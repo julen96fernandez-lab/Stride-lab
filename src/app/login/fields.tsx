@@ -1,5 +1,5 @@
 const inputClass =
-  "h-14 rounded-2xl border border-line-strong bg-black/30 px-4 text-[17px] text-fg outline-none placeholder:text-fg-3 focus:border-lime";
+  "h-14 rounded-2xl border border-line-strong bg-inset px-4 text-[17px] text-fg outline-none placeholder:text-fg-3 focus:border-lime";
 
 export function PasswordField({
   id,

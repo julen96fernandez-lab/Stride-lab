@@ -80,6 +80,27 @@ Nada de Horizonte ni de la app de limpieza (repos, proyectos, BD, variables, cla
 - Un intento fallido (contraseña o código) espera 800 ms.
 - Pendiente: cambiar la contraseña desde Perfil (con la actual).
 
+## Tema día / noche
+
+- Selector en Perfil → Apariencia: **Sistema** (por defecto, sigue al iPhone), **Día** o
+  **Noche**. Se guarda en este dispositivo (`localStorage` `stride-theme`) y un script en
+  `<head>` lo aplica antes de pintar (sin parpadeo). Día/Noche ponen `data-theme` en
+  `<html>`; Sistema lo quita y manda `prefers-color-scheme`.
+- Todos los colores son variables CSS en `globals.css` (bloque noche en `:root`, bloque día
+  repetido para el sistema claro y para `data-theme="light"`). Nada de colores fijos en
+  componentes: superficies (`ov-1`, `ov-2`, `inset`, `map`, `bar`, `glass`), texto
+  (`fg`, `fg-2`, `fg-3`, `lime-text`), gráficas (`chart-*`), ruta (`route`), zonas
+  (`z1…z5`), carga (`load-*`) y tipos (`t-*`).
+- Día: fondo `#F3F3EE`, tarjetas blancas, lima `#C8F23A` como relleno de acento (botón y
+  chip activos con texto casi negro); para texto y líneas sobre blanco se usa un lima
+  oscuro (`#4A6B00` texto, `#5A8500` líneas, `#4F7A00` ruta). Tipos en día: paleta
+  validada sobre blanco (todos ≥ 3:1). Mapa base: OpenFreeMap `positron` (día) / `dark`.
+- ECharts usa `var(--…)` en las opciones; `EChart` las resuelve y vuelve a pintar al
+  cambiar el tema. El mapa se recrea con el estilo del tema.
+- `tests/theme.test.ts` comprueba en los dos temas: texto ≥ 4,5:1 (fg, fg-2, fg-3,
+  lima sobre tarjeta y fondo, tinta sobre lima, peligro) y gráficos ≥ 3:1 (línea, ruta,
+  zonas, carga, 8 tipos).
+
 ## Diseño (tokens)
 
 | Token | Valor |
@@ -333,6 +354,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Tema día/noche (Sistema, Día, Noche) con contraste comprobado; 91 pruebas.
 - 2026‑11‑17 — Series por rutas de paso con repetición; tirada larga desde 13 km;
   «Reprocesar» zip. Zonas de FC editables, tiempo en zona, carga y tipos por zona;
   «Guardar y recalcular». 35 pruebas.

@@ -28,7 +28,7 @@ export function TypeBreakdown({ data, linkToFilter = true }: { data: KmByType[];
             <div className="flex min-h-[44px] items-center gap-3">
               <span
                 className="flex h-8 w-8 flex-none items-center justify-center rounded-xl"
-                style={{ color: TYPE_META[d.type].color, background: `${TYPE_META[d.type].color}1f` }}
+                style={{ color: TYPE_META[d.type].color, background: `color-mix(in srgb, ${TYPE_META[d.type].color} 12%, transparent)` }}
               >
                 <SessionIcon type={d.type} size={17} />
               </span>

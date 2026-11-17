@@ -38,7 +38,7 @@ export function ZonesCard({ seconds, load, zones }: { seconds: number[] | null; 
                   <span className="truncate">{ZONE_NAMES[i]}</span>
                   <span>{ranges[i]} ppm</span>
                 </div>
-                <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-white/8">
+                <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-ov-2">
                   <div className="h-full rounded-full" style={{ width: `${max ? (100 * sec) / max : 0}%`, background: `var(--z${i + 1})` }} />
                 </div>
               </div>

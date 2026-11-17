@@ -57,7 +57,7 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
 
   const chip = (active: boolean) =>
     `flex min-h-[40px] flex-none items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition ${
-      active ? "border-lime bg-lime text-lime-ink shadow-[0_0_16px_rgba(200,242,58,0.35)]" : "border-line-strong bg-white/[0.03] text-fg"
+      active ? "border-lime bg-lime text-lime-ink shadow-[0_0_16px_rgba(200,242,58,0.35)]" : "border-line-strong bg-ov-1 text-fg"
     }`;
 
   return (
@@ -118,7 +118,7 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
                   {g.runs.length} · {km(sum, 1)} km
                 </span>
               </div>
-              <ul className="divide-y divide-white/6">
+              <ul className="divide-y divide-line">
                 {g.runs.map((r) => (
                   <li key={r.id}>
                     <RunRow run={r} />

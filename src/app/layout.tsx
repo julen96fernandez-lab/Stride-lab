@@ -23,9 +23,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+const THEME_SCRIPT = `try{var t=localStorage.getItem("stride-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t;var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++){m[i].setAttribute("content",t==="light"?"#F3F3EE":"#0A0B09")}}}catch(e){}`;
+
 export const viewport: Viewport = {
-  themeColor: "#0A0B09",
-  colorScheme: "dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0A0B09" },
+    { media: "(prefers-color-scheme: light)", color: "#F3F3EE" },
+  ],
+  colorScheme: "dark light",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -33,7 +38,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es" className={`${inter.variable} ${spaceGrotesk.variable} antialiased`}>
+    <html lang="es" className={`${inter.variable} ${spaceGrotesk.variable} antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Aplica el tema guardado (Día/Noche) antes de pintar, sin parpadeo. «Sistema» = sin atributo. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>
         <div className="app-backdrop" aria-hidden="true" />
         {children}

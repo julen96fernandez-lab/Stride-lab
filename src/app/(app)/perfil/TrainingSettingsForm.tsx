@@ -6,7 +6,7 @@ import { limitsFrom, type HrZones, type ZoneMethod } from "@/lib/analysis/hr-zon
 import type { TypeSettings } from "@/lib/analysis/session-type";
 
 const field =
-  "h-11 w-full rounded-xl border border-line-strong bg-black/30 px-3 text-right text-[16px] text-fg outline-none focus:border-lime";
+  "h-11 w-full rounded-xl border border-line-strong bg-inset px-3 text-right text-[16px] text-fg outline-none focus:border-lime";
 
 /**
  * Ajustes de entrenamiento: zonas de FC (5 límites editables) y umbrales de tipos.

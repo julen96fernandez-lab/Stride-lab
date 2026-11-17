@@ -32,18 +32,19 @@ export function isSessionType(v: unknown): v is SessionType {
 }
 
 /**
- * Colores: paleta categórica validada para la superficie oscuro #151712 (orden fijo,
- * nunca se cicla). Cada tipo lleva además icono y nombre: el color nunca va solo.
+ * Colores: variables CSS con una paleta categórica validada para cada tema (noche sobre
+ * #151712, día sobre #FFFFFF; orden fijo, nunca se cicla). Ver globals.css.
+ * Cada tipo lleva además icono y nombre: el color nunca va solo.
  */
 export const TYPE_META: Record<SessionType, { label: string; color: string }> = {
-  rodaje: { label: "Rodaje", color: "#3987e5" },
-  tirada_larga: { label: "Tirada larga", color: "#d95926" },
-  series: { label: "Series", color: "#199e70" },
-  tempo: { label: "Tempo", color: "#c98500" },
-  recuperacion: { label: "Recuperación", color: "#d55181" },
-  competicion: { label: "Competición", color: "#0ca30c" },
-  trail: { label: "Trail", color: "#9085e9" },
-  cinta: { label: "Cinta", color: "#e66767" },
+  rodaje: { label: "Rodaje", color: "var(--t-rodaje)" },
+  tirada_larga: { label: "Tirada larga", color: "var(--t-tirada_larga)" },
+  series: { label: "Series", color: "var(--t-series)" },
+  tempo: { label: "Tempo", color: "var(--t-tempo)" },
+  recuperacion: { label: "Recuperación", color: "var(--t-recuperacion)" },
+  competicion: { label: "Competición", color: "var(--t-competicion)" },
+  trail: { label: "Trail", color: "var(--t-trail)" },
+  cinta: { label: "Cinta", color: "var(--t-cinta)" },
 };
 
 export interface TypeSettings {

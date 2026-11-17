@@ -37,7 +37,7 @@ export function TrendChart({
       tooltip: {
         ...tooltipBase,
         trigger: "axis",
-        axisPointer: { type: "line", lineStyle: { color: "rgba(244,245,238,0.35)", width: 1 } },
+        axisPointer: { type: "line", lineStyle: { color: C.pointer, width: 1 } },
         formatter: (ps: { value: [string, number] }[]) =>
           `<div style="color:${C.axis};font-size:11px">${fmtDay(ps[0].value[0])}</div><div style="font-family:'Space Grotesk';font-weight:700;font-size:18px">${dec1(ps[0].value[1])}</div>`,
       },
@@ -75,12 +75,12 @@ export function TrendChart({
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: "rgba(200,242,58,0.32)" },
-                { offset: 1, color: "rgba(200,242,58,0)" },
+                { offset: 0, color: C.area },
+                { offset: 1, color: C.area0 },
               ],
             },
           },
-          emphasis: { focus: "none", itemStyle: { color: C.lime, borderColor: "#0A0B09", borderWidth: 2 } },
+          emphasis: { focus: "none", itemStyle: { color: C.lime, borderColor: C.bg, borderWidth: 2 } },
         },
         last && {
           type: "effectScatter",
@@ -144,7 +144,7 @@ export function BarsChart({
               color: i === highlight ? C.lime : C.bar,
               borderRadius: [6, 6, 3, 3],
               shadowBlur: i === highlight ? 16 : 0,
-              shadowColor: i === highlight ? "rgba(200,242,58,0.45)" : "transparent",
+              shadowColor: i === highlight ? C.area : "transparent",
             },
           })),
           emphasis: { itemStyle: { color: C.barHover } },
@@ -181,7 +181,7 @@ export function RunLineChart({
       tooltip: {
         ...tooltipBase,
         trigger: "axis",
-        axisPointer: { type: "line", lineStyle: { color: "rgba(244,245,238,0.35)", width: 1 } },
+        axisPointer: { type: "line", lineStyle: { color: C.pointer, width: 1 } },
         formatter: (ps: { value: [number, number] }[]) => {
           const [m, val] = ps[0].value;
           const mm = Math.floor(m);
@@ -221,8 +221,8 @@ export function RunLineChart({
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: "rgba(200,242,58,0.22)" },
-                { offset: 1, color: "rgba(200,242,58,0)" },
+                { offset: 0, color: C.area },
+                { offset: 1, color: C.area0 },
               ],
             },
           },
@@ -257,7 +257,7 @@ export function StackedTypeYears({
       tooltip: {
         ...tooltipBase,
         trigger: "axis",
-        axisPointer: { type: "shadow", shadowStyle: { color: "rgba(255,255,255,0.04)" } },
+        axisPointer: { type: "shadow", shadowStyle: { color: "var(--ov-1)" } },
         formatter: (ps: { dataIndex: number }[]) => {
           const y = years[ps[0].dataIndex];
           const tot = types.reduce((a, t) => a + (y.km[t.key] ?? 0), 0);
@@ -287,7 +287,7 @@ export function StackedTypeYears({
         stack: "km",
         barCategoryGap: "28%",
         data: years.map((y) => (y.km[t.key] ? Math.round(y.km[t.key] * 10) / 10 : 0)),
-        itemStyle: { color: t.color, borderColor: "#151712", borderWidth: 1, borderRadius: i === types.length - 1 ? [5, 5, 0, 0] : 0 },
+        itemStyle: { color: t.color, borderColor: C.surface, borderWidth: 1, borderRadius: i === types.length - 1 ? [5, 5, 0, 0] : 0 },
         emphasis: { focus: "series" },
       })),
     }),

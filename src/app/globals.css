@@ -1,18 +1,38 @@
 @import "tailwindcss";
 
-/* ── Tokens de diseño (dark-first) ─────────────────────────────── */
+/* ── Tokens de diseño ───────────────────────────────────────────────
+   Noche (por defecto) y Día. «Sistema» = sin data-theme: sigue al sistema.
+   Contraste comprobado en tests/theme.test.ts. */
 :root {
   --bg: #0a0b09;
   --card: #151712;
   --card-top: #1a1d16;
+  --card-bottom: #121410;
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.8);
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.14);
+  --ov-1: rgba(255, 255, 255, 0.035);
+  --ov-2: rgba(255, 255, 255, 0.09);
+  --inset: rgba(0, 0, 0, 0.25);
+  --map: #0e100c;
+  --bar: #3a3d35;
+  --glass: rgba(22, 24, 19, 0.62);
   --lime: #c8f23a;
   --lime-ink: #0b0c0a;
+  --lime-text: #c8f23a;
+  --glow: rgba(200, 242, 58, 0.22);
+  --glow-soft: rgba(200, 242, 58, 0.07);
   --fg: #f4f5ee;
   --fg-2: #a9aca2;
-  --fg-3: #74776e;
+  --fg-3: #8a8d84;
   --danger: #ff8a73;
+  /* Gráficas y rutas */
+  --chart-line: #c8f23a;
+  --chart-area: rgba(200, 242, 58, 0.32);
+  --chart-area-0: rgba(200, 242, 58, 0);
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-bar: #34372f;
+  --route: #c8f23a;
   /* Zonas de FC (ordinales: gris → azul → verde → ámbar → rojo) */
   --z1: #8a8d84;
   --z2: #3987e5;
@@ -23,7 +43,112 @@
   --load-low: #2fbf5b;
   --load-mod: #e3912b;
   --load-high: #f0605d;
+  /* Tipos de sesión (paleta categórica validada para este fondo; orden fijo) */
+  --t-rodaje: #3987e5;
+  --t-tirada_larga: #d95926;
+  --t-series: #199e70;
+  --t-tempo: #c98500;
+  --t-recuperacion: #d55181;
+  --t-competicion: #0ca30c;
+  --t-trail: #9085e9;
+  --t-cinta: #e66767;
   color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+  --bg: #f3f3ee;
+  --card: #ffffff;
+  --card-top: #ffffff;
+  --card-bottom: #fafaf6;
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 14px 32px -22px rgba(30, 34, 20, 0.35);
+  --line: rgba(11, 12, 10, 0.09);
+  --line-strong: rgba(11, 12, 10, 0.17);
+  --ov-1: rgba(11, 12, 10, 0.03);
+  --ov-2: rgba(11, 12, 10, 0.08);
+  --inset: rgba(11, 12, 10, 0.04);
+  --map: #eef0e7;
+  --bar: #d9dbd2;
+  --glass: rgba(255, 255, 255, 0.72);
+  --lime: #c8f23a;
+  --lime-ink: #0b0c0a;
+  --lime-text: #4a6b00;
+  --glow: rgba(200, 242, 58, 0.45);
+  --glow-soft: rgba(200, 242, 58, 0.16);
+  --fg: #0b0c0a;
+  --fg-2: #55584f;
+  --fg-3: #6b6e65;
+  --danger: #b42318;
+  --chart-line: #5a8500;
+  --chart-area: rgba(160, 205, 20, 0.35);
+  --chart-area-0: rgba(160, 205, 20, 0);
+  --chart-grid: rgba(11, 12, 10, 0.07);
+  --chart-bar: #d9dbd2;
+  --route: #4f7a00;
+  --z1: #6b6e65;
+  --z2: #2a78d6;
+  --z3: #12895f;
+  --z4: #b07600;
+  --z5: #d63b3a;
+  --load-low: #1f8a3d;
+  --load-mod: #b45f06;
+  --load-high: #c9302c;
+  --t-rodaje: #2a78d6;
+  --t-tirada_larga: #d4561f;
+  --t-series: #12895f;
+  --t-tempo: #b07600;
+  --t-recuperacion: #cc4f7f;
+  --t-competicion: #008300;
+  --t-trail: #6250d6;
+  --t-cinta: #d63b3a;
+  color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f3f3ee;
+  --card: #ffffff;
+  --card-top: #ffffff;
+  --card-bottom: #fafaf6;
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 14px 32px -22px rgba(30, 34, 20, 0.35);
+  --line: rgba(11, 12, 10, 0.09);
+  --line-strong: rgba(11, 12, 10, 0.17);
+  --ov-1: rgba(11, 12, 10, 0.03);
+  --ov-2: rgba(11, 12, 10, 0.08);
+  --inset: rgba(11, 12, 10, 0.04);
+  --map: #eef0e7;
+  --bar: #d9dbd2;
+  --glass: rgba(255, 255, 255, 0.72);
+  --lime: #c8f23a;
+  --lime-ink: #0b0c0a;
+  --lime-text: #4a6b00;
+  --glow: rgba(200, 242, 58, 0.45);
+  --glow-soft: rgba(200, 242, 58, 0.16);
+  --fg: #0b0c0a;
+  --fg-2: #55584f;
+  --fg-3: #6b6e65;
+  --danger: #b42318;
+  --chart-line: #5a8500;
+  --chart-area: rgba(160, 205, 20, 0.35);
+  --chart-area-0: rgba(160, 205, 20, 0);
+  --chart-grid: rgba(11, 12, 10, 0.07);
+  --chart-bar: #d9dbd2;
+  --route: #4f7a00;
+  --z1: #6b6e65;
+  --z2: #2a78d6;
+  --z3: #12895f;
+  --z4: #b07600;
+  --z5: #d63b3a;
+  --load-low: #1f8a3d;
+  --load-mod: #b45f06;
+  --load-high: #c9302c;
+  --t-rodaje: #2a78d6;
+  --t-tirada_larga: #d4561f;
+  --t-series: #12895f;
+  --t-tempo: #b07600;
+  --t-recuperacion: #cc4f7f;
+  --t-competicion: #008300;
+  --t-trail: #6250d6;
+  --t-cinta: #d63b3a;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -31,8 +156,15 @@
   --color-card: var(--card);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-ov-1: var(--ov-1);
+  --color-ov-2: var(--ov-2);
+  --color-inset: var(--inset);
+  --color-map: var(--map);
+  --color-bar: var(--bar);
+  --color-glass: var(--glass);
   --color-lime: var(--lime);
   --color-lime-ink: var(--lime-ink);
+  --color-lime-text: var(--lime-text);
   --color-fg: var(--fg);
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
@@ -64,8 +196,8 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(120% 55% at 50% -12%, rgba(200, 242, 58, 0.22) 0%, rgba(200, 242, 58, 0.07) 40%, transparent 68%),
-    radial-gradient(90% 40% at 50% 112%, rgba(200, 242, 58, 0.09) 0%, transparent 70%),
+    radial-gradient(120% 55% at 50% -12%, var(--glow) 0%, var(--glow-soft) 40%, transparent 68%),
+    radial-gradient(90% 40% at 50% 112%, var(--glow-soft) 0%, transparent 70%),
     var(--bg);
 }
 .app-backdrop::after {
@@ -82,8 +214,8 @@ body {
   position: relative;
   border-radius: var(--radius-card);
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--card-top) 0%, var(--card) 55%, #121410 100%);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  background: linear-gradient(180deg, var(--card-top) 0%, var(--card) 55%, var(--card-bottom) 100%);
+  box-shadow: var(--card-shadow);
   overflow: hidden;
 }
 /* Tarjeta principal: brillo lima difuminado detrás de la gráfica */
@@ -94,7 +226,7 @@ body {
   right: 10%;
   bottom: -30%;
   height: 70%;
-  background: radial-gradient(closest-side, rgba(200, 242, 58, 0.22), transparent);
+  background: radial-gradient(closest-side, var(--glow), transparent);
   filter: blur(28px);
   pointer-events: none;
 }

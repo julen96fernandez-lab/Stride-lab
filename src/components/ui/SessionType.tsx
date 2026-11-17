@@ -38,7 +38,11 @@ export function TypeTag({ type, manual = false }: { type: SessionType; manual?: 
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-      style={{ borderColor: `${m.color}66`, color: "#F4F5EE", background: `${m.color}1f` }}
+      style={{
+        borderColor: `color-mix(in srgb, ${m.color} 40%, transparent)`,
+        color: "var(--fg)",
+        background: `color-mix(in srgb, ${m.color} 12%, transparent)`,
+      }}
       title={manual ? `${m.label} (elegido a mano)` : m.label}
     >
       <span style={{ color: m.color }} className="flex">

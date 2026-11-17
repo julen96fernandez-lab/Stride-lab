@@ -62,7 +62,7 @@ export function TypePicker({
                 className={`flex min-h-[44px] items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition active:scale-[0.97] ${
                   active
                     ? "border-lime bg-lime text-lime-ink shadow-[0_0_18px_rgba(200,242,58,0.4)]"
-                    : "border-line-strong bg-white/[0.03] text-fg"
+                    : "border-line-strong bg-ov-1 text-fg"
                 }`}
               >
                 <span style={{ color: active ? undefined : m.color }} className="flex">
@@ -84,7 +84,7 @@ export function TypePicker({
           "Sin tipo automático."
         )}
         {manual && (
-          <button type="button" onClick={() => choose("auto")} className="ml-2 min-h-[32px] font-semibold text-lime underline-offset-2 hover:underline">
+          <button type="button" onClick={() => choose("auto")} className="ml-2 min-h-[32px] font-semibold text-lime-text underline-offset-2 hover:underline">
             Volver a automático
           </button>
         )}

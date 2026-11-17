@@ -121,10 +121,10 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
             return (
               <li key={y.year} className="grid grid-cols-[40px_1fr_auto] items-center gap-3">
                 <span className="num text-[14px] text-fg-2">{y.year}</span>
-                <div className="relative h-[32px] rounded-xl bg-white/[0.04]">
+                <div className="relative h-[32px] rounded-xl bg-ov-1">
                   {y.paceSPerKm !== null ? (
                     <div
-                      className={`h-full rounded-xl ${best ? "bg-lime shadow-[0_0_16px_rgba(200,242,58,0.45)]" : "bg-[#3A3D35]"}`}
+                      className={`h-full rounded-xl ${best ? "bg-lime shadow-[0_0_16px_rgba(200,242,58,0.45)]" : "bg-bar"}`}
                       style={{ width: `${w}%` }}
                     />
                   ) : (

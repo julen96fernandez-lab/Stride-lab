@@ -380,7 +380,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
 
       {/* ── Parada > 60 s ── */}
       {stalled && (
-        <section className="card border-[rgba(255,138,115,0.35)] p-5" role="alert">
+        <section className="card border-danger/35 p-5" role="alert">
           <div className="eyebrow text-danger">Sin avances desde hace {Math.round((now - lastChange) / 1000)} s</div>
           <p className="mt-2 text-[14px] text-fg-2">
             {mode === "uploading"
@@ -397,7 +397,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
       )}
 
       {error && (
-        <section role="alert" className="card border-[rgba(255,138,115,0.35)] p-4">
+        <section role="alert" className="card border-danger/35 p-4">
           <p className="text-[14px] text-danger">{error}</p>
           {imp && !done && mode === "idle" && <ActionButton onClick={() => void process(imp.id)} label="Reintentar" />}
           {!imp && lastReg && mode === "idle" && (
@@ -421,7 +421,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
                       state === "done"
                         ? "bg-lime text-lime-ink"
                         : state === "now"
-                          ? "border-2 border-lime text-lime shadow-[0_0_12px_rgba(200,242,58,0.5)]"
+                          ? "border-2 border-lime text-lime-text shadow-[0_0_12px_rgba(200,242,58,0.5)]"
                           : "border border-line-strong text-fg-3"
                     }`}
                   >
@@ -451,7 +451,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
           <p className="mt-2 text-[13px] text-fg-2">
             Crea la importación sin volver a subir el archivo. «Reprocesar» vuelve a leer un zip ya importado (no duplica nada).
           </p>
-          <ul className="mt-3 divide-y divide-white/6">
+          <ul className="mt-3 divide-y divide-line">
             {storedZips.map((z) => (
               <li key={z.pathname} className="flex items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
@@ -542,7 +542,7 @@ function Bar({ pct }: { pct: number }) {
   const v = Math.max(0, Math.min(100, pct));
   return (
     <div
-      className="relative mt-4 h-2 overflow-hidden rounded-full bg-white/8"
+      className="relative mt-4 h-2 overflow-hidden rounded-full bg-ov-2"
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
@@ -558,7 +558,7 @@ function Bar({ pct }: { pct: number }) {
 
 function Mini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-black/20 px-3 py-2.5">
+    <div className="rounded-2xl border border-line bg-inset px-3 py-2.5">
       <dt className="text-[11px] font-semibold tracking-[0.08em] text-fg-2 uppercase">{label}</dt>
       <dd className="num mt-1 text-[17px]">{value}</dd>
     </div>
@@ -581,7 +581,7 @@ function Counters({ imp }: { imp: ImportView }) {
   return (
     <section className="card p-5">
       <div className="eyebrow">Resumen</div>
-      <dl className="mt-3 divide-y divide-white/6">
+      <dl className="mt-3 divide-y divide-line">
         {items.map(([k, v]) => (
           <div key={k} className="flex items-baseline justify-between gap-3 py-2.5">
             <dt className="text-[14px] text-fg-2">{k}</dt>
@@ -610,7 +610,7 @@ function Check({ run }: { run: CheckRun | null }) {
       {!run ? (
         <p className="mt-3 text-[14px] text-fg-2">No hay ninguna carrera válida ese día en los datos importados.</p>
       ) : (
-        <ul className="mt-3 divide-y divide-white/6">
+        <ul className="mt-3 divide-y divide-line">
           {rows.map(([k, got, want]) => {
             const ok = got === want;
             return (
@@ -618,7 +618,7 @@ function Check({ run }: { run: CheckRun | null }) {
                 <span className="text-[14px] text-fg-2">{k}</span>
                 <span className="flex items-center gap-2">
                   <span className="num text-[18px]">{got}</span>
-                  <span className={`text-[12px] font-semibold ${ok ? "text-lime" : "text-danger"}`}>{ok ? "✓" : `esperado ${want}`}</span>
+                  <span className={`text-[12px] font-semibold ${ok ? "text-lime-text" : "text-danger"}`}>{ok ? "✓" : `esperado ${want}`}</span>
                 </span>
               </li>
             );

@@ -23,7 +23,7 @@ export default function SetupPage() {
       <div className="stagger mt-10 flex flex-col gap-6">
         <div>
           <h1 className="font-display text-[40px] leading-[1.04] font-bold tracking-[-0.035em]">
-            Primer <span className="text-lime">acceso.</span>
+            Primer <span className="text-lime-text">acceso.</span>
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-fg-2">
             Elige la contraseña con la que entrarás a partir de ahora. Para demostrar que eres tú, escribe el

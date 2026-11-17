@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { getTrainingSettingsView } from "@/lib/db/queries";
 import { TrainingSettingsForm } from "./TrainingSettingsForm";
+import { ThemePicker } from "@/components/ui/ThemePicker";
 import { logout } from "@/app/login/actions";
 import { Card, PageHeader } from "@/components/ui/primitives";
 
@@ -31,6 +32,7 @@ export default function ProfilePage() {
       <Card className="py-2">
         <Row href="/perfil/importar" title="Importar datos" detail="Export de Apple Health (.zip)" />
       </Card>
+      <ThemePicker />
       <Suspense fallback={<div className="card h-[620px]" aria-hidden="true" />}>
         <TypeSettingsCard />
       </Suspense>

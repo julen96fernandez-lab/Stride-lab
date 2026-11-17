@@ -65,7 +65,7 @@ export function TabBar() {
       className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3"
       style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}
     >
-      <ul className="flex w-full max-w-[420px] items-stretch rounded-[30px] border border-white/10 bg-[rgba(22,24,19,0.62)] p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-150">
+      <ul className="flex w-full max-w-[420px] items-stretch rounded-[30px] border border-line-strong bg-glass p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-150">
         {TABS.map((tab) => {
           const active = tab.match(pathname);
           return (

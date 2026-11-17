@@ -200,7 +200,7 @@ function Splits({ splits }: { splits: Run["splits"] }) {
               <span className="num text-[13px] text-fg-2">{partial ? dec(s.distanceM / 1000, 2) : s.idx}</span>
               <div className="relative flex h-[26px] items-center">
                 <div
-                  className={`absolute inset-y-0 left-0 rounded-lg ${s.idx === fastestIdx ? "bg-lime shadow-[0_0_14px_rgba(200,242,58,0.4)]" : "bg-white/10"}`}
+                  className={`absolute inset-y-0 left-0 rounded-lg ${s.idx === fastestIdx ? "bg-lime shadow-[0_0_14px_rgba(200,242,58,0.4)]" : "bg-ov-2"}`}
                   style={{ width: `${w}%` }}
                 />
                 <span className={`num relative pl-2.5 text-[15px] ${s.idx === fastestIdx ? "text-lime-ink" : ""}`}>{pace(s.paceSPerKm)}</span>
@@ -236,7 +236,7 @@ function DurabilityCard({ d }: { d: Durability | null }) {
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         {[d.first, d.second].map((h, i) => (
-          <div key={i} className="rounded-2xl border border-line bg-black/20 p-3.5">
+          <div key={i} className="rounded-2xl border border-line bg-inset p-3.5">
             <div className="text-[12px] text-fg-2">{i === 0 ? "Primera mitad" : "Segunda mitad"}</div>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="num text-[26px]">{pace(h.paceSPerKm)}</span>
@@ -253,7 +253,7 @@ function DurabilityCard({ d }: { d: Durability | null }) {
         </div>
         <div>
           <dt className="eyebrow">Desacople FC/ritmo</dt>
-          <dd className={`num mt-1.5 text-[22px] ${d.decouplingPct === null ? "text-fg-3" : d.decouplingPct > 5 ? "" : "text-lime"}`}>
+          <dd className={`num mt-1.5 text-[22px] ${d.decouplingPct === null ? "text-fg-3" : d.decouplingPct > 5 ? "" : "text-lime-text"}`}>
             {d.decouplingPct === null ? DASH : `${d.decouplingPct > 0 ? "+" : ""}${dec(d.decouplingPct)} %`}
           </dd>
         </div>

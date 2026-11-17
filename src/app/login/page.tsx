@@ -25,7 +25,7 @@ export default function LoginPage() {
           <h1 className="font-display text-[44px] leading-[1.02] font-bold tracking-[-0.035em]">
             Tu laboratorio
             <br />
-            <span className="text-lime">de running.</span>
+            <span className="text-lime-text">de running.</span>
           </h1>
           <p className="mt-3 text-[15px] text-fg-2">Acceso privado. Solo para ti.</p>
         </div>
