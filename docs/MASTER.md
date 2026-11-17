@@ -21,55 +21,71 @@
 |---|---|---|
 | 0 | Plan de archivos y esquema de BD | Aprobado 2026‑11‑17 |
 | 1 | Esqueleto Next.js, diseño base, PWA, acceso privado, navegación inferior | **Hecho** |
-| 2 | Esquema Drizzle + migración en Neon (proyecto nuevo) | — |
-| 3 | Importador (librería + pruebas con export sintético) | — |
-| 4 | Pantalla de importación (subida a Blob + proceso en streaming + progreso) | — |
-| 5 | Inicio, Actividad + Detalle de carrera, Análisis | — |
-| 6 | Importación real + comprobación 17‑oct‑2026 | — |
+| 2 | Esquema Drizzle + migración en Neon + primer acceso `/setup` | **Hecho** |
+| 3 | Importador reanudable + pantalla de importación | **Hecho** (probado con export sintético) |
+| 4 | Importación real desde el iPhone + comprobación 17‑oct‑2026 | Pendiente (usuario) |
+| 5 | Inicio, Actividad + Detalle de carrera, Análisis | Pendiente |
 
 Fuera de Fase 1: Plan, entrenador IA, predicciones, sincronización automática.
 
-## Infraestructura (estado)
+## Infraestructura
 
 | Pieza | Estado |
 |---|---|
-| Repo GitHub `julen8fernandez/stride-lab` | Creado |
-| Proyecto Vercel `stride-lab` (equipo JULEN) | **Pendiente (acción del usuario):** la app de GitHub de Vercel no tiene acceso al repo (`repo_no_access`) |
-| Neon `stride-lab` (Fráncfort) | **Pendiente (acción del usuario):** la organización de Neon está gestionada por Vercel; la API de Neon no deja crear proyectos y hay que crearlo desde Vercel → Storage |
-| Blob `stride-lab` (privado, fra1) | Pendiente: se crea y conecta con el proyecto de Vercel |
-| Variables `AUTH_SECRET`, `AUTH_PASSWORD_HASH` | Pendiente: se configuran en el proyecto de Vercel |
+| Repo GitHub `julen96fernandez-lab/Stride-lab` | Movido desde `julen8fernandez/stride-lab` (GitHub redirige). Rama de trabajo y de producción: `claude/zen-bohr-x7mnlm` |
+| Proyecto Vercel `stride-lab` (equipo JULEN, `prj_ojARZfH5dDDjc2fwNplNqjyP6DVv`) | Enlazado al repo; cada push despliega a producción → https://stride-lab-gamma.vercel.app. La protección de despliegues de Vercel (Vercel Authentication) está activa: pide iniciar sesión en Vercel antes de ver la app |
+| Neon `stride-lab` (`wild-art-15451340`, aws‑eu‑central‑1, PG 18, Free) | Creado desde Vercel → Storage; variables `DATABASE_URL*`/`PG*`/`POSTGRES_*` puestas por la integración |
+| Blob `stride-lab` (`store_SrfwICCW7EpHKqFO`, **privado**, fra1) | Creado y conectado: `BLOB_READ_WRITE_TOKEN` |
+| `AUTH_SECRET` | Creada (sensible, production + preview) |
+| `SETUP_CODE` | **Pendiente: la crea el usuario** (ver abajo) |
+
+### Variables de entorno
+
+| Nombre | Quién | Para qué |
+|---|---|---|
+| `DATABASE_URL`, `DATABASE_URL_UNPOOLED` (+ `PG*`, `POSTGRES_*`) | Integración Neon | Conexión a la BD; `_UNPOOLED` para migraciones |
+| `BLOB_READ_WRITE_TOKEN` | Almacén Blob | Subida del zip, lectura por rangos, GPX |
+| `AUTH_SECRET` | Creada en el paso 3 | Firma de la cookie de sesión |
+| `SETUP_CODE` | **Usuario** | Código que pide `/setup` una única vez. Valor libre (≥ 12 caracteres, que no sea la contraseña). Tras fijar la contraseña ya no sirve para nada y se puede borrar |
 
 ## Independencia
 
-Repo `stride-lab` propio, proyecto de Vercel propio y proyecto de Neon propio.
+Repo, proyecto de Vercel, BD de Neon y Blob propios.
 Nada de Horizonte ni de la app de limpieza (repos, proyectos, BD, variables, claves).
 
 ## Stack
 
-- Next.js 16 (App Router, Cache Components y Partial Prefetching activados por defecto:
-  las lecturas de BD irán dentro de `<Suspense>`) + TypeScript + Tailwind CSS v4
-- Neon Postgres + Drizzle ORM (`@neondatabase/serverless`)
-- Vercel Blob (zip original y GPX individuales)
-- ECharts (gráficas), MapLibre GL + teselas OpenFreeMap (sin clave) para mapas
-- PWA instalable: `manifest.webmanifest`, iconos, service worker mínimo
-- Pruebas: Vitest
+- Next.js 16 (App Router; Cache Components y Partial Prefetching activados: las lecturas de
+  BD van en componentes dentro de `<Suspense>` con `await connection()`), TypeScript,
+  Tailwind CSS v4
+- Neon Postgres + Drizzle ORM. Cliente `drizzle-orm/neon-serverless` (WebSocket, admite
+  transacciones) en Vercel; `node-postgres` contra Postgres local en pruebas
+- Migraciones: SQL generado por `drizzle-kit generate` en `drizzle/`; `scripts/migrate.mjs`
+  las aplica antes de cada `next build` (tabla `_migrations`)
+- Vercel Blob privado (zip y GPX)
+- ECharts (gráficas), MapLibre GL + OpenFreeMap (mapas) — paso 5
+- PWA: manifest, iconos, service worker que solo cachea estáticos
+- Pruebas: Vitest (`npm test`; las del pipeline necesitan `TEST_DATABASE_URL`)
 
-## Acceso privado (implementado)
+## Acceso privado
 
-Un único usuario con contraseña. Hash en `AUTH_PASSWORD_HASH` (formato
-`scrypt:N:salt:hash`, se genera con `npm run hash-password -- '<contraseña>'`). Cookie de
-sesión `sl_session` firmada con `AUTH_SECRET` (JWT HS256, 90 días, `HttpOnly`, `Secure` en
-producción, `SameSite=Lax`). `src/proxy.ts` (en Next 16 `middleware` pasa a llamarse
-`proxy`) protege todo salvo `/login`, estáticos, iconos, manifest y `sw.js`; las rutas
-`/api/*` sin sesión devuelven 401. Login y logout son server actions (`src/app/login/actions.ts`);
-un fallo de contraseña espera 800 ms.
+- Contraseña única, guardada como hash scrypt (`scrypt:N:salt:hash`) en `app_settings`.
+- **Primer acceso `/setup`**: solo funciona mientras no hay contraseña. Pide `SETUP_CODE`,
+  la contraseña (≥ 10 caracteres) y su confirmación; la guarda con
+  `INSERT … ON CONFLICT DO NOTHING` (no puede sobrescribir) e inicia sesión. Después,
+  `/setup` redirige siempre a `/login`, y `/login` manda a `/setup` si aún no hay contraseña.
+- Cookie `sl_session` firmada con `AUTH_SECRET` (JWT HS256, 90 días, `HttpOnly`, `Secure`,
+  `SameSite=Lax`). `src/proxy.ts` (antes `middleware`) protege todo salvo `/login`,
+  `/setup`, estáticos, iconos, manifest y `sw.js`; `/api/*` sin sesión → 401.
+- Un intento fallido (contraseña o código) espera 800 ms.
+- Pendiente: cambiar la contraseña desde Perfil (con la actual).
 
 ## Diseño (tokens)
 
 | Token | Valor |
 |---|---|
 | Fondo | `#0A0B09` + resplandor radial lima arriba (y otro tenue abajo) + grano sutil |
-| Tarjeta | `#151712`, borde 1 px `rgba(255,255,255,.08)`, radio 24–28, degradado vertical sutil |
+| Tarjeta | `#151712`, borde 1 px `rgba(255,255,255,.08)`, radio 26, degradado vertical sutil |
 | Acento | `#C8F23A` (solo datos clave, gráficas, item activo) |
 | Texto | `#F4F5EE`; secundario `#A9ACA2` |
 | Tipos | Space Grotesk (números, títulos), Inter (resto) |
@@ -78,221 +94,134 @@ Barra inferior flotante de cristal, item activo en píldora lima. Entrada escalo
 tarjetas, números que cuentan. 390 px, safe areas, objetivos de 44 px.
 Si falta una métrica se muestra vacía (`—`), nunca inventada.
 
-## Plan de archivos
+## Archivos (estado real)
 
 ```
 docs/MASTER.md
-.env.example                       DATABASE_URL, BLOB_READ_WRITE_TOKEN, AUTH_SECRET, AUTH_PASSWORD_HASH
-drizzle.config.ts
-drizzle/                           migraciones SQL generadas
-public/manifest.webmanifest, icons/, sw.js
-scripts/hash-password.ts           genera AUTH_PASSWORD_HASH
-src/middleware.ts
+drizzle/                         0000_init.sql, 0001_import_lease.sql (+ meta)
+scripts/migrate.mjs              migraciones antes del build
+scripts/make-icons.mjs           iconos PWA desde SVG
+public/sw.js, public/icons/
+src/proxy.ts                     protección de rutas
 src/app/
-  layout.tsx, globals.css          fuentes, tokens, fondo con resplandores y grano
-  login/page.tsx
-  (app)/layout.tsx                 barra inferior flotante
-  (app)/page.tsx                   Inicio
-  (app)/plan/page.tsx              "Próximamente"
-  (app)/actividad/page.tsx         lista de carreras
-  (app)/actividad/[id]/page.tsx    Detalle de carrera
-  (app)/analisis/page.tsx          Análisis
-  (app)/perfil/page.tsx            ajustes, zapatillas (vacío), cerrar sesión
-  (app)/perfil/importar/page.tsx   subida del zip + progreso + resumen
-  api/auth/login|logout/route.ts
-  api/import/upload/route.ts       token de subida cliente → Blob (multipart)
-  api/import/[id]/process/route.ts procesa en streaming (maxDuration)
-  api/import/[id]/route.ts         estado del trabajo (polling)
-src/components/
-  ui/        Card, Stat, CountUp, Section, TabBar, Empty
-  charts/    EChart (wrapper cliente), Vo2Chart, YearKmBars, PaceAtHrChart, SplitsChart
-  map/       RouteMap (MapLibre, carga dinámica)
+  layout.tsx, globals.css, manifest.ts
+  login/ (page, LoginForm, fields, actions)   setup/ (page, SetupForm)
+  (app)/layout.tsx               barra inferior
+  (app)/page.tsx                 Inicio (vacío hasta el paso 5)
+  (app)/{plan,actividad,analisis,perfil}/page.tsx
+  (app)/perfil/importar/         page.tsx + ImportFlow.tsx
+  api/import/upload/route.ts     token de subida directa a Blob
+  api/import/route.ts            registra un zip subido
+  api/import/[id]/route.ts       estado
+  api/import/[id]/step/route.ts  avanza la importación (maxDuration 300, trabaja 240 s)
+src/components/ui/               primitives, TabBar, Logo, CountUp, Greeting
 src/lib/
-  auth/      session.ts, password.ts
-  db/        client.ts, schema.ts, queries/{runs,analysis,vo2}.ts
-  format.ts  ritmo, duraciones, números es-ES, zona Europe/Madrid
+  auth/                          session (JWT), password (scrypt), store (app_settings)
+  db/                            schema.ts, client.ts
+  format.ts                      km, ritmo, duración… en es-ES (— si falta)
   import/
-    remote-zip.ts    lector de zip por peticiones Range sobre la URL de Blob
-    xml-scanner.ts   escáner en streaming de export.xml (por elementos, sin cargar el XML)
-    health-types.ts  constantes HK*
-    workout.ts       <Workout> → carrera (estadísticas, metadatos, unidades)
-    samples.ts       buffers compactos (Float64Array) de FC, potencia y distancia
-    gpx.ts           parseo GPX, distancia, parciales, simplificación, polyline
-    dedupe.ts        Strava vs Apple Watch (30 min, prioridad Watch)
-    classify.ts      validez y "sesión especial" (> 8:00 /km)
-    pipeline.ts      orquestación, idempotencia, upserts, progreso
-  analysis/  splits.ts, durability.ts, pace-at-hr.ts
-tests/       vitest + fixtures/ export sintético mínimo (nunca datos reales)
+    zip.ts        directorio central por rangos (Zip64), stream de una entrada
+    blob.ts       origen por rangos sobre Blob privado + subida de GPX
+    scanner.ts    escáner de bytes con punto de reanudación seguro
+    xml.ts        atributos, entidades y fechas de Apple
+    units.ts      conversiones de unidades
+    workout.ts    <Workout> de correr → carrera; VO₂ máx.
+    gpx.ts        puntos, distancia, desnivel, Douglas–Peucker, polyline
+    splits.ts     parciales por km
+    classify.ts   duplicados, validez, sesión especial
+    pipeline.ts   fases, puntos de control, reserva
+    status.ts     vistas para la API/pantalla y carrera de comprobación
+tests/                           units.test.ts, pipeline.test.ts, helpers/ (export sintético)
 ```
 
-## Importador: diseño
+## Importador (implementado)
 
-1. **Subida.** El navegador sube el zip (~200 MB) directamente a Vercel Blob con
-   `upload()` de `@vercel/blob/client` (multipart). El archivo no pasa por la función
-   ni por GitHub. Se crea una fila en `imports`.
-2. **Lectura del zip sin descargarlo entero.** `remote-zip.ts` lee el directorio central
-   del zip con peticiones HTTP Range y abre por separado `export.xml` y cada
-   `workout-routes/*.gpx`.
-3. **XML en streaming.** `export.xml` (~3,7 GB) se descomprime como stream (zlib) y pasa
-   por un escáner que solo materializa los elementos útiles:
-   - `<Record type="HKQuantityTypeIdentifierVO2Max">` → `vo2max_readings`.
-   - `<Record>` de FC, potencia, distancia, velocidad… → buffers compactos en memoria
-     (tiempo + valor) para recortar después por ventana de cada carrera.
-     Motivo: en el export los `<Workout>` van al final, después de los `<Record>`.
-   - `<Workout workoutActivityType="HKWorkoutActivityTypeRunning">` → carrera.
-     Cualquier otro tipo se descarta sin parsear.
-4. **Mapeo de la carrera** (primera aparición de cada `WorkoutStatistics`):
-   - distancia: `DistanceWalkingRunning` `sum` (km) — no se usa el atributo de `<Workout>`;
-   - FC media/máx.: `HeartRate` average/maximum; potencia: `RunningPower` average;
-     velocidad: `RunningSpeed` average; zancada: `RunningStrideLength`;
-     oscilación vertical: `RunningVerticalOscillation`; contacto: `RunningGroundContactTime`;
-     pasos: `StepCount` sum → cadencia = pasos / minutos;
-   - metadatos: `HKElevationAscended` (desnivel), `HKWeatherTemperature`,
-     `HKWeatherHumidity`, `HKIndoorWorkout`; todo se guarda también en `raw` (JSONB).
-5. **GPX.** Enlace por `<FileReference>` del propio Workout si existe; si no, por
-   solapamiento de hora de inicio/fin. El GPX original se sube a Blob; en Neon se guarda
-   una polyline simplificada, bbox y los parciales por km.
-6. **Deduplicado.** Carreras con inicio a menos de 30 min y una de ellas de Strava:
-   se conserva la de Apple Watch; la otra queda con `status='duplicate'` y `duplicate_of`.
-7. **Sesión especial.** Ritmo medio > 8:00 /km → `is_special=true` (series o mixtas),
-   excluida de los ritmos medios.
-8. **Idempotencia.** Clave natural `source_key` = fuente + inicio + fin (UTC). Todo son
-   upserts; reimportar el mismo zip (o uno más nuevo) no duplica nada.
-9. **Progreso.** La función actualiza `imports` (fase, bytes leídos, contadores); la
-   pantalla consulta cada 2 s.
+1. **Subida.** El navegador sube el zip directo a Blob privado (`upload()`, multipart).
+   No pasa por la función ni por GitHub. Luego `POST /api/import` comprueba con `head()`
+   que existe y crea la fila en `imports`.
+2. **Proceso por tramos.** La pantalla llama en bucle a `POST /api/import/:id/step`. Cada
+   llamada trabaja hasta 240 s, guarda punto de control y devuelve el estado. Si la red
+   o la función se cortan, se reintenta; si se cierra la pantalla, «Continuar» reanuda.
+   La pantalla pide `wakeLock` para no apagarse.
+3. **Fases** (`imports.phase`):
+   - `index`: directorio central del zip por rangos. XML = el `.xml` más grande que no sea
+     CDA (el nombre puede ir traducido: `exportación.xml`). GPX: todos los `.gpx`.
+   - `workouts` (1.ª pasada): `<Workout>` de correr, `<Record …VO2Max>`, `<ExportDate>`.
+     Lo que no es `HKWorkoutActivityTypeRunning` se descarta sin parsear.
+   - `samples` (2.ª pasada): `<Record>` de FC, potencia, velocidad y distancia **del mismo
+     `sourceName` que la carrera** y dentro de su ventana (así no se cuentan las del iPhone).
+     Hacen falta dos pasadas porque los `<Workout>` van al final del XML.
+   - `series`: fusiona las muestras (`import_samples`) en `run_series`.
+   - `routes`: GPX por `<FileReference>`; los GPX sin referencia se enlazan por solapamiento
+     de hora (prioridad Apple Watch, no indoor). Original a Blob (`routes/<run>.gpx`),
+     polyline simplificada (4 m), bbox, desnivel, y parciales.
+   - `finalize`: parciales de las carreras sin GPX (cinta) desde la distancia del reloj;
+     deduplicado y clasificación sobre **todas** las carreras; contadores.
+4. **Puntos de control.** Las pasadas guardan el byte del XML descomprimido ya procesado.
+   Al reanudar se descomprime de nuevo y se salta hasta ahí (descomprimir es muy rápido).
+   Los resultados y el punto de control se guardan en la misma transacción cada 30 s.
+   Cada invocación avanza al menos un elemento/lote (evita bucles sin progreso).
+5. **Reserva.** `imports.lease_until` impide que dos invocaciones procesen a la vez.
+6. **Mapeo de la carrera**: primera aparición de cada `WorkoutStatistics`
+   (`DistanceWalkingRunning` sum, `HeartRate` average/maximum, `RunningPower`,
+   `RunningSpeed`, `RunningStrideLength`, `RunningVerticalOscillation`,
+   `RunningGroundContactTime`, `StepCount` → cadencia, `ActiveEnergyBurned`) y metadatos
+   `HKElevationAscended`, `HKWeatherTemperature` (°F→°C), `HKWeatherHumidity`
+   («7200 %» = 72 %), `HKIndoorWorkout`. Si no hay estadística de distancia se usa el
+   atributo antiguo `totalDistance` si existe (queda anotado en `raw.distanceFrom`); si no,
+   la distancia queda vacía.
+7. **Parciales**: por defecto desde la distancia del reloj (`basis='samples'`, coincide con
+   la distancia oficial); si no hay muestras, desde el GPX (`basis='gpx'`). FC y potencia
+   medias del tramo; desnivel del GPX. Último parcial si ≥ 50 m.
+8. **Reglas**: duplicada = otra fuente que empieza a ≤ 30 min de una de Apple Watch;
+   válida = no duplicada y ≥ 0,5 km; especial = ritmo medio > 8:00 /km (válida, fuera de
+   los ritmos medios).
+9. **Idempotencia**: `source_key` = `sourceName|inicio|fin` (UTC), upserts en todo; VO₂ por
+   (`measured_at`, `source_name`); rutas por carrera.
 
-**Reanudable desde el principio (Vercel Hobby, 300 s por invocación).** No se depende de
-que todo quepa en un proceso. El diseño concreto (pasadas/lotes con punto de control en
-`imports`) se fija en el paso 3.
+Rendimiento medido en local con 400 MB de XML sintético: 1.ª pasada ~430 MB/s, 2.ª pasada
+(peor caso) ~230 MB/s. Para 3,7 GB se esperan del orden de 1–2 min por pasada en Vercel;
+aunque tardara más, se reanuda sola.
 
-## Esquema de base de datos (Postgres / Drizzle)
+## Esquema de base de datos
 
-```sql
-imports (
-  id               uuid pk,
-  blob_url         text not null,
-  blob_pathname    text not null,
-  file_size        bigint,
-  export_date      timestamptz,           -- <ExportDate> del XML
-  status           text not null,         -- uploaded | processing | done | failed
-  phase            text,                  -- zip | xml | routes | dedupe | done
-  bytes_processed  bigint default 0,
-  stats            jsonb,                 -- contadores: carreras, descartes, GPX, VO2…
-  error            text,
-  created_at, started_at, finished_at timestamptz
-)
+Ver `src/lib/db/schema.ts` (fuente de verdad) y `drizzle/*.sql`. Tablas:
+`app_settings`, `imports` (+ `lease_until`), `shoes`, `runs`, `run_routes`, `run_splits`
+(+ `basis`), `run_series` (hr | power | speed | distance), `import_samples` (temporal
+durante la importación), `vo2max_readings`.
 
-shoes (
-  id uuid pk, name text not null, brand text, model text,
-  purchased_at date, retired_at date,
-  initial_km numeric(7,2) default 0, notes text,
-  created_at timestamptz
-)
+Durabilidad (primera vs segunda mitad: ritmo, FC y desacople) se calculará al vuelo en
+el paso 5 desde `run_splits`/`run_series`.
 
-runs (
-  id                     uuid pk,
-  source_key             text unique not null,    -- idempotencia
-  source                 text not null,           -- apple_watch | strava | other
-  source_name            text, source_version text, device text,
-  start_at               timestamptz not null,
-  end_at                 timestamptz not null,
-  duration_s             real not null,
-  distance_m             real,                    -- null si no hay estadística
-  avg_pace_s_per_km      real,                    -- derivado
-  avg_hr                 real, max_hr real,
-  avg_power_w            real,
-  avg_speed_mps          real,
-  avg_stride_m           real,
-  avg_vertical_osc_cm    real,
-  avg_ground_contact_ms  real,
-  steps                  integer,
-  cadence_spm            real,                    -- derivado de pasos
-  elevation_gain_m       real,
-  temperature_c          real,
-  humidity_pct           real,
-  is_indoor              boolean,
-  active_energy_kcal     real,
-  status                 text not null default 'valid',  -- valid | invalid | duplicate
-  invalid_reason         text,
-  duplicate_of           uuid references runs(id),
-  is_special             boolean not null default false,  -- > 8:00 /km
-  shoe_id                uuid references shoes(id),
-  import_id              uuid references imports(id),
-  raw                    jsonb,                   -- metadatos y estadísticas originales
-  created_at, updated_at timestamptz
-)
-index runs(start_at desc); index runs(status, is_special)
+"Ritmo a igual FC por año": válidas, no especiales, ≥ 5 km, con FC; franja
+**140–150 ppm** (ajustable), mostrando cuántas carreras entran cada año.
 
-run_routes (
-  run_id         uuid pk references runs(id) on delete cascade,
-  blob_url       text not null,       -- GPX original
-  file_name      text not null,
-  point_count    integer,
-  polyline       text,                -- simplificada, para mapa y miniatura
-  min_lat, min_lon, max_lat, max_lon  double precision,
-  gpx_distance_m real,
-  gpx_elevation_gain_m real
-)
+## Riesgos y pendientes
 
-run_splits (
-  run_id         uuid references runs(id) on delete cascade,
-  idx            smallint,            -- km 1, 2, …; el último puede ser parcial
-  distance_m     real, duration_s real, pace_s_per_km real,
-  avg_hr         real, avg_power_w real,
-  elevation_gain_m real, elevation_loss_m real,
-  primary key (run_id, idx)
-)
-
-run_series (
-  run_id   uuid references runs(id) on delete cascade,
-  metric   text,                      -- hr | power | speed | distance | elevation
-  t        integer[],                 -- segundos desde el inicio
-  v        real[],
-  primary key (run_id, metric)
-)
-
-vo2max_readings (
-  id           uuid pk,
-  measured_at  timestamptz not null,
-  value        real not null,         -- mL/(kg·min)
-  source_name  text,
-  import_id    uuid references imports(id),
-  unique (measured_at, source_name)
-)
-```
-
-Durabilidad (primera vs segunda mitad: ritmo, FC y desacople ritmo/FC) se calcula al
-vuelo desde `run_series`/`run_splits`; no se guarda.
-
-"Ritmo a igual FC por año": carreras válidas, no especiales, ≥ 5 km, con FC; ritmo
-medio por año en la franja **140–150 ppm** (ajustable), mostrando cuántas carreras entran
-cada año (decidido).
-
-## Riesgos y decisiones abiertas
-
-- **Tiempo de función.** Plan Hobby: 300 s máx. por invocación → importación por lotes
-  reanudable (decidido).
-- **Privacidad de Blob.** Datos de salud: usar almacenamiento privado de Blob si está
-  disponible en la cuenta; si no, rutas con sufijo aleatorio no adivinable y nunca
-  enlazadas públicamente.
-- **Carrera válida (decidido):** no duplicada (ventana 30 min, gana Apple Watch) y
-  distancia ≥ 0,5 km. Salen ~251 de 269. Sesión especial (> 8:00 /km) sigue siendo válida
-  pero queda fuera de los ritmos medios.
-- **Zona horaria.** Se guarda en UTC; se muestra en Europe/Madrid.
+- La 1.ª importación real dirá si el formato del export coincide con lo esperado
+  (nombres localizados, `FileReference`, unidades). La pantalla muestra el error exacto
+  si algo falla y se puede reanudar.
+- Neon Free: 0,5 GB de almacenamiento; las series ocupan poco (estimado < 50 MB).
+- Cambiar contraseña desde Perfil.
+- Zona horaria: se guarda en UTC; se muestra en Europe/Madrid.
 
 ## Comprobación con datos reales
 
 Carrera del 17‑oct‑2026: 21,34 km · 1:41:41 · 4:46 /km · FC 156 · 252 W.
-La pantalla de importación mostrará esta carrera al terminar para verificarla.
+Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
 - 2026‑11‑17 — Plan inicial de Fase 1 (archivos, esquema, importador).
 - 2026‑11‑17 — Plan aprobado. Decididos: contraseña única (90 días), Hobby → importación
-  reanudable, regla de carrera válida, franja 140–150 ppm. Añadido el contexto del
-  documento maestro.
-- 2026‑11‑17 — Paso 1: esqueleto Next 16 + Tailwind 4, tokens de diseño dark (resplandor
-  lima, grano, tarjetas), Space Grotesk + Inter, barra inferior flotante de cristal,
-  pantallas vacías (sin datos inventados), login con contraseña, PWA (manifest, iconos,
-  service worker que solo cachea estáticos). Comprobado en local a 390 px: redirección a
-  login, 401 en API, error de contraseña, cookie de 90 días, logout.
+  reanudable, regla de carrera válida, franja 140–150 ppm. Contexto del documento maestro.
+- 2026‑11‑17 — Paso 1: esqueleto Next 16 + Tailwind 4, diseño dark, barra inferior,
+  pantallas vacías, login, PWA. Comprobado en local a 390 px.
+- 2026‑11‑17 — Infraestructura: repo movido a `julen96fernandez-lab`; proyecto Vercel,
+  Neon (Fráncfort) creados por el usuario; Blob privado y `AUTH_SECRET` creados.
+- 2026‑11‑17 — Paso 2: esquema y migraciones (aplicadas en Neon); contraseña en BD;
+  pantalla `/setup` con `SETUP_CODE`. Probado en local de punta a punta.
+- 2026‑11‑17 — Paso 3: importador reanudable (zip por rangos, escáner en streaming, dos
+  pasadas, series, rutas, parciales, deduplicado, clasificación, reserva) y pantalla de
+  importación con progreso y comprobación. 18 pruebas con export sintético, incluida la
+  reanudación tras cortes en cualquier punto y la reimportación sin duplicados.
