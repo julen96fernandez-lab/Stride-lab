@@ -2,16 +2,25 @@
 
 > App de running personal (un solo usuario), PWA para iPhone.
 > Este archivo es la fuente de verdad del repo: decisiones, pendientes y estado.
-> **Pendiente:** incorporar aquí el contenido de `documento-maestro.md` del proyecto
-> "Running App" (no accesible desde la sesión de Code). Si algo de ese documento
-> contradice este plan, manda el documento y se corrige aquí.
+
+## Contexto (del documento maestro, aportado por el usuario el 2026‑11‑17)
+
+- Reloj: **Apple Watch Ultra**. Fuente principal: **Apple Health**. Strava solo como apoyo.
+- Solo entrenamientos de correr. Se descartan andar, senderismo, gimnasio, etc.
+- Historial: **269 carreras** (2016 – nov 2026). Hasta 2022 solo distancia y ritmo.
+  Desde 2023: pulso, potencia, zancada, oscilación vertical, contacto, temperatura y humedad.
+- **2022 sin carreras y 2023 casi vacío (4)**: los gráficos muestran el hueco, no lo rellenan.
+- ~186 carreras con GPX; ~56 indoor sin ruta.
+- Uso personal: sin social, sin suscripciones, sin multiusuario.
+- Fases posteriores (no ahora): Plan por turnos de 5 semanas; carga/fatiga/forma;
+  predicción de marcas con indicador de confianza; sincronización automática.
 
 ## Estado
 
 | Paso | Qué | Estado |
 |---|---|---|
-| 0 | Plan de archivos y esquema de BD | **Propuesto, pendiente de aprobación** |
-| 1 | Esqueleto Next.js, diseño base, PWA, acceso privado, navegación inferior | — |
+| 0 | Plan de archivos y esquema de BD | Aprobado 2026‑11‑17 |
+| 1 | Esqueleto Next.js, diseño base, PWA, acceso privado, navegación inferior | **Hecho** |
 | 2 | Esquema Drizzle + migración en Neon (proyecto nuevo) | — |
 | 3 | Importador (librería + pruebas con export sintético) | — |
 | 4 | Pantalla de importación (subida a Blob + proceso en streaming + progreso) | — |
@@ -27,19 +36,23 @@ Nada de Horizonte ni de la app de limpieza (repos, proyectos, BD, variables, cla
 
 ## Stack
 
-- Next.js (App Router) + TypeScript + Tailwind CSS v4
+- Next.js 16 (App Router, Cache Components y Partial Prefetching activados por defecto:
+  las lecturas de BD irán dentro de `<Suspense>`) + TypeScript + Tailwind CSS v4
 - Neon Postgres + Drizzle ORM (`@neondatabase/serverless`)
 - Vercel Blob (zip original y GPX individuales)
 - ECharts (gráficas), MapLibre GL + teselas OpenFreeMap (sin clave) para mapas
 - PWA instalable: `manifest.webmanifest`, iconos, service worker mínimo
 - Pruebas: Vitest
 
-## Acceso privado
+## Acceso privado (implementado)
 
-Un único usuario con contraseña (recomendado frente a magic link: no depende de un
-proveedor de correo). Hash de la contraseña en `AUTH_PASSWORD_HASH` (scrypt), cookie de
-sesión firmada (`AUTH_SECRET`, JWT HS256, 90 días, `HttpOnly`, `Secure`, `SameSite=Lax`).
-`middleware.ts` protege todas las rutas salvo `/login`, `/api/auth/*`, manifest e iconos.
+Un único usuario con contraseña. Hash en `AUTH_PASSWORD_HASH` (formato
+`scrypt:N:salt:hash`, se genera con `npm run hash-password -- '<contraseña>'`). Cookie de
+sesión `sl_session` firmada con `AUTH_SECRET` (JWT HS256, 90 días, `HttpOnly`, `Secure` en
+producción, `SameSite=Lax`). `src/proxy.ts` (en Next 16 `middleware` pasa a llamarse
+`proxy`) protege todo salvo `/login`, estáticos, iconos, manifest y `sw.js`; las rutas
+`/api/*` sin sesión devuelven 401. Login y logout son server actions (`src/app/login/actions.ts`);
+un fallo de contraseña espera 800 ms.
 
 ## Diseño (tokens)
 
@@ -138,8 +151,9 @@ tests/       vitest + fixtures/ export sintético mínimo (nunca datos reales)
 9. **Progreso.** La función actualiza `imports` (fase, bytes leídos, contadores); la
    pantalla consulta cada 2 s.
 
-Estimación de tiempo: descomprimir y escanear 3,7 GB ≈ 1–2 min en una función de Vercel
-(`maxDuration` 300 s). Riesgo y plan B en "Riesgos".
+**Reanudable desde el principio (Vercel Hobby, 300 s por invocación).** No se depende de
+que todo quepa en un proceso. El diseño concreto (pasadas/lotes con punto de control en
+`imports`) se fija en el paso 3.
 
 ## Esquema de base de datos (Postgres / Drizzle)
 
@@ -241,18 +255,19 @@ Durabilidad (primera vs segunda mitad: ritmo, FC y desacople ritmo/FC) se calcul
 vuelo desde `run_series`/`run_splits`; no se guarda.
 
 "Ritmo a igual FC por año": carreras válidas, no especiales, ≥ 5 km, con FC; ritmo
-medio por año dentro de una banda de FC común (p. ej. 140–150 ppm, ajustable).
-Pendiente de confirmar con el documento maestro.
+medio por año en la franja **140–150 ppm** (ajustable), mostrando cuántas carreras entran
+cada año (decidido).
 
 ## Riesgos y decisiones abiertas
 
-- **Tiempo de función.** Si el proceso supera `maxDuration`, plan B: dividir en dos
-  pasadas reanudables (Workouts/VO2 primero; series de FC/potencia después).
+- **Tiempo de función.** Plan Hobby: 300 s máx. por invocación → importación por lotes
+  reanudable (decidido).
 - **Privacidad de Blob.** Datos de salud: usar almacenamiento privado de Blob si está
   disponible en la cuenta; si no, rutas con sufijo aleatorio no adivinable y nunca
   enlazadas públicamente.
-- **Criterio de "válida".** ~250 de 269: hace falta la regla exacta del documento maestro
-  (de momento: sin distancia o duplicado → no válida).
+- **Carrera válida (decidido):** no duplicada (ventana 30 min, gana Apple Watch) y
+  distancia ≥ 0,5 km. Salen ~251 de 269. Sesión especial (> 8:00 /km) sigue siendo válida
+  pero queda fuera de los ritmos medios.
 - **Zona horaria.** Se guarda en UTC; se muestra en Europe/Madrid.
 
 ## Comprobación con datos reales
@@ -263,3 +278,11 @@ La pantalla de importación mostrará esta carrera al terminar para verificarla.
 ## Registro de cambios
 
 - 2026‑11‑17 — Plan inicial de Fase 1 (archivos, esquema, importador).
+- 2026‑11‑17 — Plan aprobado. Decididos: contraseña única (90 días), Hobby → importación
+  reanudable, regla de carrera válida, franja 140–150 ppm. Añadido el contexto del
+  documento maestro.
+- 2026‑11‑17 — Paso 1: esqueleto Next 16 + Tailwind 4, tokens de diseño dark (resplandor
+  lima, grano, tarjetas), Space Grotesk + Inter, barra inferior flotante de cristal,
+  pantallas vacías (sin datos inventados), login con contraseña, PWA (manifest, iconos,
+  service worker que solo cachea estáticos). Comprobado en local a 390 px: redirección a
+  login, 401 en API, error de contraseña, cookie de 90 días, logout.
