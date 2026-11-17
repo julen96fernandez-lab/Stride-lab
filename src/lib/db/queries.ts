@@ -5,7 +5,7 @@ import { decodePolyline } from "@/lib/import/gpx";
 import { paceAtHrByYear, type YearPace } from "@/lib/analysis/pace-at-hr";
 import { durabilityFromSeries, durabilityFromSplits, type Durability } from "@/lib/analysis/durability";
 import type { SeriesMetric } from "./schema";
-import { effectiveType, ensureClassified, getTypeSettings } from "@/lib/analysis/session-type-db";
+import { effectiveType, ensureClassified, getTypeSettings, getZones } from "@/lib/analysis/session-type-db";
 import { SESSION_TYPES, isSessionType, type SessionType } from "@/lib/analysis/session-type";
 
 const TZ = "Europe/Madrid";
@@ -60,6 +60,7 @@ export interface RunListItem {
   route: RouteShape | null;
   type: SessionType | null;
   typeManual: boolean;
+  trainingLoad: number | null;
 }
 
 function listColumns() {
@@ -76,6 +77,7 @@ function listColumns() {
     polyline: s.runRoutes.polyline,
     type: effectiveType,
     typeManual: sql<boolean>`${s.runs.sessionTypeManual} IS NOT NULL`,
+    trainingLoad: s.runs.trainingLoad,
   };
 }
 
@@ -186,7 +188,7 @@ export async function getRun(id: string) {
   const runRows = await d.select().from(s.runs).where(eq(s.runs.id, id)).limit(1);
   const run = runRows[0];
   if (!run) return null;
-  const [routeRows, splits, seriesRows, neighbours] = await Promise.all([
+  const [routeRows, splits, seriesRows, neighbours, zones] = await Promise.all([
     d.select().from(s.runRoutes).where(eq(s.runRoutes.runId, id)).limit(1),
     d.select().from(s.runSplits).where(eq(s.runSplits.runId, id)).orderBy(asc(s.runSplits.idx)),
     d.select().from(s.runSeries).where(eq(s.runSeries.runId, id)),
@@ -194,6 +196,7 @@ export async function getRun(id: string) {
       SELECT
         (SELECT id FROM runs WHERE status='valid' AND start_at < ${run.startAt} ORDER BY start_at DESC LIMIT 1) AS prev,
         (SELECT id FROM runs WHERE status='valid' AND start_at > ${run.startAt} ORDER BY start_at ASC LIMIT 1) AS next`),
+    getZones(d),
   ]);
   const series = Object.fromEntries(seriesRows.map((r) => [r.metric, { t: r.t, v: r.v }])) as Partial<
     Record<SeriesMetric, { t: number[]; v: number[] }>
@@ -212,6 +215,7 @@ export async function getRun(id: string) {
     hr: series.hr ?? null,
     power: series.power ?? null,
     durability,
+    zones,
     prevId: nb.prev,
     nextId: nb.next,
   };
@@ -273,6 +277,7 @@ export async function getAnalysis(band: [number, number]) {
   return { vo2, kmByYear, paceAtHr, totalRuns: runRows.length, longestM: longest, firstHrYear, typeByYear, byType12, byTypeAll };
 }
 
-export async function getTypeSettingsView() {
-  return getTypeSettings(db());
+export async function getTrainingSettingsView() {
+  const [types, zones] = await Promise.all([getTypeSettings(db()), getZones(db())]);
+  return { types, zones };
 }

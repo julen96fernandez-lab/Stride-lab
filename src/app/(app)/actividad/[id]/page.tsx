@@ -8,6 +8,8 @@ import { CountUp } from "@/components/ui/CountUp";
 import { Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/RunRow";
 import { TypePicker } from "@/components/ui/TypePicker";
+import { ZonesCard } from "@/components/ui/ZonesCard";
+import { LoadBadge } from "@/components/ui/Load";
 import { isSessionType } from "@/lib/analysis/session-type";
 import type { Durability } from "@/lib/analysis/durability";
 import { getRun } from "@/lib/db/queries";
@@ -38,7 +40,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getRun(id);
   if (!data) notFound();
-  const { run, route, splits, hr, power, durability, prevId, nextId } = data;
+  const { run, route, splits, hr, power, durability, zones, prevId, nextId } = data;
 
   return (
     <div className="stagger flex flex-col gap-4">
@@ -54,6 +56,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
           <Tag>{run.source === "apple_watch" ? "Apple Watch" : run.source === "strava" ? "Strava" : (run.sourceName ?? "Otra fuente")}</Tag>
           {run.isIndoor && <Tag>Indoor</Tag>}
           {run.isSpecial && <Tag tone="lime">Sesión especial</Tag>}
+          <LoadBadge load={run.trainingLoad} />
           {run.status !== "valid" && <Tag>{run.status === "duplicate" ? "Duplicada" : "No válida"}</Tag>}
         </div>
       </header>
@@ -102,6 +105,9 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Durabilidad */}
       <DurabilityCard d={durability} />
+
+      {/* Tiempo en zonas y carga */}
+      <ZonesCard seconds={run.hrZoneSeconds} load={run.trainingLoad} zones={zones} />
 
       {/* Pulso y potencia a lo largo de la carrera */}
       {hr && hr.t.length > 1 && (

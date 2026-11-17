@@ -13,6 +13,16 @@
   --fg-2: #a9aca2;
   --fg-3: #74776e;
   --danger: #ff8a73;
+  /* Zonas de FC (ordinales: gris → azul → verde → ámbar → rojo) */
+  --z1: #8a8d84;
+  --z2: #3987e5;
+  --z3: #199e70;
+  --z4: #c98500;
+  --z5: #e66767;
+  /* Carga: baja / moderada / alta */
+  --load-low: #2fbf5b;
+  --load-mod: #e3912b;
+  --load-high: #f0605d;
   color-scheme: dark;
 }
 

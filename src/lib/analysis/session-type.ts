@@ -5,10 +5,15 @@
  *   2. Cinta         → entrenamiento indoor
  *   3. Tirada larga  → distancia ≥ longRunKm (15 km por defecto)
  *   4. Trail         → desnivel positivo ≥ trailMPerKm metros por km
- *   5. Tempo / Recuperación / Rodaje → ritmo y pulso frente a tu media de los
- *      12 meses anteriores (rodajes comparables: sin cinta, sin series, sin especiales)
+ *   5. Con pulso, por la zona del pulso medio: Z1 → Recuperación; Z2 → Rodaje;
+ *      Z3 o más → Tempo si el ritmo es ≥ 4 % más rápido que tu media de los 12 meses
+ *      anteriores (carreras comparables: sin cinta, series ni especiales); si no, Rodaje.
+ *      Sin pulso, solo el ritmo frente a tu media (≥ 7 % más rápido → Tempo,
+ *      ≥ 10 % más lento → Recuperación, si no Rodaje).
  * Competición nunca se adivina: solo a mano.
  */
+
+import { DEFAULT_ZONES, zoneOf, type HrZones } from "./hr-zones";
 
 export const SESSION_TYPES = [
   "rodaje",
@@ -63,12 +68,9 @@ export function isIntervalWorkout(steps: readonly string[] | null | undefined): 
   });
 }
 
-/** Umbrales de ritmo/pulso frente a la media (fijos y explicados en el motivo). */
-const TEMPO_PACE = 0.04; // ≥ 4 % más rápido que tu media…
-const TEMPO_HR = 3; // …y ≥ 3 ppm por encima
+/** Umbrales de ritmo frente a tu media (fijos y explicados en el motivo). */
+const TEMPO_PACE = 0.04; // Tempo: Z3 o más y ≥ 4 % más rápido que tu media
 const TEMPO_PACE_NO_HR = 0.07; // sin pulso: ≥ 7 % más rápido
-const RECOV_PACE = 0.06; // ≥ 6 % más lento…
-const RECOV_HR = 3; // …y ≥ 3 ppm por debajo
 const RECOV_PACE_NO_HR = 0.1; // sin pulso: ≥ 10 % más lento
 const BASELINE_DAYS = 365;
 const MIN_BASELINE_RUNS = 5;
@@ -101,7 +103,11 @@ function median(xs: number[]): number | null {
 const pct = (x: number) => `${Math.round(Math.abs(x) * 100)} %`;
 const fmtKm = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 1 });
 
-export function classifySessionTypes(runs: RunForType[], settings: TypeSettings = DEFAULT_TYPE_SETTINGS): Map<string, TypeResult> {
+export function classifySessionTypes(
+  runs: RunForType[],
+  settings: TypeSettings = DEFAULT_TYPE_SETTINGS,
+  zones: HrZones | null = DEFAULT_ZONES,
+): Map<string, TypeResult> {
   const comparable = runs
     .filter((r) => !r.isIndoor && !isIntervalWorkout(r.intervalSteps) && !r.isSpecial && r.avgPaceSPerKm !== null && r.distanceM !== null && r.distanceM >= 1000)
     .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
@@ -146,25 +152,34 @@ export function classifySessionTypes(runs: RunForType[], settings: TypeSettings 
       continue;
     }
     const base = r.avgPaceSPerKm === null ? null : baselineFor(r);
-    if (!base || r.avgPaceSPerKm === null) {
-      out.set(r.id, { type: "rodaje", reason: "Sin media suficiente para comparar" });
+    const diff = base && r.avgPaceSPerKm !== null ? (r.avgPaceSPerKm - base.pace) / base.pace : null; // < 0 = más rápido
+    const scope = base ? `tu media (${base.scope})` : "";
+
+    // Con pulso y zonas: la zona del pulso medio decide.
+    if (zones && r.avgHr !== null) {
+      const z = zoneOf(r.avgHr, zones.limits);
+      const hrText = `FC media ${Math.round(r.avgHr)} ppm en Z${z}`;
+      if (z === 1) out.set(r.id, { type: "recuperacion", reason: hrText });
+      else if (z === 2) out.set(r.id, { type: "rodaje", reason: hrText });
+      else if (diff !== null && diff <= -TEMPO_PACE)
+        out.set(r.id, { type: "tempo", reason: `${hrText} y ritmo ${pct(diff)} más rápido que ${scope}` });
+      else
+        out.set(r.id, {
+          type: "rodaje",
+          reason: diff === null ? `${hrText}; sin media para comparar el ritmo` : `${hrText}, ritmo no claramente más rápido que ${scope}`,
+        });
       continue;
     }
-    const diff = (r.avgPaceSPerKm - base.pace) / base.pace; // negativo = más rápido
-    const useHr = r.avgHr !== null && base.hr !== null;
-    const hrDiff = useHr ? r.avgHr! - base.hr! : 0;
-    const hrText = useHr ? ` y FC ${hrDiff >= 0 ? "+" : "−"}${Math.round(Math.abs(hrDiff))} ppm` : "";
-    const scope = `tu media (${base.scope})`;
 
-    if (useHr ? diff <= -TEMPO_PACE && hrDiff >= TEMPO_HR : diff <= -TEMPO_PACE_NO_HR) {
-      out.set(r.id, { type: "tempo", reason: `Ritmo ${pct(diff)} más rápido${hrText} que ${scope}` });
-    } else if (useHr ? diff >= RECOV_PACE && hrDiff <= -RECOV_HR : diff >= RECOV_PACE_NO_HR) {
-      out.set(r.id, { type: "recuperacion", reason: `Ritmo ${pct(diff)} más lento${hrText} que ${scope}` });
+    // Sin pulso: solo el ritmo frente a tu media, con umbrales más exigentes.
+    if (diff === null) {
+      out.set(r.id, { type: "rodaje", reason: "Sin pulso ni media suficiente para comparar" });
+    } else if (diff <= -TEMPO_PACE_NO_HR) {
+      out.set(r.id, { type: "tempo", reason: `Sin pulso: ritmo ${pct(diff)} más rápido que ${scope}` });
+    } else if (diff >= RECOV_PACE_NO_HR) {
+      out.set(r.id, { type: "recuperacion", reason: `Sin pulso: ritmo ${pct(diff)} más lento que ${scope}` });
     } else {
-      out.set(r.id, {
-        type: "rodaje",
-        reason: `Ritmo ${Math.abs(diff) < 0.005 ? "igual a" : `${pct(diff)} ${diff < 0 ? "más rápido que" : "más lento que"}`} ${scope}${hrText}`,
-      });
+      out.set(r.id, { type: "rodaje", reason: `Sin pulso: ritmo cercano a ${scope}` });
     }
   }
   return out;

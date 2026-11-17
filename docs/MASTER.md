@@ -254,19 +254,35 @@ en lima. El color nunca va solo: siempre icono + nombre.
 - Columnas en `runs`: `session_type_auto`, `session_type_reason` (por qué) y
   `session_type_manual`. Tipo efectivo = manual si existe; si no, automático.
 - **Reglas automáticas** (`src/lib/analysis/session-type.ts`, la primera que se cumple):
-  1. Series: el reloj registró intervalos (`WOIntervalStepKeyPath` en los metadatos; 40
-     carreras en los datos reales).
+  1. Series: el reloj marcó intervalos de verdad: **5 o más rutas de paso distintas**
+     (`WOIntervalStepKeyPath`) **y alguna con repetición** (2.º o 3.º componente ≠ 0,
+     p. ej. `1.0.1`, `1.1.0`). El Apple Watch pone `0.0.0` en rodajes normales, así que ese
+     valor solo no cuenta. El importador guarda todas las rutas distintas en
+     `raw.intervalSteps` (hace falta «Reprocesar» el zip para tenerlas en carreras viejas).
   2. Cinta: indoor.
-  3. Tirada larga: ≥ 15 km (configurable en Perfil).
-  4. Trail: desnivel positivo ≥ 25 m por km (configurable; mediana real 7 m/km, p90 27).
-  5. Frente a tu media de los 12 meses anteriores (mediana de ritmo y de FC de carreras
-     comparables: sin cinta, series ni especiales; si hay < 5, todo el historial):
-     Tempo = ≥ 4 % más rápido y ≥ 3 ppm más (sin pulso: ≥ 7 % más rápido);
-     Recuperación = ≥ 6 % más lento y ≥ 3 ppm menos (sin pulso: ≥ 10 % más lento);
-     si no, Rodaje. Sin media suficiente → Rodaje con ese motivo.
+  3. Tirada larga: ≥ 13 km (configurable).
+  4. Trail: desnivel positivo ≥ 25 m por km (configurable).
+  5. Con pulso, por la zona del pulso medio: Z1 → Recuperación; Z2 → Rodaje; Z3 o más →
+     Tempo si el ritmo es ≥ 4 % más rápido que tu media (mediana de los 12 meses previos,
+     carreras comparables), si no Rodaje. Sin pulso: ≥ 7 % más rápido → Tempo, ≥ 10 % más
+     lento → Recuperación, si no Rodaje.
   Competición nunca se adivina.
-- Se recalcula al terminar cada importación, al guardar los umbrales en Perfil y, si hay
-  carreras válidas sin tipo, al abrir cualquier pantalla. El manual nunca se toca.
+- Se recalcula al terminar cada importación, con «Guardar y recalcular» en Perfil y, si
+  las reglas cambian de versión (`CLASSIFIER_VERSION`) o hay carreras válidas sin tipo, al
+  abrir cualquier pantalla. El manual nunca se toca.
+
+## Zonas de FC y carga
+
+- Ajustes en `app_settings` (`hr_zones`): FC máx. 181, reposo 46, método reserva
+  cardíaca; límites inferiores Z1…Z5 = 50/60/70/80/90 % de la reserva → 114, 127, 141,
+  154, 168 ppm. Editables en Perfil (a mano o «Calcular límites»; también % del máximo).
+- Tiempo en zona por carrera (`runs.hr_zone_seconds`): cada muestra de FC cuenta hasta la
+  siguiente, como máximo 30 s (no rellena pausas); por debajo de Z1 cuenta como Z1.
+- Carga (`runs.training_load`): minutos en zona × 1…5 (TRIMP de Edwards). Rayo verde
+  < 120, naranja 120–249, rojo ≥ 250. Sin muestras de FC no hay carga («—» / sin insignia).
+- Se ve en Actividad (insignia) y en el detalle (insignia + tarjeta de zonas).
+- **Guardar y recalcular** (Perfil): guarda zonas y umbrales y vuelve a calcular zonas,
+  carga y tipos automáticos de todas las carreras.
 - **Cambio manual**: en el detalle, fila de chips; un toque elige el tipo (se guarda al
   momento), otro toque sobre el elegido o «Volver a automático» lo quita.
 - **Actividad**: filtros por tipo (`?tipo=`) con recuento y etiqueta del tipo en cada fila.
@@ -317,6 +333,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Series por rutas de paso con repetición; tirada larga desde 13 km;
+  «Reprocesar» zip. Zonas de FC editables, tiempo en zona, carga y tipos por zona;
+  «Guardar y recalcular». 35 pruebas.
 - 2026‑11‑17 — Tipos de sesión: clasificación automática por reglas, tipo manual aparte
   con un toque, filtros en Actividad y km por tipo en Inicio y Análisis. 32 pruebas.
 - 2026‑11‑17 — Arreglo de la subida (ver Incidencias): subida por partes reanudable,

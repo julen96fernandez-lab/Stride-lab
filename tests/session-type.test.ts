@@ -29,7 +29,9 @@ describe("clasificación de tipos de sesión", () => {
       base({ id: "long", distanceM: 16_000 }),
       base({ id: "trail", distanceM: 10_000, elevationGainM: 300 }),
       base({ id: "tempo", avgPaceSPerKm: 300, avgHr: 156 }),
-      base({ id: "rec", avgPaceSPerKm: 370, avgHr: 135 }),
+      base({ id: "rec", avgPaceSPerKm: 370, avgHr: 120 }),
+      base({ id: "z2", avgPaceSPerKm: 300, avgHr: 135 }), // rápido pero en Z2 → rodaje
+      base({ id: "z3slow", avgPaceSPerKm: 335, avgHr: 150 }), // Z3 sin ir más rápido → rodaje
       base({ id: "easy", avgPaceSPerKm: 335, avgHr: 146 }),
       base({ id: "fastNoHr", avgPaceSPerKm: 300, avgHr: null }),
     ];
@@ -39,7 +41,10 @@ describe("clasificación de tipos de sesión", () => {
     expect(r.get("long")!.type).toBe("tirada_larga");
     expect(r.get("trail")!.type).toBe("trail");
     expect(r.get("tempo")!.type).toBe("tempo");
-    expect(r.get("tempo")!.reason).toMatch(/9 % más rápido y FC \+11 ppm/);
+    expect(r.get("tempo")!.reason).toMatch(/FC media 156 ppm en Z4 y ritmo 9 % más rápido/);
+    expect(r.get("z2")!.type).toBe("rodaje");
+    expect(r.get("z2")!.reason).toMatch(/en Z2/);
+    expect(r.get("z3slow")!.type).toBe("rodaje");
     expect(r.get("rec")!.type).toBe("recuperacion");
     expect(r.get("easy")!.type).toBe("rodaje");
     expect(r.get("fastNoHr")!.type).toBe("tempo"); // 9 % ≥ 7 % sin pulso
@@ -54,7 +59,8 @@ describe("clasificación de tipos de sesión", () => {
 
   it("nunca propone Competición y, sin media, deja Rodaje con el motivo", () => {
     const r = classifySessionTypes([base({ id: "solo", avgPaceSPerKm: 250 })]);
-    expect(r.get("solo")).toEqual({ type: "rodaje", reason: "Sin media suficiente para comparar" });
+    expect(r.get("solo")!.type).toBe("rodaje");
+    expect(r.get("solo")!.reason).toMatch(/sin media para comparar el ritmo/);
     const all = classifySessionTypes([...history, base({ avgPaceSPerKm: 200, avgHr: 190 })]);
     expect([...all.values()].some((v) => v.type === "competicion")).toBe(false);
   });
@@ -69,5 +75,36 @@ describe("detección de series", () => {
     expect(isIntervalWorkout(["0.0.0", "1.0.0", "1.0.1", "2.0.0"])).toBe(false); // < 5 distintas
     expect(isIntervalWorkout(["0.0.0", "1.0.0", "1.0.1", "1.1.0", "2.0.0"])).toBe(true);
     expect(isIntervalWorkout(["0.0.0", "1.0.0", "1.0.1", "1.0.1", "2.0.0"])).toBe(false); // repetidas no cuentan
+  });
+});
+
+describe("zonas y carga", () => {
+  it("límites por reserva cardíaca con 181/46", async () => {
+    const { DEFAULT_ZONES, limitsFrom, zoneOf, timeInZones, trainingLoad, loadLevel, validZones } = await import("@/lib/analysis/hr-zones");
+    expect(DEFAULT_ZONES.limits).toEqual([114, 127, 141, 154, 168]);
+    expect(limitsFrom(181, 46, "max")).toEqual([91, 109, 127, 145, 163]);
+    expect(zoneOf(100, DEFAULT_ZONES.limits)).toBe(1);
+    expect(zoneOf(141, DEFAULT_ZONES.limits)).toBe(3);
+    expect(zoneOf(190, DEFAULT_ZONES.limits)).toBe(5);
+    // 10 min a 130 (Z2) y 10 min a 160 (Z4), muestras cada 5 s; un hueco de 5 min no cuenta entero
+    const t: number[] = [];
+    const v: number[] = [];
+    for (let s = 0; s < 600; s += 5) {
+      t.push(s);
+      v.push(130);
+    }
+    for (let s = 900; s < 1500; s += 5) {
+      t.push(s);
+      v.push(160);
+    }
+    const z = timeInZones(t, v, DEFAULT_ZONES.limits);
+    expect(z[1]).toBe(595 + 30); // el salto de 300 s se recorta a 30 s
+    expect(z[3]).toBe(600);
+    expect(trainingLoad(z)).toBe(Math.round((625 / 60) * 2 + (600 / 60) * 4));
+    expect(trainingLoad(null)).toBeNull();
+    expect(loadLevel(80)).toBe("low");
+    expect(loadLevel(150)).toBe("moderate");
+    expect(loadLevel(300)).toBe("high");
+    expect(validZones({ ...DEFAULT_ZONES, limits: [114, 113, 141, 154, 168] })).toBe(false);
   });
 });

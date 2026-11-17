@@ -117,6 +117,12 @@ d("pipeline de importación", () => {
 
     // Tipos de sesión automáticos: cinta para la indoor; las no válidas sin tipo.
     expect(indoor.sessionTypeAuto ?? (await db.select().from(s.runs).where(eq(s.runs.id, indoor.id)))[0].sessionTypeAuto).toBe("cinta");
+    // Zonas (FC 150 → Z3, 162 → Z4 con 181/46) y carga de la carrera de referencia.
+    const refNow = (await db.select().from(s.runs).where(eq(s.runs.id, ref.id)))[0];
+    expect(refNow.hrZoneSeconds).toHaveLength(5);
+    expect(refNow.hrZoneSeconds![2]).toBeGreaterThan(2900);
+    expect(refNow.hrZoneSeconds![3]).toBeGreaterThan(2900);
+    expect(refNow.trainingLoad).toBeGreaterThan(300);
     const typed = await db.select({ st: s.runs.status, t: s.runs.sessionTypeAuto }).from(s.runs);
     expect(typed.filter((x) => x.st === "valid").every((x) => x.t !== null)).toBe(true);
     expect(typed.filter((x) => x.st !== "valid").every((x) => x.t === null)).toBe(true);

@@ -110,6 +110,10 @@ export const runs = pgTable(
     sessionTypeReason: text("session_type_reason"),
     /** Tipo elegido a mano; si existe, manda sobre el automático. */
     sessionTypeManual: text("session_type_manual"),
+    /** Segundos en Z1…Z5 según las muestras de FC y las zonas guardadas. */
+    hrZoneSeconds: real("hr_zone_seconds").array(),
+    /** Carga (minutos en zona × 1…5); null si no hay muestras de FC. */
+    trainingLoad: real("training_load"),
     shoeId: uuid("shoe_id").references(() => shoes.id, { onDelete: "set null" }),
     importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     /** Metadatos y estadísticas originales, para trazabilidad. */

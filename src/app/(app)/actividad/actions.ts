@@ -1,9 +1,9 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { DEFAULT_TYPE_SETTINGS, isSessionType } from "@/lib/analysis/session-type";
-import { reclassifyAll, saveTypeSettings, setManualType } from "@/lib/analysis/session-type-db";
+import { isSessionType } from "@/lib/analysis/session-type";
+import { validZones, type HrZones } from "@/lib/analysis/hr-zones";
+import { ensureClassified, reclassifyAll, saveTypeSettings, saveZones, setManualType } from "@/lib/analysis/session-type-db";
 
 /** Cambia el tipo de una carrera. "auto" vuelve al tipo automático. */
 export async function setRunType(runId: string, type: string): Promise<{ ok: boolean }> {
@@ -13,16 +13,29 @@ export async function setRunType(runId: string, type: string): Promise<{ ok: boo
   return { ok: true };
 }
 
-/** Guarda los umbrales configurables y recalcula los tipos automáticos. */
-export async function saveTypeSettingsAction(formData: FormData): Promise<void> {
-  const num = (k: string, lo: number, hi: number, def: number) => {
-    const v = Number(String(formData.get(k) ?? "").replace(",", "."));
-    return Number.isFinite(v) && v >= lo && v <= hi ? v : def;
+export type SettingsState = { ok?: string; error?: string };
+
+/** Guarda zonas y umbrales y vuelve a aplicar todo (zonas, carga y tipos automáticos). */
+export async function saveTrainingSettings(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
+  const n = (k: string) => Number(String(formData.get(k) ?? "").replace(",", ".").trim());
+  const zones: HrZones = {
+    maxHr: Math.round(n("maxHr")),
+    restHr: Math.round(n("restHr")),
+    method: formData.get("method") === "max" ? "max" : "reserve",
+    limits: [1, 2, 3, 4, 5].map((i) => Math.round(n(`z${i}`))) as HrZones["limits"],
   };
-  await saveTypeSettings(db(), {
-    longRunKm: num("longRunKm", 5, 60, DEFAULT_TYPE_SETTINGS.longRunKm),
-    trailMPerKm: num("trailMPerKm", 5, 200, DEFAULT_TYPE_SETTINGS.trailMPerKm),
-  });
-  await reclassifyAll(db());
-  redirect("/perfil?tipos=ok");
+  if (!validZones(zones)) {
+    return { error: "Revisa las zonas: los límites deben subir de Z1 a Z5 y no pasar del pulso máximo." };
+  }
+  const longRunKm = n("longRunKm");
+  const trailMPerKm = n("trailMPerKm");
+  if (!(longRunKm >= 5 && longRunKm <= 60)) return { error: "La tirada larga debe estar entre 5 y 60 km." };
+  if (!(trailMPerKm >= 5 && trailMPerKm <= 200)) return { error: "El umbral de trail debe estar entre 5 y 200 m/km." };
+
+  const d = db();
+  await saveZones(d, zones);
+  await saveTypeSettings(d, { longRunKm, trailMPerKm });
+  const count = await reclassifyAll(d);
+  await ensureClassified(d); // deja apuntada la versión de las reglas
+  return { ok: `${count} carreras recalculadas.` };
 }
