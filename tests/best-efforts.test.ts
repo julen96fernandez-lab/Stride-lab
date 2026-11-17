@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestEfforts, continuousSegments, improvementPct, MAX_SPEED_MPS, recordProgression } from "@/lib/analysis/best-efforts";
+import { bestEfforts, continuousSegments, improvementPct, isImplausibleSample, MAX_SPEED_MPS, recordProgression } from "@/lib/analysis/best-efforts";
 
 /** Muestras cada `step` s a velocidades por tramos: [segundos, m/s][] */
 function samples(parts: [number, number][], step = 3, pauseAfter?: { at: number; gap: number }) {
@@ -155,5 +155,53 @@ describe("muestras anómalas (velocidad implícita imposible)", () => {
     const t = [305, 610, 915, 1220, 1525];
     const v = [732, 732, 732, 732, 732];
     expect(continuousSegments(t, v)).toHaveLength(1);
+  });
+
+  // Las que se escaparon del primer umbral (7 m/s): mismas carreras reales.
+  it("muestras largas con hueco corto por debajo de 7 m/s también son inválidas", () => {
+    expect(isImplausibleSample(945.5, 141)).toBe(true); // 4-jul: 6,71 m/s → daba un 1 km en 2:38
+    expect(isImplausibleSample(1303.7, 203)).toBe(true); // 24-ago-2021: 6,42 m/s → daba un 1 km en 2:36
+    expect(isImplausibleSample(801, 179)).toBe(true); // 4-jul: 4,48 m/s
+    expect(isImplausibleSample(1250.3, 20)).toBe(true); // 13-jun-2021: 62 m/s
+    expect(isImplausibleSample(1160.6, 142)).toBe(true); // 14-ene-2024: 8,17 m/s → daba una milla en 4:30
+  });
+
+  it("las muestras completas (~300 s) y los ritmos normales son válidos", () => {
+    expect(isImplausibleSample(737.1, 305)).toBe(false); // 2,4 m/s
+    expect(isImplausibleSample(1198, 278)).toBe(false); // 4,3 m/s en una muestra completa
+    expect(isImplausibleSample(1000, 270)).toBe(false);
+    expect(isImplausibleSample(1000, 269)).toBe(false); // 3,7 m/s: bajo el límite
+    expect(isImplausibleSample(1100, 269)).toBe(true); // 4,09 m/s con hueco incompleto
+    expect(isImplausibleSample(2000, 270)).toBe(true); // 7,4 m/s: ni una muestra completa lo aguanta
+    expect(isImplausibleSample(17.1, 2)).toBe(false); // redondeo de segundos
+    expect(isImplausibleSample(60, 9)).toBe(false); // hueco < 10 s: no se juzga
+  });
+
+  it("carrera con las tres anomalías del 4-jul: ningún esfuerzo las cruza y ninguno baja de ritmo creíble", () => {
+    // 3 000 s a 2,6 m/s (muestras de 3 s), muestra anómala (946 m en 141 s), 600 s más, otra (801 m en 179 s), 600 s más
+    const t: number[] = [];
+    const v: number[] = [];
+    let now = 0;
+    const run = (secs: number) => {
+      for (let s = 0; s < secs; s += 3) {
+        now += 3;
+        t.push(now);
+        v.push(7.8);
+      }
+    };
+    run(3000);
+    now += 141;
+    t.push(now);
+    v.push(945.5);
+    run(600);
+    now += 179;
+    t.push(now);
+    v.push(801);
+    run(600);
+    const segs = continuousSegments(t, v);
+    expect(segs).toHaveLength(3);
+    for (const s of segs) expect(s.t.some((_, k) => k > 0 && s.d[k] - s.d[k - 1] > 700)).toBe(false);
+    const e = bestEfforts(t, v);
+    expect(e.find((x) => x.key === "1k")!.timeS).toBeGreaterThan(380); // 2,6 m/s → ~6:25 /km
   });
 });

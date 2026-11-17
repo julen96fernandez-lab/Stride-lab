@@ -18,12 +18,29 @@ export const PAUSE_GAP_S = 15;
 const PAUSE_SPEED_MPS = 1;
 /**
  * Muestra inválida: de cada muestra solo se guarda el final de su intervalo, así que si la
- * anterior terminó mucho antes, el hueco no es su duración real y la velocidad implícita sale
- * imposible (p. ej. 886 m en 105 s = 2:00 /km). Solo se juzga con huecos de MIN_GAP_CHECK_S o
- * más: las muestras de 2–3 s con 14–17 m son redondeo de segundos y no son anomalías.
+ * anterior terminó mucho antes, el hueco no es su duración real (el reloj registra muestras de
+ * ~300 s y, entre medias, muestras finas casi paradas) y la velocidad implícita sale imposible
+ * (4-jul-2026: 886 m en 105 s = 2:00 /km; 946 m en 141 s = 6,7 m/s; 801 m en 179 s = 4,5 m/s).
+ *
+ * - Hueco < MIN_GAP_CHECK_S (10 s): no se juzga. Las muestras de 2–3 s con 14–17 m son redondeo
+ *   de segundos y salen por cientos.
+ * - Hueco entre 10 s y FULL_SAMPLE_GAP_S (270 s): el intervalo real probablemente es más largo
+ *   que el hueco; por encima de MAX_SPEED_SPARSE_MPS (4 m/s ≈ 4:10 /km) es inválida. En los datos
+ *   reales hay 188 muestras entre 3,5 y 4 m/s y la cola por encima es casi toda de este tipo.
+ * - Hueco ≥ 270 s: es una muestra completa de ~300 s, su intervalo es fiable; solo se descarta
+ *   por encima de MAX_SPEED_MPS (7 m/s ≈ 2:23 /km).
  */
-export const MAX_SPEED_MPS = 7; // ≈ 2:23 /km
+export const MAX_SPEED_MPS = 7;
+export const MAX_SPEED_SPARSE_MPS = 4;
 export const MIN_GAP_CHECK_S = 10;
+export const FULL_SAMPLE_GAP_S = 270;
+
+/** ¿La muestra (distancia v tras un hueco de gap s) tiene una velocidad implícita imposible? */
+export function isImplausibleSample(v: number, gap: number): boolean {
+  if (gap < MIN_GAP_CHECK_S) return false;
+  const speed = v / gap;
+  return speed > MAX_SPEED_MPS || (gap < FULL_SAMPLE_GAP_S && speed > MAX_SPEED_SPARSE_MPS);
+}
 export const MIN_PACE_S_PER_KM = 150; // 2:30 /km
 
 export const EFFORT_DISTANCES = [
@@ -59,7 +76,7 @@ export function continuousSegments(t: readonly number[], v: readonly number[]): 
     const gap = t[i] - prevT;
     const isPause = gap > PAUSE_GAP_S && v[i] / gap < PAUSE_SPEED_MPS;
     // Muestra inválida: se descarta y el tramo se parte antes y después (ningún esfuerzo la cruza).
-    if (gap >= MIN_GAP_CHECK_S && v[i] / gap > MAX_SPEED_MPS) {
+    if (isImplausibleSample(v[i], gap)) {
       cur = null;
       prevT = t[i];
       first = false;

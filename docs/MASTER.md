@@ -164,15 +164,18 @@ cubre < 1 m/s (un hueco largo con distancia de carrera es una muestra continua, 
 pausa). Se descartan esfuerzos más rápidos de 2:30 /km. Resultado en `run_efforts`
 (se recalcula al reprocesar o al cambiar la versión de reglas).
 
-**Muestras anómalas** (reglas versión 6): de cada muestra solo se guarda el final de su
-intervalo, así que si la anterior terminó mucho antes, el hueco no es su duración real y la
-velocidad implícita sale imposible (4‑jul‑2026: 886 m en 105 s = 2:00 /km, tras muestras finas
-casi paradas; daba un «1 km en 2:32»). Una muestra con hueco ≥ 10 s y velocidad implícita
-> 7 m/s (≈ 2:23 /km) se descarta y parte el tramo antes y después: ningún esfuerzo la cruza, y
-el tramo siguiente empieza donde ella termina. Con huecos < 10 s no se juzga: las muestras de
-2–3 s con 14–17 m son redondeo de segundos (aparecen por cientos). Si el mejor esfuerzo de un
-tramo baja de 2:30 /km, se ignora ese tramo (no toda la distancia). Pruebas con la secuencia
-real del 4‑jul y del 5 km de 2021.
+**Muestras anómalas** (reglas versión 7): de cada muestra solo se guarda el final de su
+intervalo; el reloj registra muestras de ~300 s y, entre medias, muestras finas casi paradas.
+Si la muestra anterior terminó mucho antes, el hueco no es la duración real y la velocidad
+implícita sale imposible (4‑jul‑2026: 886 m en 105 s = 2:00 /km, daba un «1 km en 2:32»; y
+otras dos, 946 m en 141 s y 801 m en 179 s, por debajo de 7 m/s). Regla (con datos reales: 188
+muestras entre 3,5 y 4 m/s, solo 11 entre 4 y 4,5 y una cola de ~19 por encima):
+- hueco < 10 s: no se juzga (muestras de 2–3 s con 14–17 m son redondeo y salen por cientos);
+- hueco de 10 a 270 s: inválida por encima de 4 m/s (≈ 4:10 /km);
+- hueco ≥ 270 s (muestra completa de ~300 s): inválida solo por encima de 7 m/s.
+Una muestra inválida se descarta y parte el tramo antes y después (ningún esfuerzo la cruza; el
+tramo siguiente empieza donde ella termina). Si el mejor esfuerzo de un tramo baja de 2:30 /km
+se ignora ese tramo, no toda la distancia. Pruebas con las secuencias reales.
 
 Datos reales: 1202 huecos > 15 s; 164 son pausas (57 carreras, mediana 58 s); 1038 son
 muestras largas continuas. Las 15 carreras válidas sin muestras de distancia tienen su
@@ -458,8 +461,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
-- 2026‑11‑17 — Récords: las muestras con velocidad implícita imposible (hueco ≥ 10 s y
-  > 7 m/s) se descartan y parten el tramo; reglas versión 6; el build recalcula tras migrar
+- 2026‑11‑17 — Récords: las muestras con velocidad implícita imposible (hueco 10–270 s y > 4 m/s, o > 7 m/s) se descartan y parten el tramo; reglas versión 7; el build recalcula tras migrar
   (`scripts/recompute.mts`, no rompe el despliegue si falla). Análisis: tarjetas con el mismo
   tramo del periodo anterior y ejes de ritmo regulares.
 - 2026‑11‑17 — Revisión visual: bandas «Lesión» al fondo y por columnas enteras, objetivo
