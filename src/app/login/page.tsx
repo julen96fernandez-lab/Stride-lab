@@ -1,8 +1,18 @@
 import { Suspense } from "react";
+import { connection } from "next/server";
+import { redirect } from "next/navigation";
 import { Logo } from "@/components/ui/Logo";
+import { isPasswordSet } from "@/lib/auth/store";
 import { LoginForm } from "./LoginForm";
 
 export const metadata = { title: "Entrar · Stride Lab" };
+
+/** Si todavía no hay contraseña, el primer acceso va a /setup. */
+async function RequireConfigured() {
+  await connection();
+  if (!(await isPasswordSet())) redirect("/setup");
+  return null;
+}
 
 export default function LoginPage() {
   return (
@@ -23,6 +33,9 @@ export default function LoginPage() {
           <LoginForm />
         </Suspense>
       </div>
+      <Suspense>
+        <RequireConfigured />
+      </Suspense>
     </main>
   );
 }

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, isValidSessionToken } from "@/lib/auth/session";
 
 /** Rutas accesibles sin sesión. */
-const PUBLIC_PATHS = new Set(["/login"]);
+const PUBLIC_PATHS = new Set(["/login", "/setup"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

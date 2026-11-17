@@ -1,0 +1,209 @@
+import {
+  bigint,
+  boolean,
+  date,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  real,
+  smallint,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
+
+const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
+
+/** Ajustes clave/valor (p. ej. el hash de la contraseña). */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: updatedAt(),
+});
+
+export type ImportStatus = "uploaded" | "processing" | "done" | "failed";
+export type ImportPhase = "index" | "workouts" | "samples" | "routes" | "finalize" | "done";
+
+export const imports = pgTable("imports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  blobUrl: text("blob_url").notNull(),
+  blobPathname: text("blob_pathname").notNull(),
+  fileName: text("file_name"),
+  fileSize: bigint("file_size", { mode: "number" }),
+  exportDate: timestamp("export_date", { withTimezone: true }),
+  status: text("status").$type<ImportStatus>().notNull().default("uploaded"),
+  phase: text("phase").$type<ImportPhase>().notNull().default("index"),
+  /** Bytes descomprimidos de export.xml ya procesados en la pasada actual. */
+  bytesProcessed: bigint("bytes_processed", { mode: "number" }).notNull().default(0),
+  bytesTotal: bigint("bytes_total", { mode: "number" }),
+  /** Punto de control y datos internos del importador (índice del zip, contadores…). */
+  state: jsonb("state").$type<Record<string, unknown>>().notNull().default({}),
+  stats: jsonb("stats").$type<Record<string, number>>().notNull().default({}),
+  error: text("error"),
+  createdAt: createdAt(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  updatedAt: updatedAt(),
+});
+
+export const shoes = pgTable("shoes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  brand: text("brand"),
+  model: text("model"),
+  purchasedAt: date("purchased_at"),
+  retiredAt: date("retired_at"),
+  initialKm: real("initial_km").notNull().default(0),
+  notes: text("notes"),
+  createdAt: createdAt(),
+});
+
+export type RunSource = "apple_watch" | "strava" | "other";
+export type RunStatus = "valid" | "invalid" | "duplicate";
+
+export const runs = pgTable(
+  "runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Clave natural para importación idempotente: fuente|inicio|fin (UTC). */
+    sourceKey: text("source_key").notNull(),
+    source: text("source").$type<RunSource>().notNull(),
+    sourceName: text("source_name"),
+    sourceVersion: text("source_version"),
+    device: text("device"),
+    startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+    endAt: timestamp("end_at", { withTimezone: true }).notNull(),
+    durationS: real("duration_s").notNull(),
+    distanceM: real("distance_m"),
+    avgPaceSPerKm: real("avg_pace_s_per_km"),
+    avgHr: real("avg_hr"),
+    maxHr: real("max_hr"),
+    avgPowerW: real("avg_power_w"),
+    avgSpeedMps: real("avg_speed_mps"),
+    avgStrideM: real("avg_stride_m"),
+    avgVerticalOscCm: real("avg_vertical_osc_cm"),
+    avgGroundContactMs: real("avg_ground_contact_ms"),
+    steps: integer("steps"),
+    cadenceSpm: real("cadence_spm"),
+    elevationGainM: real("elevation_gain_m"),
+    temperatureC: real("temperature_c"),
+    humidityPct: real("humidity_pct"),
+    isIndoor: boolean("is_indoor"),
+    activeEnergyKcal: real("active_energy_kcal"),
+    /** Ruta del GPX dentro del zip según <FileReference>, si existe. */
+    routeFile: text("route_file"),
+    status: text("status").$type<RunStatus>().notNull().default("valid"),
+    invalidReason: text("invalid_reason"),
+    duplicateOf: uuid("duplicate_of").references((): AnyPgColumn => runs.id, { onDelete: "set null" }),
+    isSpecial: boolean("is_special").notNull().default(false),
+    shoeId: uuid("shoe_id").references(() => shoes.id, { onDelete: "set null" }),
+    importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
+    /** Metadatos y estadísticas originales, para trazabilidad. */
+    raw: jsonb("raw").$type<Record<string, unknown>>(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("runs_source_key_uq").on(t.sourceKey),
+    index("runs_start_at_idx").on(t.startAt.desc()),
+    index("runs_status_idx").on(t.status, t.isSpecial),
+  ],
+);
+
+export const runRoutes = pgTable("run_routes", {
+  runId: uuid("run_id")
+    .primaryKey()
+    .references(() => runs.id, { onDelete: "cascade" }),
+  blobUrl: text("blob_url").notNull(),
+  fileName: text("file_name").notNull(),
+  pointCount: integer("point_count"),
+  /** Polyline codificada (precisión 5), simplificada para mapa y miniatura. */
+  polyline: text("polyline"),
+  minLat: doublePrecision("min_lat"),
+  minLon: doublePrecision("min_lon"),
+  maxLat: doublePrecision("max_lat"),
+  maxLon: doublePrecision("max_lon"),
+  gpxDistanceM: real("gpx_distance_m"),
+  gpxElevationGainM: real("gpx_elevation_gain_m"),
+  createdAt: createdAt(),
+});
+
+export const runSplits = pgTable(
+  "run_splits",
+  {
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    /** Km 1, 2, …; el último puede ser parcial. */
+    idx: smallint("idx").notNull(),
+    distanceM: real("distance_m").notNull(),
+    durationS: real("duration_s").notNull(),
+    paceSPerKm: real("pace_s_per_km"),
+    avgHr: real("avg_hr"),
+    avgPowerW: real("avg_power_w"),
+    elevationGainM: real("elevation_gain_m"),
+    elevationLossM: real("elevation_loss_m"),
+    /** Origen de la distancia: muestras del reloj o GPX. */
+    basis: text("basis").$type<"samples" | "gpx">().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.idx] })],
+);
+
+export type SeriesMetric = "hr" | "power" | "speed" | "distance";
+
+export const runSeries = pgTable(
+  "run_series",
+  {
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    metric: text("metric").$type<SeriesMetric>().notNull(),
+    /** Segundos desde el inicio de la carrera. */
+    t: integer("t").array().notNull(),
+    v: real("v").array().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.metric] })],
+);
+
+/** Muestras parciales recogidas durante una importación (se fusionan al final). */
+export const importSamples = pgTable(
+  "import_samples",
+  {
+    importId: uuid("import_id")
+      .notNull()
+      .references(() => imports.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    metric: text("metric").$type<SeriesMetric>().notNull(),
+    /** Número de lote: cada invocación escribe uno nuevo. */
+    seq: integer("seq").notNull(),
+    t: integer("t").array().notNull(),
+    v: real("v").array().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.importId, t.runId, t.metric, t.seq] })],
+);
+
+export const vo2maxReadings = pgTable(
+  "vo2max_readings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    measuredAt: timestamp("measured_at", { withTimezone: true }).notNull(),
+    /** mL/(kg·min) */
+    value: real("value").notNull(),
+    sourceName: text("source_name").notNull().default(""),
+    importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("vo2max_measured_source_uq").on(t.measuredAt, t.sourceName),
+    index("vo2max_measured_idx").on(t.measuredAt),
+  ],
+);
+
