@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { getTrainingSettingsView } from "@/lib/db/queries";
+import { getGoalsSettings, getTrainingSettingsView } from "@/lib/db/queries";
+import { GoalsForm } from "./GoalsForm";
 import { TrainingSettingsForm } from "./TrainingSettingsForm";
 import { ThemePicker } from "@/components/ui/ThemePicker";
 import { logout } from "@/app/login/actions";
@@ -33,6 +34,9 @@ export default function ProfilePage() {
         <Row href="/perfil/importar" title="Importar datos" detail="Export de Apple Health (.zip)" />
       </Card>
       <ThemePicker />
+      <Suspense fallback={<div className="card h-[380px]" aria-hidden="true" />}>
+        <GoalsCard />
+      </Suspense>
       <Suspense fallback={<div className="card h-[620px]" aria-hidden="true" />}>
         <TypeSettingsCard />
       </Suspense>
@@ -56,4 +60,10 @@ async function TypeSettingsCard() {
   await connection();
   const { types, zones } = await getTrainingSettingsView();
   return <TrainingSettingsForm zones={zones} types={types} />;
+}
+
+async function GoalsCard() {
+  await connection();
+  const { goals, suggested } = await getGoalsSettings();
+  return <GoalsForm goals={goals} suggested={suggested} />;
 }

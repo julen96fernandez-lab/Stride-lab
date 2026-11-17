@@ -39,3 +39,23 @@ export async function saveTrainingSettings(_prev: SettingsState, formData: FormD
   await ensureClassified(d); // deja apuntada la versión de las reglas
   return { ok: `${count} carreras recalculadas.` };
 }
+
+export type GoalsState = { ok?: string; error?: string };
+
+/** Objetivos de km (semana, mes, año). Vacío = sin objetivo; «pausar» lo oculta sin borrarlo. */
+export async function saveGoalsAction(_prev: GoalsState, formData: FormData): Promise<GoalsState> {
+  const { saveGoals } = await import("@/lib/analysis/goals-db");
+  const read = (k: "week" | "month" | "year", max: number) => {
+    const raw = String(formData.get(`${k}Km`) ?? "").replace(",", ".").trim();
+    const km = raw === "" ? null : Number(raw);
+    if (km !== null && !(km > 0 && km <= max)) throw new Error(k);
+    return { km: km === null ? null : Math.round(km * 10) / 10, paused: formData.get(`${k}Paused`) === "on" };
+  };
+  try {
+    await saveGoals(db(), { week: read("week", 500), month: read("month", 2000), year: read("year", 20000) });
+  } catch (e) {
+    const which = { week: "semanal", month: "mensual", year: "anual" }[(e as Error).message] ?? "";
+    return { error: `Revisa el objetivo ${which}: debe ser un número de km mayor que 0.` };
+  }
+  return { ok: "Objetivos guardados." };
+}

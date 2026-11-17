@@ -281,3 +281,53 @@ export async function getTrainingSettingsView() {
   const [types, zones] = await Promise.all([getTypeSettings(db()), getZones(db())]);
   return { types, zones };
 }
+
+// ─── Periodos y objetivos ────────────────────────────────────────────────────
+
+import { buildPeriods, compareLast, goalProgress, suggestGoals, yearsSinceFirst, type PeriodUnit, type RunForPeriod } from "@/lib/analysis/periods";
+import { getGoals } from "@/lib/analysis/goals-db";
+
+async function runsForPeriods(): Promise<RunForPeriod[]> {
+  return db()
+    .select({
+      startAt: s.runs.startAt,
+      distanceM: s.runs.distanceM,
+      durationS: s.runs.durationS,
+      avgHr: s.runs.avgHr,
+      isSpecial: s.runs.isSpecial,
+      elevationGainM: s.runs.elevationGainM,
+      trainingLoad: s.runs.trainingLoad,
+      hrZoneSeconds: s.runs.hrZoneSeconds,
+    })
+    .from(s.runs)
+    .where(valid);
+}
+
+/** Tarjeta de objetivos de Inicio: semana y mes en curso. */
+export async function getGoalsHome() {
+  const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
+  const now = new Date();
+  const week = buildPeriods(runs, "week", 1, now)[0];
+  const month = buildPeriods(runs, "month", 1, now)[0];
+  return {
+    goals,
+    week: goals.week.km && !goals.week.paused ? goalProgress(goals.week.km, week.km, "week", now) : null,
+    month: goals.month.km && !goals.month.paused ? goalProgress(goals.month.km, month.km, "month", now) : null,
+    weekKm: week.km,
+    monthKm: month.km,
+  };
+}
+
+/** Gráficos por periodo de Análisis. */
+export async function getPeriodsView(unit: PeriodUnit, weeks: 12 | 26) {
+  const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
+  const count = unit === "week" ? weeks : unit === "month" ? 12 : yearsSinceFirst(runs);
+  const periods = buildPeriods(runs, unit, count);
+  const goal = goals[unit];
+  return { periods, comparison: compareLast(periods), goalKm: goal.km && !goal.paused ? goal.km : null };
+}
+
+export async function getGoalsSettings() {
+  const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
+  return { goals, suggested: suggestGoals(runs) };
+}

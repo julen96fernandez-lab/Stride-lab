@@ -8,7 +8,8 @@ import { RouteThumb } from "@/components/map/RouteMap";
 import { ButtonLink, Card, SectionTitle, Stat } from "@/components/ui/primitives";
 import { CountUp } from "@/components/ui/CountUp";
 import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
-import { getHome } from "@/lib/db/queries";
+import { getGoalsHome, getHome } from "@/lib/db/queries";
+import { GoalCard } from "@/components/ui/GoalCard";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
 
 const MONTH_LETTER = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -114,6 +115,11 @@ async function HomeData() {
         </section>
       </Link>
 
+      {/* Objetivos de la semana y el mes */}
+      <Suspense fallback={<div className="card h-[120px]" aria-hidden="true" />}>
+        <GoalsBlock />
+      </Suspense>
+
       {/* Últimos 28 días */}
       <SectionTitle aside={`${h.last28.runs} ${h.last28.runs === 1 ? "carrera" : "carreras"}`}>Últimos 28 días</SectionTitle>
       <div className="grid grid-cols-2 gap-3">
@@ -205,4 +211,10 @@ async function HomeData() {
       )}
     </div>
   );
+}
+
+async function GoalsBlock() {
+  await connection();
+  const g = await getGoalsHome();
+  return <GoalCard week={g.week} month={g.month} weekKm={g.weekKm} monthKm={g.monthKm} />;
 }

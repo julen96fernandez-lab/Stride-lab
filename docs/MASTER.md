@@ -80,6 +80,24 @@ Nada de Horizonte ni de la app de limpieza (repos, proyectos, BD, variables, cla
 - Un intento fallido (contraseña o código) espera 800 ms.
 - Pendiente: cambiar la contraseña desde Perfil (con la actual).
 
+## Objetivos y volumen por periodo
+
+- **Objetivos** (Perfil → Objetivos de kilómetros; `app_settings` `km_goals`): km por semana,
+  mes y año, cada uno opcional (vacío = sin objetivo) y con «Pausar». Sugerencias desde los
+  últimos 12 meses: media semanal (km/52,14), media mensual (km/12) y total.
+- **Inicio**: tarjeta con anillo de progreso de la semana y del mes: km hechos / objetivo,
+  km que faltan y km por día necesarios (días que quedan, hoy incluido). Sin objetivos
+  activos, un enlace a Perfil.
+- **Análisis → Volumen** (`src/lib/analysis/periods.ts`): selector Semana (12 o 26) / Mes
+  (12) / Año (desde la primera carrera). Barras de km con el periodo actual resaltado y la
+  línea discontinua del objetivo (si lo hay; el eje se estira para que se vea); debajo,
+  alineado y con el mismo eje X, el ritmo medio (eje invertido: arriba = más rápido). Son
+  dos gráficos y no uno con dos escalas, a propósito. Tocar una columna muestra km,
+  carreras, ritmo, tiempo, FC media, desnivel, carga y tiempo en cada zona. Comparación con
+  el periodo anterior (km y ritmo; el actual «hasta hoy»).
+- Semanas de lunes a domingo en hora de Madrid. Km: todas las válidas; ritmo medio sin
+  sesiones especiales; FC ponderada por tiempo; periodos sin carreras a 0 (sin rellenar).
+
 ## Tema día / noche
 
 - Selector en Perfil → Apariencia: **Sistema** (por defecto, sigue al iPhone), **Día** o
@@ -374,6 +392,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Objetivos de km (semana/mes/año) y volumen por periodo con detalle,
+  objetivo, ritmo medio y comparación. 113 pruebas.
 - 2026‑11‑17 — Zonas reales del Apple Watch (47/187). Reclasificación: 7 carreras cambian
   (6 Tempo → Rodaje con FC 141–144, ahora Z2; 1 Rodaje → Recuperación con 129). 16 Series
   en 12 meses; el 10‑dic‑2025 (13 pasos `N.0.0`, sin repeticiones) no cuenta como Series.

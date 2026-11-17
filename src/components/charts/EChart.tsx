@@ -52,15 +52,22 @@ export function EChart({
   option,
   height,
   label,
+  onSelect,
 }: {
   option: EChartsCoreOption;
   height: number;
   /** Descripción accesible del gráfico. */
   label: string;
+  /** Se llama con el índice de la categoría tocada (barras o eje). */
+  onSelect?: (index: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   const optionRef = useRef(option);
+  const selectRef = useRef(onSelect);
+  useEffect(() => {
+    selectRef.current = onSelect;
+  }, [onSelect]);
 
   const apply = () => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -75,6 +82,14 @@ export function EChart({
     const ro = new ResizeObserver(() => c.resize());
     ro.observe(ref.current);
     const off = onThemeChange(() => requestAnimationFrame(apply));
+    // Toque en cualquier punto de la columna de una categoría (no solo sobre la barra).
+    c.getZr().on("click", (e) => {
+      if (!selectRef.current) return;
+      const pt = [e.offsetX, e.offsetY];
+      if (!c.containPixel("grid", pt)) return;
+      const [idx] = c.convertFromPixel({ seriesIndex: 0 }, pt) as number[];
+      if (Number.isFinite(idx)) selectRef.current(Math.round(idx));
+    });
     return () => {
       off();
       ro.disconnect();

@@ -7,7 +7,9 @@ import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { DEFAULT_HR_BAND, MIN_DISTANCE_M, parseBand } from "@/lib/analysis/pace-at-hr";
-import { getAnalysis } from "@/lib/db/queries";
+import { getAnalysis, getPeriodsView } from "@/lib/db/queries";
+import { PeriodCharts } from "@/components/charts/PeriodCharts";
+import type { PeriodUnit } from "@/lib/analysis/periods";
 import { DASH, date, dec, int, km, pace } from "@/lib/format";
 
 export const metadata = { title: "Análisis · Stride Lab" };
@@ -38,6 +40,8 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
   const sp = await searchParams;
   const band = parseBand(typeof sp.fc === "string" ? sp.fc : undefined);
   const allTime = sp.periodo === "todo";
+  const unit: PeriodUnit = sp.vista === "mes" ? "month" : sp.vista === "año" || sp.vista === "ano" ? "year" : "week";
+  const weeks: 12 | 26 = sp.semanas === "26" ? 26 : 12;
   const keepFc = typeof sp.fc === "string" ? `fc=${sp.fc}&` : "";
   const a = await getAnalysis(band);
 
@@ -82,6 +86,9 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
           {a.vo2.length} días con lectura · pellizca o arrastra para acercar. Estimación del Apple Watch.
         </p>
       </section>
+
+      {/* Volumen por semana / mes / año */}
+      <PeriodsCard unit={unit} weeks={weeks} keep={keepFc} />
 
       {/* Ritmo a igual pulso */}
       <Card>
@@ -244,5 +251,91 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
         </Card>
       </div>
     </div>
+  );
+}
+
+const UNIT_LABEL: Record<PeriodUnit, string> = { week: "Semana", month: "Mes", year: "Año" };
+const UNIT_PARAM: Record<PeriodUnit, string> = { week: "semana", month: "mes", year: "año" };
+const PREV_LABEL: Record<PeriodUnit, [string, string]> = {
+  week: ["Esta semana", "la semana pasada"],
+  month: ["Este mes", "el mes pasado"],
+  year: ["Este año", "el año pasado"],
+};
+
+async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 | 26; keep: string }) {
+  const { periods, comparison, goalKm } = await getPeriodsView(unit, weeks);
+  const href = (u: PeriodUnit, w: number = weeks) =>
+    `/analisis?${keep}vista=${encodeURIComponent(UNIT_PARAM[u])}${u === "week" && w === 26 ? "&semanas=26" : ""}#volumen`;
+  const chip = (active: boolean) =>
+    `inline-flex min-h-[36px] flex-1 items-center justify-center rounded-full text-[13px] font-semibold ${
+      active ? "bg-lime text-lime-ink" : "text-fg-2"
+    }`;
+  const c = comparison;
+  return (
+    <section id="volumen" className="card scroll-mt-6 p-5">
+      <div className="flex items-baseline justify-between">
+        <div className="eyebrow">Volumen</div>
+        {unit === "week" && (
+          <div className="flex gap-1.5 text-[12px]" role="group" aria-label="Semanas">
+            {[12, 26].map((w) => (
+              <Link
+                key={w}
+                href={href("week", w)}
+                scroll={false}
+                aria-current={weeks === w ? "true" : undefined}
+                className={`rounded-full px-2.5 py-1 font-semibold ${weeks === w ? "bg-ov-2 text-fg" : "text-fg-2"}`}
+              >
+                {w} sem.
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mt-3 flex rounded-full border border-line-strong p-1" role="group" aria-label="Periodo">
+        {(["week", "month", "year"] as const).map((u) => (
+          <Link key={u} href={href(u)} scroll={false} aria-current={unit === u ? "true" : undefined} className={chip(unit === u)}>
+            {UNIT_LABEL[u]}
+          </Link>
+        ))}
+      </div>
+
+      {c && (
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-line bg-inset p-3.5">
+            <div className="text-[12px] text-fg-2">{PREV_LABEL[unit][0]} (hasta hoy)</div>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="num text-[24px]">{km(c.current.km * 1000, 1)}</span>
+              <span className="text-[11px] text-fg-2">km</span>
+            </div>
+            <div className="mt-0.5 text-[12px] text-fg-2">
+              {c.kmDelta === 0 ? "Igual que" : `${c.kmDelta > 0 ? "+" : "−"}${km(Math.abs(c.kmDelta) * 1000, 1)} km frente a`} {PREV_LABEL[unit][1]} (
+              {km(c.previous.km * 1000, 1)})
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line bg-inset p-3.5">
+            <div className="text-[12px] text-fg-2">Ritmo medio</div>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="num text-[24px]">{pace(c.current.paceSPerKm)}</span>
+              <span className="text-[11px] text-fg-2">/km</span>
+            </div>
+            <div className="mt-0.5 text-[12px] text-fg-2">
+              {c.paceDeltaS === null
+                ? `Sin datos para comparar con ${PREV_LABEL[unit][1]}`
+                : Math.round(c.paceDeltaS) === 0
+                  ? `Igual que ${PREV_LABEL[unit][1]}`
+                  : `${Math.abs(Math.round(c.paceDeltaS))} s/km ${c.paceDeltaS < 0 ? "más rápido" : "más lento"} que ${PREV_LABEL[unit][1]} (${pace(c.previous.paceSPerKm)})`}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <PeriodCharts key={`${unit}-${weeks}`} periods={periods} unit={unit} goalKm={goalKm} />
+      </div>
+      <p className="mt-3 text-[12px] text-fg-2">
+        Toca una columna para ver su detalle. El periodo actual va en lima{goalKm ? "; la línea discontinua es tu objetivo" : ""}. Las
+        sesiones especiales (más de 8:00 /km) suman km pero no cuentan en el ritmo medio.
+      </p>
+    </section>
   );
 }
