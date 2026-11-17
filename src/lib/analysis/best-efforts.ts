@@ -17,29 +17,31 @@ export const PAUSE_GAP_S = 15;
 /** Por debajo de esta velocidad media en el hueco, la muestra no lo cubre: es una pausa. */
 const PAUSE_SPEED_MPS = 1;
 /**
- * Muestra inválida: de cada muestra solo se guarda el final de su intervalo, así que si la
- * anterior terminó mucho antes, el hueco no es su duración real (el reloj registra muestras de
- * ~300 s y, entre medias, muestras finas casi paradas) y la velocidad implícita sale imposible
- * (4-jul-2026: 886 m en 105 s = 2:00 /km; 946 m en 141 s = 6,7 m/s; 801 m en 179 s = 4,5 m/s).
+ * Muestra inválida. De cada muestra solo se guarda el final de su intervalo. El reloj registra
+ * muestras completas de ~300 s y, entre medias, muestras finas de 2–3 s que se solapan con ellas:
+ * una muestra larga que llega detrás de muestras finas tiene un hueco (desde la anterior) más
+ * corto que su intervalo real, así que su velocidad implícita sale inflada y fabrica récords
+ * (4-jul-2026: 886 m en 105 s = 2:00 /km; 946 m en 141 s; 929 m en 236 s = 3,94 m/s, que no
+ * supera ningún umbral de velocidad razonable pero tiene un intervalo real de ~305 s).
  *
- * - Hueco < MIN_GAP_CHECK_S (10 s): no se juzga. Las muestras de 2–3 s con 14–17 m son redondeo
- *   de segundos y salen por cientos.
- * - Hueco entre 10 s y FULL_SAMPLE_GAP_S (270 s): el intervalo real probablemente es más largo
- *   que el hueco; por encima de MAX_SPEED_SPARSE_MPS (4 m/s ≈ 4:10 /km) es inválida. En los datos
- *   reales hay 188 muestras entre 3,5 y 4 m/s y la cola por encima es casi toda de este tipo.
- * - Hueco ≥ 270 s: es una muestra completa de ~300 s, su intervalo es fiable; solo se descarta
- *   por encima de MAX_SPEED_MPS (7 m/s ≈ 2:23 /km).
+ * Una muestra se descarta (y parte el tramo antes y después) cuando:
+ * - hueco ≥ MIN_GAP_CHECK_S (10 s) y velocidad > MAX_SPEED_MPS (7 m/s ≈ 2:23 /km), sea cual sea; o
+ * - es «larga con hueco corto»: ≥ MIN_LONG_SAMPLE_M (300 m) con un hueco de 10 s a
+ *   FULL_SAMPLE_GAP_S (270 s) y detrás de una muestra que tampoco era completa (hueco < 270 s).
+ *   Una muestra final más corta detrás de una completa es legítima y no se toca.
+ * Con huecos < 10 s no se juzga: las muestras de 2–3 s con 14–17 m son redondeo de segundos.
+ * En los datos reales son 38 muestras en 26 carreras, todas con distancia de ~800–1300 m.
  */
 export const MAX_SPEED_MPS = 7;
-export const MAX_SPEED_SPARSE_MPS = 4;
 export const MIN_GAP_CHECK_S = 10;
 export const FULL_SAMPLE_GAP_S = 270;
+export const MIN_LONG_SAMPLE_M = 300;
 
-/** ¿La muestra (distancia v tras un hueco de gap s) tiene una velocidad implícita imposible? */
-export function isImplausibleSample(v: number, gap: number): boolean {
+/** ¿La muestra (v metros tras un hueco de `gap` s; `prevGap` = hueco de la muestra anterior) es inválida? */
+export function isImplausibleSample(v: number, gap: number, prevGap: number = Infinity): boolean {
   if (gap < MIN_GAP_CHECK_S) return false;
-  const speed = v / gap;
-  return speed > MAX_SPEED_MPS || (gap < FULL_SAMPLE_GAP_S && speed > MAX_SPEED_SPARSE_MPS);
+  if (v / gap > MAX_SPEED_MPS) return true;
+  return v >= MIN_LONG_SAMPLE_M && gap < FULL_SAMPLE_GAP_S && prevGap < FULL_SAMPLE_GAP_S;
 }
 export const MIN_PACE_S_PER_KM = 150; // 2:30 /km
 
@@ -72,11 +74,14 @@ export function continuousSegments(t: readonly number[], v: readonly number[]): 
   let prevT = 0;
   let first = true;
   let afterInvalid = false;
+  let prevGap = Infinity;
   for (const i of order) {
     const gap = t[i] - prevT;
+    const lastGap = prevGap;
+    prevGap = gap;
     const isPause = gap > PAUSE_GAP_S && v[i] / gap < PAUSE_SPEED_MPS;
     // Muestra inválida: se descarta y el tramo se parte antes y después (ningún esfuerzo la cruza).
-    if (isImplausibleSample(v[i], gap)) {
+    if (isImplausibleSample(v[i], gap, lastGap)) {
       cur = null;
       prevT = t[i];
       first = false;

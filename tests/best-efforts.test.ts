@@ -158,23 +158,26 @@ describe("muestras anómalas (velocidad implícita imposible)", () => {
   });
 
   // Las que se escaparon del primer umbral (7 m/s): mismas carreras reales.
-  it("muestras largas con hueco corto por debajo de 7 m/s también son inválidas", () => {
-    expect(isImplausibleSample(945.5, 141)).toBe(true); // 4-jul: 6,71 m/s → daba un 1 km en 2:38
-    expect(isImplausibleSample(1303.7, 203)).toBe(true); // 24-ago-2021: 6,42 m/s → daba un 1 km en 2:36
-    expect(isImplausibleSample(801, 179)).toBe(true); // 4-jul: 4,48 m/s
-    expect(isImplausibleSample(1250.3, 20)).toBe(true); // 13-jun-2021: 62 m/s
-    expect(isImplausibleSample(1160.6, 142)).toBe(true); // 14-ene-2024: 8,17 m/s → daba una milla en 4:30
+  it("muestras largas con hueco corto detrás de muestras finas son inválidas aunque no pasen de 7 m/s", () => {
+    expect(isImplausibleSample(945.5, 141, 20)).toBe(true); // 4-jul: 6,71 m/s → daba un 1 km en 2:38
+    expect(isImplausibleSample(1303.7, 203, 2)).toBe(true); // 24-ago-2021: 6,42 m/s → daba un 1 km en 2:36
+    expect(isImplausibleSample(801, 179, 3)).toBe(true); // 4-jul: 4,48 m/s
+    expect(isImplausibleSample(929, 236, 3)).toBe(true); // 4-jul: 3,94 m/s → daba un 1 km en 4:19 (parciales: 5:16)
+    expect(isImplausibleSample(1250.3, 20, 621)).toBe(true); // 13-jun-2021: 62 m/s
+    expect(isImplausibleSample(1160.6, 142, 637)).toBe(true); // 14-ene-2024: 8,17 m/s → daba una milla en 4:30
   });
 
-  it("las muestras completas (~300 s) y los ritmos normales son válidos", () => {
-    expect(isImplausibleSample(737.1, 305)).toBe(false); // 2,4 m/s
-    expect(isImplausibleSample(1198, 278)).toBe(false); // 4,3 m/s en una muestra completa
-    expect(isImplausibleSample(1000, 270)).toBe(false);
-    expect(isImplausibleSample(1000, 269)).toBe(false); // 3,7 m/s: bajo el límite
-    expect(isImplausibleSample(1100, 269)).toBe(true); // 4,09 m/s con hueco incompleto
-    expect(isImplausibleSample(2000, 270)).toBe(true); // 7,4 m/s: ni una muestra completa lo aguanta
-    expect(isImplausibleSample(17.1, 2)).toBe(false); // redondeo de segundos
-    expect(isImplausibleSample(60, 9)).toBe(false); // hueco < 10 s: no se juzga
+  it("las muestras completas, las finales cortas tras una completa y los ritmos normales son válidos", () => {
+    expect(isImplausibleSample(737.1, 305, 305)).toBe(false); // 2,4 m/s
+    expect(isImplausibleSample(1198, 278, 306)).toBe(false); // 4,3 m/s en una muestra casi completa
+    expect(isImplausibleSample(937, 237, 306)).toBe(false); // última muestra, más corta, tras una completa
+    expect(isImplausibleSample(659, 167, 306)).toBe(false);
+    expect(isImplausibleSample(1000, 270, 2)).toBe(false); // hueco completo
+    expect(isImplausibleSample(2000, 270, 306)).toBe(true); // 7,4 m/s: ni una muestra completa lo aguanta
+    expect(isImplausibleSample(17.1, 2, 3)).toBe(false); // redondeo de segundos
+    expect(isImplausibleSample(60, 9, 3)).toBe(false); // hueco < 10 s: no se juzga
+    expect(isImplausibleSample(250, 200, 2)).toBe(false); // < 300 m: muestra pequeña (pausa), la tratan las pausas
+    expect(isImplausibleSample(700, 105)).toBe(false); // primera muestra de la carrera (sin anterior)
   });
 
   it("carrera con las tres anomalías del 4-jul: ningún esfuerzo las cruza y ninguno baja de ritmo creíble", () => {

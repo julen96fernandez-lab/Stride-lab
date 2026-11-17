@@ -112,7 +112,7 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
  * que se abra una pantalla, todo se recalcula una vez.
  * 3 = Series por rutas de paso con repetición + tipos por zona de FC + carga.
  */
-const CLASSIFIER_VERSION = "7"; // 7 = muestras de distancia con velocidad imposible (hueco 10–270 s y > 4 m/s, o > 7 m/s) parten los tramos de los récords
+const CLASSIFIER_VERSION = "8"; // 8 = muestras largas con hueco corto (detrás de muestras finas) o a más de 7 m/s parten los tramos de los récords
 const VERSION_KEY = "classifier_version";
 
 /** Recalcula si las reglas cambiaron o si hay carreras válidas sin tipo automático. */
