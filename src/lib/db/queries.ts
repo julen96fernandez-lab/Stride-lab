@@ -1,4 +1,5 @@
 import "server-only";
+import { EFFORT_DISTANCES, improvementPct, recordProgression, type EffortKey } from "@/lib/analysis/best-efforts";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db, schema as s } from "./client";
 import { decodePolyline } from "@/lib/import/gpx";
@@ -109,8 +110,8 @@ export async function getHome() {
       SELECT count(*)::int AS runs,
              sum(distance_m) AS dist,
              sum(duration_s) AS dur,
-             sum(duration_s) FILTER (WHERE NOT is_special AND distance_m > 0) AS dur_ns,
-             sum(distance_m) FILTER (WHERE NOT is_special AND distance_m > 0) AS dist_ns,
+             sum(duration_s) FILTER (WHERE NOT is_special AND NOT in_injury AND distance_m > 0) AS dur_ns,
+             sum(distance_m) FILTER (WHERE NOT is_special AND NOT in_injury AND distance_m > 0) AS dist_ns,
              sum(avg_hr * duration_s) FILTER (WHERE avg_hr IS NOT NULL) / nullif(sum(duration_s) FILTER (WHERE avg_hr IS NOT NULL), 0) AS hr
       FROM runs WHERE status = 'valid' AND start_at >= now() - interval '28 days'`),
     d.execute(sql`
@@ -237,6 +238,7 @@ export async function getAnalysis(band: [number, number]) {
         durationS: s.runs.durationS,
         avgHr: s.runs.avgHr,
         isSpecial: s.runs.isSpecial,
+        inInjury: s.runs.inInjury,
       })
       .from(s.runs)
       .where(and(valid)),
@@ -251,7 +253,8 @@ export async function getAnalysis(band: [number, number]) {
     kmByYear.push({ year: y, km: ys.reduce((a, r) => a + (r.distanceM ?? 0), 0) / 1000, runs: ys.length });
   }
   const paceAtHr: YearPace[] = paceAtHrByYear(
-    runRows.map((r) => ({ ...r, year: Number(r.year) })),
+    // Las carreras en periodo de lesión no cuentan en medias de ritmo.
+    runRows.filter((r) => !r.inInjury).map((r) => ({ ...r, year: Number(r.year) })),
     band,
     firstYear,
     thisYear,
@@ -284,8 +287,9 @@ export async function getTrainingSettingsView() {
 
 // ─── Periodos y objetivos ────────────────────────────────────────────────────
 
-import { buildPeriods, compareLast, goalProgress, suggestGoals, yearsSinceFirst, type PeriodUnit, type RunForPeriod } from "@/lib/analysis/periods";
+import { buildPeriods, compareLast, localDay, goalProgress, suggestGoals, yearsSinceFirst, type PeriodUnit, type RunForPeriod } from "@/lib/analysis/periods";
 import { getGoals } from "@/lib/analysis/goals-db";
+import { listInjuries } from "@/lib/analysis/injuries-db";
 
 async function runsForPeriods() {
   const rows = await db()
@@ -293,6 +297,7 @@ async function runsForPeriods() {
       id: s.runs.id,
       avgPaceSPerKm: s.runs.avgPaceSPerKm,
       type: effectiveType,
+      inInjury: s.runs.inInjury,
       startAt: s.runs.startAt,
       distanceM: s.runs.distanceM,
       durationS: s.runs.durationS,
@@ -328,25 +333,97 @@ export async function getPeriodsView(unit: PeriodUnit, weeks: 12 | 26) {
   const count = unit === "week" ? weeks : unit === "month" ? 12 : yearsSinceFirst(runs);
   const periods = buildPeriods(runs, unit, count);
   const goal = goals[unit];
-  return { periods, comparison: compareLast(periods), goalKm: goal.km && !goal.paused ? goal.km : null };
+  // Comparación con el periodo anterior: sin las carreras en periodo de lesión.
+  const comparison = compareLast(buildPeriods(runs.filter((r) => !r.inInjury), unit, 2));
+  const injuries = await listInjuries(db());
+  const today = new Date(localDay(new Date()) * 86_400_000).toISOString().slice(0, 10);
+  const injuryRanges = periodInjuryRanges(
+    periods.map((p) => p.start),
+    injuries,
+    today,
+  );
+  return { periods, comparison, goalKm: goal.km && !goal.paused ? goal.km : null, injuries, injuryRanges };
 }
 
 export async function getGoalsSettings() {
   const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
-  return { goals, suggested: suggestGoals(runs) };
+  return { goals, suggested: suggestGoals(runs.filter((r) => !r.inInjury)) };
 }
 
 // ─── Evolución del ritmo, calendario y comparación de años ───────────────────
 
+import { bandsInYear, periodInjuryRanges } from "@/lib/analysis/injuries";
 import { calendarDays, pacePoints, smoothTrend, yearToDate, type PaceRange } from "@/lib/analysis/insights";
 
 export async function getInsights(range: PaceRange, paceType: SessionType | null) {
   const runs = await runsForPeriods();
   const points = pacePoints(runs, range, paceType);
+  const injuries = await listInjuries(db());
+  const ytd = yearToDate(runs);
+  const nowMs = Date.now();
+  const bands = injuries.map((i) => ({ startDate: i.startDate, endDate: i.endDate }));
   return {
     points,
-    trend: smoothTrend(points),
+    nowMs,
+    bands,
+    yearBands: bandsInYear(bands, ytd.year, ytd.doy),
+    // La tendencia y la comparación de años no usan las carreras en periodo de lesión.
+    trend: smoothTrend(points.filter((p) => !p.inInjury)),
     calendar: calendarDays(runs),
-    ytd: yearToDate(runs),
+    ytd,
+    ytdNoInjury: yearToDate(runs.filter((r) => !r.inInjury)),
+    injuries,
   };
+}
+
+// ─── Récords personales ──────────────────────────────────────────────────────
+
+
+export async function getRecords() {
+  await ensureClassified(db());
+  const rows = await db()
+    .select({
+      key: s.runEfforts.key,
+      timeS: s.runEfforts.timeS,
+      startS: s.runEfforts.startS,
+      runId: s.runEfforts.runId,
+      startAt: s.runs.startAt,
+      runDistanceM: s.runs.distanceM,
+      inInjury: s.runs.inInjury,
+    })
+    .from(s.runEfforts)
+    .innerJoin(s.runs, and(eq(s.runs.id, s.runEfforts.runId), valid));
+  return EFFORT_DISTANCES.map((d) => {
+    const mine = rows.filter((r) => r.key === d.key);
+    const best = mine.reduce<(typeof mine)[number] | null>((b, r) => (!b || r.timeS < b.timeS ? r : b), null);
+    const recent = !!best && best.startAt.getTime() >= Date.now() - 365 * 86_400_000;
+    return { ...d, best, attempts: mine.length, recent };
+  });
+}
+
+export async function getRecordHistory(key: EffortKey) {
+  const rows = await db()
+    .select({ runId: s.runEfforts.runId, timeS: s.runEfforts.timeS, startAt: s.runs.startAt, inInjury: s.runs.inInjury })
+    .from(s.runEfforts)
+    .innerJoin(s.runs, and(eq(s.runs.id, s.runEfforts.runId), valid))
+    .where(eq(s.runEfforts.key, key));
+  const points = recordProgression(rows.map((r) => ({ ...r, key })));
+  const injuries = await listInjuries(db());
+  const nowMs = Date.now();
+  const recentRecords = points.filter((p) => p.isRecord && p.startAt.getTime() >= nowMs - 365 * 86_400_000).length;
+  return { points, improvement: improvementPct(points), injuries, recentRecords, nowMs };
+}
+
+/** Periodos de lesión con el número de carreras válidas dentro, para Perfil. */
+export async function getInjuriesView() {
+  const injuries = await listInjuries(db());
+  const counts = await db().execute<{ id: string; n: number }>(sql`
+    SELECT i.id, count(r.id)::int AS n FROM injuries i
+    LEFT JOIN runs r ON r.status = 'valid'
+      AND (r.start_at AT TIME ZONE 'Europe/Madrid')::date >= i.start_date
+      AND (i.end_date IS NULL OR (r.start_at AT TIME ZONE 'Europe/Madrid')::date <= i.end_date)
+    GROUP BY i.id`);
+  const n = new Map(counts.rows.map((r) => [r.id, Number(r.n)]));
+  const today = new Date(localDay(new Date()) * 86_400_000).toISOString().slice(0, 10);
+  return { injuries: injuries.map((i) => ({ id: i.id, startDate: i.startDate, endDate: i.endDate, note: i.note, runs: n.get(i.id) ?? 0 })), today };
 }

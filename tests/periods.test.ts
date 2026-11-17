@@ -50,6 +50,17 @@ describe("periodos", () => {
     expect(m.zoneSeconds).toEqual([0, 3000, 0, 2700, 0]);
   });
 
+  it("lesión: suma km pero no cuenta en el ritmo medio", () => {
+    const [m] = buildPeriods(
+      [run("2026-11-02T08:00:00Z", 10, 50), run("2026-11-05T08:00:00Z", 6, 42, { inInjury: true })],
+      "month",
+      1,
+      NOW,
+    );
+    expect(m.km).toBe(16);
+    expect(m.paceSPerKm).toBe(300);
+  });
+
   it("periodos sin carreras aparecen a cero y sin ritmo", () => {
     const p = buildPeriods([run("2026-01-10T08:00:00Z", 8, 40)], "month", 12, NOW);
     expect(p).toHaveLength(12);

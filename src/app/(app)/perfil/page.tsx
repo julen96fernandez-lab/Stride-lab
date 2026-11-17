@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { getGoalsSettings, getTrainingSettingsView } from "@/lib/db/queries";
+import { getGoalsSettings, getInjuriesView, getTrainingSettingsView } from "@/lib/db/queries";
+import { InjuriesForm } from "./InjuriesForm";
 import { GoalsForm } from "./GoalsForm";
 import { TrainingSettingsForm } from "./TrainingSettingsForm";
 import { ThemePicker } from "@/components/ui/ThemePicker";
@@ -37,6 +38,9 @@ export default function ProfilePage() {
       <Suspense fallback={<div className="card h-[380px]" aria-hidden="true" />}>
         <GoalsCard />
       </Suspense>
+      <Suspense fallback={<div className="card h-[200px]" aria-hidden="true" />}>
+        <InjuriesCard />
+      </Suspense>
       <Suspense fallback={<div className="card h-[620px]" aria-hidden="true" />}>
         <TypeSettingsCard />
       </Suspense>
@@ -66,4 +70,10 @@ async function GoalsCard() {
   await connection();
   const { goals, suggested } = await getGoalsSettings();
   return <GoalsForm goals={goals} suggested={suggested} />;
+}
+
+async function InjuriesCard() {
+  await connection();
+  const { injuries, today } = await getInjuriesView();
+  return <InjuriesForm injuries={injuries} today={today} />;
 }

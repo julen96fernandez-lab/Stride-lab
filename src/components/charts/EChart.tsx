@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts/core";
 import { BarChart, LineChart, ScatterChart, EffectScatterChart } from "echarts/charts";
-import { DataZoomComponent, GridComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
+import { DataZoomComponent, GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import type { EChartsCoreOption } from "echarts/core";
 
@@ -16,6 +16,7 @@ echarts.use([
   TooltipComponent,
   DataZoomComponent,
   MarkLineComponent,
+  MarkAreaComponent,
   SVGRenderer,
 ]);
 
@@ -143,3 +144,11 @@ export const tooltipBase = {
 };
 
 export const axisLabel = { color: C.axis, fontFamily: C.font, fontSize: 11 };
+
+const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+/** Etiquetas de un eje de tiempo en español: año el 1 de enero, mes el día 1, si no «d mes». */
+export function timeLabel(v: number): string {
+  const d = new Date(v);
+  if (d.getDate() !== 1) return `${d.getDate()} ${MES[d.getMonth()]}`;
+  return d.getMonth() === 0 ? String(d.getFullYear()) : MES[d.getMonth()];
+}

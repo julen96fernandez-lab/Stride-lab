@@ -3,7 +3,7 @@
  *
  * - Fechas en hora de Madrid; la semana empieza el lunes.
  * - Km: todas las carreras válidas. Ritmo medio: tiempo/distancia SIN sesiones especiales
- *   (> 8:00 /km). FC media ponderada por tiempo. Desnivel, carga y zonas: sumas.
+ *   (> 8:00 /km) ni carreras en periodo de lesión. FC media ponderada por tiempo. Desnivel, carga y zonas: sumas.
  * - Los periodos sin carreras aparecen con 0 (huecos visibles, nada inventado).
  */
 
@@ -20,6 +20,8 @@ export interface RunForPeriod {
   hrZoneSeconds: number[] | null;
   /** Tipo de sesión efectivo (manual o automático); opcional. */
   type?: string | null;
+  /** En periodo de lesión: suma km, no cuenta en el ritmo medio. */
+  inInjury?: boolean;
 }
 
 export interface Period {
@@ -101,7 +103,7 @@ function aggregate(runs: RunForPeriod[]) {
       kmByType[t] = (kmByType[t] ?? 0) + dist / 1000;
     }
     dur += r.durationS;
-    if (!r.isSpecial && dist > 0) {
+    if (!r.isSpecial && !r.inInjury && dist > 0) {
       nsDist += dist;
       nsDur += r.durationS;
     }

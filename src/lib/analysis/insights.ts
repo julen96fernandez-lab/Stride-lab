@@ -32,6 +32,7 @@ export interface RunForPace {
   avgHr: number | null;
   isSpecial: boolean;
   type: string | null;
+  inInjury?: boolean;
 }
 
 export type PaceRange = "1m" | "3m" | "6m" | "1y" | "all";
@@ -44,6 +45,7 @@ export interface PacePoint {
   km: number;
   avgHr: number | null;
   type: string | null;
+  inInjury: boolean;
 }
 
 /** Una carrera = un punto. Excluye especiales y carreras sin ritmo; filtra por rango y tipo. */
@@ -54,7 +56,15 @@ export function pacePoints(runs: RunForPace[], range: PaceRange, type: string | 
     .filter((r) => !r.isSpecial && r.avgPaceSPerKm !== null && r.distanceM !== null && r.distanceM > 0)
     .filter((r) => r.startAt.getTime() >= from && r.startAt.getTime() <= now.getTime())
     .filter((r) => !type || r.type === type)
-    .map((r) => ({ id: r.id, t: r.startAt.getTime(), pace: r.avgPaceSPerKm!, km: r.distanceM! / 1000, avgHr: r.avgHr, type: r.type }))
+    .map((r) => ({
+      id: r.id,
+      t: r.startAt.getTime(),
+      pace: r.avgPaceSPerKm!,
+      km: r.distanceM! / 1000,
+      avgHr: r.avgHr,
+      type: r.type,
+      inInjury: r.inInjury ?? false,
+    }))
     .sort((a, b) => a.t - b.t);
 }
 

@@ -31,6 +31,20 @@ export default function AnalysisPage({ searchParams }: PageProps<"/analisis">) {
       <div className="mt-4">
         <PageHeader title="Análisis" subtitle="Tu evolución, no solo tus kilómetros." />
       </div>
+      <Link href="/analisis/records" className="card flex min-h-[64px] items-center gap-3 px-4 py-3 active:opacity-80">
+        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-lime text-lime-ink" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24">
+            <path d="M8 4h8v5a4 4 0 0 1-8 0V4Zm4 9v4m-4 3h8M8 6H5v1a3 3 0 0 0 3 3m8-4h3v1a3 3 0 0 1-3 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <span className="flex-1">
+          <span className="block font-display text-[16px] font-bold">Récords</span>
+          <span className="block text-[12px] text-fg-2">1 km, milla, 5 km, 10 km, media y maratón</span>
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" className="text-fg-3">
+          <path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </Link>
       <Suspense fallback={<div className="card h-[520px] animate-pulse" aria-hidden="true" />}>
         <AnalysisData searchParams={searchParams} />
       </Suspense>
@@ -269,7 +283,7 @@ const PREV_LABEL: Record<PeriodUnit, [string, string]> = {
 };
 
 async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 | 26; keep: string }) {
-  const { periods, comparison, goalKm } = await getPeriodsView(unit, weeks);
+  const { periods, comparison, goalKm, injuries, injuryRanges } = await getPeriodsView(unit, weeks);
   const href = (u: PeriodUnit, w: number = weeks) =>
     `/analisis?${keep}vista=${encodeURIComponent(UNIT_PARAM[u])}${u === "week" && w === 26 ? "&semanas=26" : ""}#volumen`;
   const chip = (active: boolean) =>
@@ -336,11 +350,13 @@ async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 
       )}
 
       <div className="mt-4">
-        <PeriodCharts key={`${unit}-${weeks}`} periods={periods} unit={unit} goalKm={goalKm} />
+        <PeriodCharts key={`${unit}-${weeks}`} periods={periods} unit={unit} goalKm={goalKm} injuryRanges={injuryRanges} />
       </div>
       <p className="mt-3 text-[12px] text-fg-2">
         Toca una columna para ver su detalle. El periodo actual va en lima{goalKm ? "; la línea discontinua es tu objetivo" : ""}. Las
         sesiones especiales (más de 8:00 /km) suman km pero no cuentan en el ritmo medio.
+        {injuries.length > 0 &&
+          " Las carreras en periodos de lesión (banda gris) suman km, pero no cuentan en el ritmo medio ni en la comparación con el periodo anterior."}
       </p>
     </section>
   );
@@ -359,7 +375,8 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
   const range = (RANGES.map((r) => r[0]) as string[]).includes(String(sp.rango)) ? (sp.rango as PaceRange) : "6m";
   const paceType = isSessionType(sp.rtipo) ? sp.rtipo : null;
   const calMetric = sp.cal === "carga" ? "load" : "km";
-  const { points, trend, calendar, ytd } = await getInsights(range, paceType);
+  const { points, trend, calendar, ytd, ytdNoInjury, bands, yearBands, nowMs } = await getInsights(range, paceType);
+  const hasInjuries = bands.length > 0;
 
   // Enlaces que conservan el resto de parámetros.
   const link = (patch: Record<string, string | null>, anchor: string) => {
@@ -376,8 +393,9 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
     `inline-flex min-h-[34px] flex-none items-center gap-1 rounded-full px-3 text-[12px] font-semibold ${
       active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"
     }`;
-  const c = ytd.current;
-  const p = ytd.previous;
+  // La tabla compara sin las carreras en periodos de lesión.
+  const c = ytdNoInjury.current;
+  const p = ytdNoInjury.previous;
   const delta = (a: number | null, b: number | null, fmt: (n: number) => string, lowerIsBetter = false) => {
     if (a === null || b === null) return <span className="text-fg-3">—</span>;
     const d = a - b;
@@ -437,7 +455,7 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
           </div>
         </div>
         <div className="mt-3">
-          <PaceTrend key={`${range}-${paceType}`} points={points} trend={trend} />
+          <PaceTrend key={`${range}-${paceType}`} points={points} trend={trend} bands={bands} nowMs={nowMs} />
         </div>
         <p className="mt-2 text-[12px] text-fg-2">
           {points.length} {points.length === 1 ? "carrera" : "carreras"}. Sin sesiones especiales (más de 8:00 /km).
@@ -467,7 +485,7 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
           </div>
         </div>
         <div className="mt-4">
-          <ConsistencyCalendar key={calMetric} days={calendar} metric={calMetric} />
+          <ConsistencyCalendar key={calMetric} days={calendar} metric={calMetric} bands={bands} />
         </div>
         {calMetric === "load" && (
           <p className="mt-2 text-[12px] text-fg-2">Los días con carrera pero sin pulso no tienen carga y salen en gris.</p>
@@ -479,11 +497,12 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
           {ytd.year} frente a {ytd.year - 1}
         </div>
         <div className="mt-3">
-          <YearCumulative year={ytd.year} current={ytd.currentCum} previous={ytd.previousCum} />
+          <YearCumulative year={ytd.year} current={ytd.currentCum} previous={ytd.previousCum} bands={yearBands} />
         </div>
         <table className="mt-4 w-full text-[14px]">
           <caption className="mb-2 text-left text-[12px] text-fg-2">
-            Del 1 de enero hasta hoy, frente al mismo tramo de {ytd.year - 1}. Ritmo sin sesiones especiales.
+            Del 1 de enero hasta hoy, frente al mismo tramo de {ytd.year - 1}. Ritmo sin sesiones especiales
+            {hasInjuries ? "; toda la tabla, sin periodos de lesión (el gráfico sí los incluye)." : "."}
           </caption>
           <thead>
             <tr className="text-[11px] tracking-[0.06em] text-fg-2 uppercase">

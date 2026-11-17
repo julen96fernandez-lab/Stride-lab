@@ -36,6 +36,13 @@
       "when": 1794933237760,
       "tag": "0004_hr_zones_load",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794944827970,
+      "tag": "0005_injuries_efforts",
+      "breakpoints": true
     }
   ]
 }

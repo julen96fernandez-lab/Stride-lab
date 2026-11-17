@@ -116,6 +116,44 @@ Cálculos en `src/lib/analysis/insights.ts` (y `kmByType` en `periods.ts`), con 
   completo, discontinuo) y tabla del 1 de enero hasta hoy frente al mismo tramo del año
   pasado: km, horas, desnivel, carreras y ritmo medio (sin especiales).
 
+## Periodos de lesión
+
+En **Perfil → Periodos de lesión**: inicio, fin opcional (sin fin = abierto hasta hoy) y
+nota corta; añadir, editar y borrar (con segundo toque para confirmar). Tabla `injuries`;
+`runs.in_injury` se recalcula con fechas de Madrid al guardar o borrar
+(`src/lib/analysis/injuries-db.ts`), y además se vuelven a clasificar los tipos.
+- Las carreras dentro **se guardan, se ven y sus km cuentan** en totales, Volumen y
+  calendario.
+- **No cuentan** en: ritmo medio (Inicio 28 días, Volumen, ritmo a igual FC, tendencia de
+  la evolución del ritmo), sugerencias de objetivos, comparación con el periodo anterior,
+  tabla de comparación de años y base del clasificador de tipos.
+- **Sí cuentan** en los récords.
+- Gráficos: banda gris suave «Lesión» (Volumen por columnas, evolución del ritmo, km
+  acumulados del año, evolución de récords); en el calendario, raya inferior gris. En la
+  evolución del ritmo, los puntos en lesión se ven apagados. Cálculos puros en
+  `src/lib/analysis/injuries.ts` (con pruebas).
+
+## Récords personales
+
+`/analisis/records` (enlace desde Análisis): 1 km, 1 milla, 5 km, 10 km, media y maratón
+con tiempo, ritmo, fecha y enlace a la carrera; «Sin datos suficientes» si ninguna carrera
+tiene un tramo continuo de esa distancia. Tocar una distancia abre su evolución: cada
+carrera es un punto (su mejor esfuerzo), la escalera es el récord vigente, % de mejora
+del primer récord al actual y récords de los últimos 12 meses en lima.
+
+**Mejor esfuerzo** (`src/lib/analysis/best-efforts.ts`): distancia acumulada del reloj
+frente al tiempo, ventana deslizante con interpolación lineal. Las **pausas parten la
+carrera** en tramos continuos y un esfuerzo nunca las cruza: hueco > 15 s cuya muestra
+cubre < 1 m/s (un hueco largo con distancia de carrera es una muestra continua, no una
+pausa). Se descartan esfuerzos más rápidos de 2:30 /km. Resultado en `run_efforts`
+(se recalcula al reprocesar o al cambiar la versión de reglas).
+
+Datos reales: 1202 huecos > 15 s; 164 son pausas (57 carreras, mediana 58 s); 1038 son
+muestras largas continuas. Las 15 carreras válidas sin muestras de distancia tienen su
+distancia exacta del total de Apple, pero ninguna puede dar récords: 5 son de 2016–2017
+sin muestras ni GPS; 3 tienen GPS útil pero < 1 km; 1 GPX tiene 4 puntos; el resto, < 2 km
+sin GPS.
+
 ## Tema día / noche
 
 - Selector en Perfil → Apariencia: **Sistema** (por defecto, sigue al iPhone), **Día** o
@@ -261,9 +299,10 @@ aunque tardara más, se reanuda sola.
 ## Esquema de base de datos
 
 Ver `src/lib/db/schema.ts` (fuente de verdad) y `drizzle/*.sql`. Tablas:
-`app_settings`, `imports` (+ `lease_until`), `shoes`, `runs`, `run_routes`, `run_splits`
+`app_settings`, `imports` (+ `lease_until`), `shoes`, `runs` (+ `in_injury`), `run_routes`, `run_splits`
 (+ `basis`), `run_series` (hr | power | speed | distance), `import_samples` (temporal
-durante la importación), `vo2max_readings`.
+durante la importación), `vo2max_readings`, `injuries`, `run_efforts` (mejor esfuerzo por
+carrera y distancia).
 
 Durabilidad (primera vs segunda mitad: ritmo, FC y desacople) se calculará al vuelo en
 el paso 5 desde `run_splits`/`run_series`.
@@ -393,6 +432,11 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑17 — Periodos de lesión (Perfil) excluidos de ritmos medios, sugerencias,
+  comparaciones y clasificador, con bandas «Lesión» en los gráficos. Récords personales
+  con mejor esfuerzo por tramos continuos y su evolución. Arreglo: el componente MarkArea
+  de ECharts no estaba registrado (tampoco se veía la columna seleccionada en «Por tipo»);
+  ejes de tiempo en español. Reglas versión 5. 135 pruebas.
 - 2026‑11‑17 — Plan inicial de Fase 1 (archivos, esquema, importador).
 - 2026‑11‑17 — Plan aprobado. Decididos: contraseña única (90 días), Hobby → importación
   reanudable, regla de carrera válida, franja 140–150 ppm. Contexto del documento maestro.

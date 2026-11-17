@@ -6,6 +6,7 @@ import { movingAverage } from "@/lib/analysis/insights";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { SessionIcon } from "@/components/ui/SessionType";
 import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { injuryAreaItems } from "./injury";
 
 /** Orden fijo de las capas apiladas (la paleta de tipos), más «sin tipo» al final. */
 const STACK = [...SESSION_TYPES, "sin_tipo"] as const;
@@ -31,7 +32,18 @@ const ZONE_NAMES = ["Z1", "Z2", "Z3", "Z4", "Z5"];
  * el ritmo medio (línea; sin sesiones especiales). Dos gráficos con el mismo eje X en lugar
  * de un gráfico con dos escalas. Tocar una columna muestra su detalle.
  */
-export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; unit: PeriodUnit; goalKm: number | null }) {
+export function PeriodCharts({
+  periods,
+  unit,
+  goalKm,
+  injuryRanges = [],
+}: {
+  periods: Period[];
+  unit: PeriodUnit;
+  goalKm: number | null;
+  /** Columnas [primera, última] que se solapan con un periodo de lesión. */
+  injuryRanges?: [number, number][];
+}) {
   const [sel, setSel] = useState(periods.length - 1);
   const [byType, setByType] = useState(false);
   const p = periods[Math.min(sel, periods.length - 1)];
@@ -55,9 +67,20 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
     [goalKm],
   );
   // Columna seleccionada en la vista por tipo (el periodo actual se indica en el detalle).
+  const injuryItems = useMemo(
+    () => injuryAreaItems(injuryRanges.map(([a, z]): [string, string] => [periods[a].label, periods[z].label])),
+    [periods, injuryRanges],
+  );
+  // Columna seleccionada (solo en la vista por tipo) y bandas «Lesión», en la misma markArea.
   const selArea = useMemo(
-    () => ({ silent: true, itemStyle: { color: "var(--ov-2)" }, data: [[{ xAxis: periods[sel]?.label }, { xAxis: periods[sel]?.label }]] }),
-    [periods, sel],
+    () => ({
+      silent: true,
+      data: [
+        ...(byType && unit !== "year" ? [[{ xAxis: periods[sel]?.label, itemStyle: { color: "var(--ov-2)" } }, { xAxis: periods[sel]?.label }]] : []),
+        ...injuryItems,
+      ],
+    }),
+    [periods, sel, byType, unit, injuryItems],
   );
 
   const bars = useMemo(
@@ -114,6 +137,7 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
                   },
                 })),
                 markLine: goalLine,
+                markArea: injuryItems.length ? { silent: true, data: injuryItems } : undefined,
               },
             ]),
         ...(ma
@@ -132,7 +156,7 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
           : []),
       ],
     }),
-    [periods, sel, goalKm, many, unit, stacked, typesShown, ma, goalLine, selArea],
+    [periods, sel, goalKm, many, unit, stacked, typesShown, ma, goalLine, selArea, injuryItems],
   );
 
   const paceVals = periods.map((x) => x.paceSPerKm);
@@ -202,7 +226,7 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
         label={`Kilómetros por ${UNIT_NAME[unit][0].toLowerCase()}${stacked ? " y tipo" : ""}`}
         onSelect={setSel}
       />
-      {(stacked || ma) && (
+      {(stacked || ma || injuryRanges.length > 0) && (
         <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 px-1" aria-label="Leyenda">
           {stacked &&
             typesShown.map((t) => (
@@ -223,6 +247,12 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
               Media móvil 4 semanas
             </li>
           )}
+          {injuryRanges.length > 0 && (
+            <li className="flex items-center gap-1 text-[11px] text-fg-2">
+              <span className="h-2.5 w-3 rounded-sm" style={{ background: "var(--ov-2)", outline: "1px solid var(--line-strong)" }} />
+              Lesión
+            </li>
+          )}
         </ul>
       )}
       <div className="mt-1 flex items-baseline justify-between px-1">
@@ -237,6 +267,9 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
           <div className="text-[13px] font-semibold">
             {unit === "week" ? `Semana del ${p.label}` : unit === "month" ? p.label : p.label}
             {p.current && <span className="ml-2 rounded-full bg-lime px-2 py-0.5 text-[10px] font-bold text-lime-ink">ACTUAL</span>}
+            {injuryRanges.some(([a, z]) => Math.min(sel, periods.length - 1) >= a && Math.min(sel, periods.length - 1) <= z) && (
+              <span className="ml-2 rounded-full bg-ov-2 px-2 py-0.5 text-[10px] font-bold text-fg-2">LESIÓN</span>
+            )}
           </div>
           <span className="text-[12px] text-fg-2">
             {p.runs} {p.runs === 1 ? "carrera" : "carreras"}

@@ -12,6 +12,7 @@ import * as s from "@/lib/db/schema";
 import { runImportStep } from "@/lib/import/pipeline";
 import { registerImportFromBlob } from "@/lib/import/register";
 import { reclassifyAll, setManualType } from "@/lib/analysis/session-type-db";
+import { applyInjuryFlags, deleteInjury, saveInjury, listInjuries } from "@/lib/analysis/injuries-db";
 import { bufferSource } from "@/lib/import/zip";
 import { REF_START, buildFixture } from "./helpers/fixture";
 
@@ -241,6 +242,34 @@ d("pipeline de importación", () => {
     // Volver a automático: se borra el manual y queda el calculado.
     await setManualType(db, ref.id, null);
     expect(await effective(ref.id)).toMatchObject({ m: null, t: "tirada_larga" });
+  });
+
+  it("periodos de lesión abiertos y cerrados marcan las carreras sin borrarlas; esfuerzos calculados", async () => {
+    await runImportStep(await newImport(), deps(), Date.now() + 60_000);
+    const flagged = async () =>
+      ((await db.execute(sql`SELECT to_char(start_at AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') d FROM runs WHERE in_injury ORDER BY 1`)).rows as { d: string }[]).map((r) => r.d);
+    // cerrado: del 15 al 18 de octubre de 2026 → la carrera del 17
+    await saveInjury(db, { startDate: "2026-10-15", endDate: "2026-10-18", note: "Gemelo" });
+    expect(await flagged()).toEqual(["2026-10-17", "2026-10-17"]); // la de Strava (duplicada) también cae dentro
+    // abierto: desde el 19 de octubre → 19 y 20 también
+    await saveInjury(db, { startDate: "2026-10-19", endDate: null, note: "Rodilla" });
+    expect(await flagged()).toEqual(["2026-10-17", "2026-10-17", "2026-10-19", "2026-10-20"]);
+    // cerrar el abierto el día 19
+    const open = (await listInjuries(db)).find((i) => i.endDate === null)!;
+    await saveInjury(db, { id: open.id, startDate: "2026-10-19", endDate: "2026-10-19", note: "Rodilla" });
+    expect(await flagged()).toEqual(["2026-10-17", "2026-10-17", "2026-10-19"]);
+    await deleteInjury(db, open.id);
+    await applyInjuryFlags(db);
+    expect(await flagged()).toEqual(["2026-10-17", "2026-10-17"]);
+    // siguen guardadas y visibles
+    expect((await db.execute(sql`SELECT count(*)::int n FROM runs WHERE status='valid'`)).rows[0]).toEqual({ n: 6 });
+
+    // Mejores esfuerzos: la carrera de referencia (21,34 km constantes) tiene hasta la media
+    const ref = (await db.select().from(s.runs).where(eq(s.runs.startAt, new Date(REF_START))))[0];
+    const eff = await db.select().from(s.runEfforts).where(eq(s.runEfforts.runId, ref.id));
+    expect(eff.map((e) => e.key).sort()).toEqual(["10k", "1k", "1mi", "5k", "half"]);
+    const half = eff.find((e) => e.key === "half")!;
+    expect(half.timeS).toBeCloseTo((6101 * 21097.5) / 21340, -1);
   });
 
   it("reimportar el mismo zip no duplica nada", async () => {

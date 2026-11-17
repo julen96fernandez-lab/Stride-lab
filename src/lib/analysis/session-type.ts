@@ -87,6 +87,8 @@ export interface RunForType {
   elevationGainM: number | null;
   /** Rutas de paso distintas (WOIntervalStepKeyPath); null si la importación no las guardó. */
   intervalSteps: string[] | null;
+  /** En periodo de lesión: no entra en la media de referencia. */
+  inInjury?: boolean;
 }
 
 export interface TypeResult {
@@ -110,7 +112,7 @@ export function classifySessionTypes(
   zones: HrZones | null = DEFAULT_ZONES,
 ): Map<string, TypeResult> {
   const comparable = runs
-    .filter((r) => !r.isIndoor && !isIntervalWorkout(r.intervalSteps) && !r.isSpecial && r.avgPaceSPerKm !== null && r.distanceM !== null && r.distanceM >= 1000)
+    .filter((r) => !r.isIndoor && !r.inInjury && !isIntervalWorkout(r.intervalSteps) && !r.isSpecial && r.avgPaceSPerKm !== null && r.distanceM !== null && r.distanceM >= 1000)
     .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 
   const baselineFor = (r: RunForType) => {

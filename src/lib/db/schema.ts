@@ -114,6 +114,8 @@ export const runs = pgTable(
     hrZoneSeconds: real("hr_zone_seconds").array(),
     /** Carga (minutos en zona × 1…5); null si no hay muestras de FC. */
     trainingLoad: real("training_load"),
+    /** Dentro de un periodo de lesión: cuenta en km totales, no en medias de ritmo ni comparaciones. */
+    inInjury: boolean("in_injury").notNull().default(false),
     shoeId: uuid("shoe_id").references(() => shoes.id, { onDelete: "set null" }),
     importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     /** Metadatos y estadísticas originales, para trazabilidad. */
@@ -219,3 +221,27 @@ export const vo2maxReadings = pgTable(
   ],
 );
 
+
+/** Periodos de lesión (fechas en hora de Madrid; sin fin = sigue abierto). */
+export const injuries = pgTable("injuries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  note: text("note"),
+  createdAt: createdAt(),
+});
+
+/** Mejor esfuerzo de cada carrera por distancia (tramos continuos; ver best-efforts.ts). */
+export const runEfforts = pgTable(
+  "run_efforts",
+  {
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    distanceM: real("distance_m").notNull(),
+    timeS: real("time_s").notNull(),
+    startS: real("start_s").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.key] }), index("run_efforts_key_time_idx").on(t.key, t.timeS)],
+);

@@ -1,6 +1,8 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
+import { applyInjuryFlags } from "./injuries-db";
+import { recomputeEfforts } from "./efforts-db";
 import { DEFAULT_ZONES, timeInZones, trainingLoad, validZones, type HrZones } from "./hr-zones";
 import { DEFAULT_TYPE_SETTINGS, classifySessionTypes, type SessionType, type TypeSettings } from "./session-type";
 
@@ -47,7 +49,10 @@ export async function saveZones(db: Db, z: HrZones): Promise<void> {
  * Recalcula todo lo que depende de los ajustes, para todas las carreras válidas:
  * tiempo en zonas, carga y tipo automático. El tipo manual no se toca.
  */
-export async function reclassifyAll(db: Db): Promise<number> {
+export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): Promise<number> {
+  await applyInjuryFlags(db);
+  // Los mejores esfuerzos no dependen de lesiones ni zonas: se pueden saltar al guardar una lesión.
+  if (opts.efforts !== false) await recomputeEfforts(db);
   const [settings, zones] = await Promise.all([getTypeSettings(db), getZones(db)]);
   const rows = await db
     .select({
@@ -60,6 +65,7 @@ export async function reclassifyAll(db: Db): Promise<number> {
       isSpecial: s.runs.isSpecial,
       elevationGainM: s.runs.elevationGainM,
       intervalSteps: sql<string[] | null>`${s.runs.raw}->'intervalSteps'`,
+      inInjury: s.runs.inInjury,
     })
     .from(s.runs)
     .where(eq(s.runs.status, "valid"));
@@ -106,7 +112,7 @@ export async function reclassifyAll(db: Db): Promise<number> {
  * que se abra una pantalla, todo se recalcula una vez.
  * 3 = Series por rutas de paso con repetición + tipos por zona de FC + carga.
  */
-const CLASSIFIER_VERSION = "4"; // 4 = zonas reales del Apple Watch (47/187)
+const CLASSIFIER_VERSION = "5"; // 5 = lesiones (excluidas de la media) y mejores esfuerzos
 const VERSION_KEY = "classifier_version";
 
 /** Recalcula si las reglas cambiaron o si hay carreras válidas sin tipo automático. */

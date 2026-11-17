@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { C, EChart, axisLabel, timeLabel, tooltipBase } from "./EChart";
 
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const fmtDay = (iso: string) => {
@@ -47,7 +47,7 @@ export function TrendChart({
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { show: false },
-        axisLabel: { ...axisLabel, hideOverlap: true, formatter: { year: "{yyyy}", month: "{MMM}", day: "" } },
+        axisLabel: { ...axisLabel, hideOverlap: true, formatter: timeLabel },
       },
       yAxis: {
         type: "value",

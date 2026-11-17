@@ -111,3 +111,15 @@ describe("zonas y carga", () => {
     expect(validZones({ ...DEFAULT_ZONES, limits: [131, 130, 145, 159, 173] })).toBe(false);
   });
 });
+
+describe("lesiones en la media de referencia", () => {
+  it("las carreras en lesión no cambian la media con la que se compara", async () => {
+    const { classifySessionTypes } = await import("@/lib/analysis/session-type");
+    const hist = Array.from({ length: 10 }, (_, i) => base({ id: `x${i}`, startAt: new Date(Date.UTC(2026, 3, 1 + i * 5)), avgPaceSPerKm: 330, avgHr: 150 }));
+    // 10 carreras muy lentas en lesión: si contaran, la media subiría y la de prueba parecería Tempo con poco margen
+    const injured = Array.from({ length: 10 }, (_, i) => base({ id: `y${i}`, startAt: new Date(Date.UTC(2026, 4, 1 + i)), avgPaceSPerKm: 420, avgHr: 150, inInjury: true }));
+    const probe = base({ id: "p", avgPaceSPerKm: 325, avgHr: 150 });
+    const r = classifySessionTypes([...hist, ...injured, probe]);
+    expect(r.get("p")!.type).toBe("rodaje"); // 1,5 % más rápido que 5:30, no Tempo
+  });
+});

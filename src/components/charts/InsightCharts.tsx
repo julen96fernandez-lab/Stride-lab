@@ -6,7 +6,9 @@ import type { CalendarDay, PacePoint } from "@/lib/analysis/insights";
 import { intensityLevels } from "@/lib/analysis/insights";
 import { TYPE_META, isSessionType } from "@/lib/analysis/session-type";
 import { SessionIcon } from "@/components/ui/SessionType";
-import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { C, EChart, axisLabel, timeLabel, tooltipBase } from "./EChart";
+import { injuryMarkArea } from "./injury";
+import { bandsToMs, isInjuryDay, type InjuryBand } from "@/lib/analysis/injuries";
 
 const paceStr = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
 const km1 = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 1 });
@@ -27,7 +29,17 @@ const typeName = (t: string | null) => (isSessionType(t) ? TYPE_META[t].label : 
 // ─── Evolución del ritmo ─────────────────────────────────────────────────────
 
 /** Un punto por carrera (color de su tipo) y la tendencia suavizada. Tocar un punto la muestra. */
-export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: number; pace: number }[] }) {
+export function PaceTrend({
+  points,
+  trend,
+  bands = [],
+  nowMs,
+}: {
+  points: PacePoint[];
+  trend: { t: number; pace: number }[];
+  bands?: InjuryBand[];
+  nowMs: number;
+}) {
   const [sel, setSel] = useState<PacePoint | null>(points.at(-1) ?? null);
   const option = useMemo(() => {
     const paces = points.map((p) => p.pace);
@@ -39,7 +51,7 @@ export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: 
         formatter: (e: { seriesIndex: number; dataIndex: number }) => {
           if (e.seriesIndex !== 0) return "";
           const p = points[e.dataIndex];
-          return `<div style="color:${C.axis};font-size:11px">${fmtDate(p.t)} · ${typeName(p.type)}</div><b>${paceStr(p.pace)} /km</b> · ${km1(p.km)} km`;
+          return `<div style="color:${C.axis};font-size:11px">${fmtDate(p.t)} · ${typeName(p.type)}${p.inInjury ? " · lesión" : ""}</div><b>${paceStr(p.pace)} /km</b> · ${km1(p.km)} km`;
         },
       },
       xAxis: {
@@ -47,7 +59,7 @@ export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: 
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { show: false },
-        axisLabel: { ...axisLabel, hideOverlap: true, formatter: { year: "{yyyy}", month: "{MMM}", day: "{d} {MMM}" } },
+        axisLabel: { ...axisLabel, hideOverlap: true, formatter: timeLabel },
       },
       yAxis: {
         type: "value",
@@ -64,8 +76,17 @@ export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: 
           data: points.map((p) => ({
             value: [p.t, p.pace],
             symbolSize: p.id === sel?.id ? 13 : 8,
-            itemStyle: { color: typeColor(p.type), borderColor: p.id === sel?.id ? C.text : C.surface, borderWidth: p.id === sel?.id ? 2 : 1 },
+            itemStyle: {
+              color: typeColor(p.type),
+              borderColor: p.id === sel?.id ? C.text : C.surface,
+              borderWidth: p.id === sel?.id ? 2 : 1,
+              // En lesión: visibles pero apagados (no cuentan en la tendencia).
+              opacity: p.inInjury ? 0.35 : 1,
+            },
           })),
+          markArea: points.length
+            ? injuryMarkArea(bandsToMs(bands, points[0].t, points[points.length - 1].t, nowMs), points[0].t, points[points.length - 1].t)
+            : undefined,
           z: 3,
         },
         {
@@ -79,7 +100,7 @@ export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: 
         },
       ],
     };
-  }, [points, trend, sel]);
+  }, [points, trend, sel, bands, nowMs]);
 
   if (points.length === 0) return <p className="mt-3 text-[14px] text-fg-2">Sin carreras en este periodo con ese tipo.</p>;
   return (
@@ -87,6 +108,7 @@ export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: 
       <EChart option={option} height={210} label="Ritmo medio de cada carrera y tendencia" onItem={(si, di) => si === 0 && setSel(points[di])} />
       <p className="mt-1 px-1 text-[11px] text-fg-2">
         Cada punto es una carrera; la línea es la tendencia suavizada{trend.length === 0 ? " (hacen falta 3 carreras)" : ""}. Más arriba = más rápido.
+        {points.some((p) => p.inInjury) && " Los puntos apagados son de periodos de lesión y no cuentan en la tendencia."}
       </p>
       {sel && (
         <Link
@@ -101,6 +123,7 @@ export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: 
           <div className="min-w-0 flex-1">
             <div className="text-[12px] text-fg-2 first-letter:uppercase">
               {fmtDate(sel.t)} · {typeName(sel.type)}
+              {sel.inInjury ? " · lesión" : ""}
             </div>
             <div className="mt-0.5 text-[14px]">
               <b className="num text-[17px]">{paceStr(sel.pace)}</b> /km · {km1(sel.km)} km{sel.avgHr ? ` · ${Math.round(sel.avgHr)} ppm` : ""}
@@ -118,7 +141,7 @@ export function PaceTrend({ points, trend }: { points: PacePoint[]; trend: { t: 
 const LEVEL_MIX = [0, 42, 62, 82, 100];
 
 /** Mapa de calor: columnas = semanas (lun→dom), casilla = día. Gris = sin correr. */
-export function ConsistencyCalendar({ days, metric }: { days: CalendarDay[]; metric: "km" | "load" }) {
+export function ConsistencyCalendar({ days, metric, bands = [] }: { days: CalendarDay[]; metric: "km" | "load"; bands?: InjuryBand[] }) {
   const levels = useMemo(() => intensityLevels(days.map((d) => (metric === "km" ? d.km : d.load))), [days, metric]);
   const [sel, setSel] = useState<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -158,17 +181,20 @@ export function ConsistencyCalendar({ days, metric }: { days: CalendarDay[]; met
                   if (!cell) return <span key={wd} className="h-4 w-4" />;
                   const lv = levels[cell.i];
                   const active = sel === cell.i;
+                  const hurt = isInjuryDay(cell.day.date, bands);
                   return (
                     <button
                       key={wd}
                       type="button"
                       role="gridcell"
                       onClick={() => setSel(active ? null : cell.i)}
-                      aria-label={`${fmtDate(cell.day.date)}: ${cell.day.runs.length ? `${km1(cell.day.km)} km` : "sin correr"}`}
+                      aria-label={`${fmtDate(cell.day.date)}: ${cell.day.runs.length ? `${km1(cell.day.km)} km` : "sin correr"}${hurt ? ", lesión" : ""}`}
                       aria-selected={active}
                       className={`h-4 w-4 rounded-[4px] ${active ? "ring-2 ring-[var(--fg)] ring-offset-1 ring-offset-[var(--card)]" : ""}`}
                       style={{
                         background: lv === 0 ? "var(--ov-2)" : `color-mix(in srgb, var(--chart-line) ${LEVEL_MIX[lv]}%, var(--ov-2))`,
+                        // Día en periodo de lesión: raya inferior gris.
+                        boxShadow: hurt ? "inset 0 -4px 0 var(--fg-3)" : undefined,
                       }}
                     />
                   );
@@ -194,10 +220,19 @@ export function ConsistencyCalendar({ days, metric }: { days: CalendarDay[]; met
           más
         </span>
       </div>
+      {bands.length > 0 && days.some((d) => isInjuryDay(d.date, bands)) && (
+        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-fg-2">
+          <span className="h-3 w-3 rounded-[3px]" style={{ background: "var(--ov-2)", boxShadow: "inset 0 -3px 0 var(--fg-3)" }} />
+          Día en periodo de lesión
+        </div>
+      )}
       <div aria-live="polite">
         {s && (
           <div className="mt-3 rounded-2xl border border-line bg-inset p-3.5">
-            <div className="text-[13px] font-semibold first-letter:uppercase">{fmtDate(s.date)}</div>
+            <div className="text-[13px] font-semibold first-letter:uppercase">
+              {fmtDate(s.date)}
+              {isInjuryDay(s.date, bands) && <span className="ml-2 rounded-full bg-ov-2 px-2 py-0.5 text-[10px] font-bold text-fg-2">LESIÓN</span>}
+            </div>
             {s.runs.length === 0 ? (
               <p className="mt-1 text-[13px] text-fg-2">Sin correr.</p>
             ) : (
@@ -229,7 +264,18 @@ export function ConsistencyCalendar({ days, metric }: { days: CalendarDay[]; met
 // ─── Comparación de años ─────────────────────────────────────────────────────
 
 /** Km acumulados día a día: año actual (hasta hoy) frente al anterior (completo). */
-export function YearCumulative({ year, current, previous }: { year: number; current: number[]; previous: number[] }) {
+export function YearCumulative({
+  year,
+  current,
+  previous,
+  bands = [],
+}: {
+  year: number;
+  current: number[];
+  previous: number[];
+  /** Periodos de lesión del año actual en días del año [inicio, fin]. */
+  bands?: [number, number][];
+}) {
   const option = useMemo(() => {
     const toPts = (arr: number[], y: number) => arr.map((v, d) => [Date.UTC(2000, 0, 1) + d * 86_400_000, Math.round(v * 10) / 10, y]);
     return {
@@ -264,6 +310,11 @@ export function YearCumulative({ year, current, previous }: { year: number; curr
           showSymbol: false,
           lineStyle: { width: 2.5, color: C.lime },
           endLabel: { show: true, formatter: String(year), color: C.text, fontFamily: C.font, fontSize: 11, fontWeight: 600 },
+          markArea: injuryMarkArea(
+            bands.map(([a, z]): [number, number] => [Date.UTC(2000, 0, 1) + a * 86_400_000, Date.UTC(2000, 0, 1) + (z + 1) * 86_400_000]),
+            Date.UTC(2000, 0, 1),
+            Date.UTC(2000, 11, 31),
+          ),
           z: 3,
         },
         {
@@ -277,7 +328,7 @@ export function YearCumulative({ year, current, previous }: { year: number; curr
         },
       ],
     };
-  }, [year, current, previous]);
+  }, [year, current, previous, bands]);
   return (
     <div>
       <EChart option={option} height={200} label={`Km acumulados en ${year} frente a ${year - 1}`} />
@@ -290,6 +341,12 @@ export function YearCumulative({ year, current, previous }: { year: number; curr
           <span className="h-0 w-5 border-t-2 border-dashed" style={{ borderColor: "var(--fg-3)" }} />
           {year - 1}
         </li>
+        {bands.length > 0 && (
+          <li className="flex items-center gap-1.5">
+            <span className="h-2.5 w-3 rounded-sm" style={{ background: "var(--ov-2)", outline: "1px solid var(--line-strong)" }} />
+            Lesión
+          </li>
+        )}
       </ul>
     </div>
   );
