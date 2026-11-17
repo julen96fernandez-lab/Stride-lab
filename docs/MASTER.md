@@ -304,8 +304,11 @@ en lima. El color nunca va solo: siempre icono + nombre.
 - Se ve en Actividad (insignia) y en el detalle (insignia + tarjeta de zonas).
 - **Guardar y recalcular** (Perfil): guarda zonas y umbrales y vuelve a calcular zonas,
   carga y tipos automáticos de todas las carreras.
-- **Cambio manual**: en el detalle, fila de chips; un toque elige el tipo (se guarda al
-  momento), otro toque sobre el elegido o «Volver a automático» lo quita.
+- **Cambio manual**: en el detalle se toca la etiqueta del tipo y se abre una hoja con los
+  8 tipos; elegir uno lo guarda como manual al momento. En la hoja, «Volver a automático»
+  borra el manual. Las carreras con tipo manual llevan un lápiz pequeño en su etiqueta.
+- **El manual manda siempre**: ni Reprocesar (el upsert no toca `session_type_manual`; al
+  unir sesiones se conserva) ni «Guardar y recalcular» lo cambian. Cubierto por pruebas.
 - **Actividad**: filtros por tipo (`?tipo=`) con recuento y etiqueta del tipo en cada fila.
 - **Inicio**: km por tipo de los últimos 12 meses. **Análisis**: km por tipo (12 meses o
   todo) y km por año apilados por tipo, con leyenda.
@@ -371,6 +374,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Tipo manual con hoja de selección y marca de lápiz; pruebas de que
+  Reprocesar y recalcular no lo pisan y de «Volver a automático». 105 pruebas.
 - 2026‑11‑17 — Distancia sin duplicar (todas las apariciones de DistanceWalkingRunning;
   respaldo con muestras del reloj) y unión de entrenamientos seguidos (< 2 min). 104 pruebas.
 - 2026‑11‑17 — Tema día/noche (Sistema, Día, Noche) con contraste comprobado; 91 pruebas.

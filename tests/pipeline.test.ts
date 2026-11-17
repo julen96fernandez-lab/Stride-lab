@@ -11,6 +11,7 @@ import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import { runImportStep } from "@/lib/import/pipeline";
 import { registerImportFromBlob } from "@/lib/import/register";
+import { reclassifyAll, setManualType } from "@/lib/analysis/session-type-db";
 import { bufferSource } from "@/lib/import/zip";
 import { REF_START, buildFixture } from "./helpers/fixture";
 
@@ -206,6 +207,40 @@ d("pipeline de importación", () => {
     await runImportStep(a.row.id, deps(), Date.now() + 60_000);
     const fresh = await registerImportFromBlob(db, blob, "exportar.zip"); // la anterior terminó
     expect(fresh.reused).toBe(false);
+  });
+
+  it("el tipo manual manda: no lo pisan Reprocesar ni recalcular; volver a automático funciona", async () => {
+    const effective = async (id: string) =>
+      (await db.execute(sql`SELECT coalesce(session_type_manual, session_type_auto) AS t, session_type_manual AS m, session_type_auto AS a FROM runs WHERE id = ${id}`))
+        .rows[0] as { t: string; m: string | null; a: string };
+    const startOf = (iso: string) => db.select().from(s.runs).where(eq(s.runs.startAt, new Date(iso)));
+
+    await runImportStep(await newImport(), deps(), Date.now() + 60_000);
+    const ref = (await startOf(new Date(REF_START).toISOString()))[0];
+    const joined = (await startOf("2026-04-30T08:28:32.000Z"))[0]; // sesión unida
+    expect((await effective(ref.id)).a).toBe("tirada_larga");
+
+    await setManualType(db, ref.id, "competicion");
+    await setManualType(db, joined.id, "tempo");
+    expect((await effective(ref.id)).t).toBe("competicion");
+
+    // «Guardar y recalcular»
+    await reclassifyAll(db);
+    expect((await effective(ref.id)).t).toBe("competicion");
+    expect((await effective(joined.id)).t).toBe("tempo");
+
+    // Reprocesar el zip (nueva importación del mismo archivo)
+    await runImportStep(await newImport(), deps(), Date.now() + 60_000);
+    const refAfter = (await startOf(new Date(REF_START).toISOString()))[0];
+    const joinedAfter = await startOf("2026-04-30T08:28:32.000Z");
+    expect(refAfter.id).toBe(ref.id);
+    expect(refAfter.sessionTypeManual).toBe("competicion");
+    expect(joinedAfter).toHaveLength(1);
+    expect(joinedAfter[0].sessionTypeManual).toBe("tempo");
+
+    // Volver a automático: se borra el manual y queda el calculado.
+    await setManualType(db, ref.id, null);
+    expect(await effective(ref.id)).toMatchObject({ m: null, t: "tirada_larga" });
   });
 
   it("reimportar el mismo zip no duplica nada", async () => {

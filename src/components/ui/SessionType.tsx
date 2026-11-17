@@ -32,6 +32,17 @@ export function SessionIcon({ type, size = 18 }: { type: SessionType; size?: num
   );
 }
 
+/** Marca pequeña de «tipo elegido a mano» (lápiz). */
+export function ManualMark() {
+  return (
+    <span className="inline-flex items-center" title="Elegido a mano" aria-label="elegido a mano" role="img">
+      <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" className="text-fg-2">
+        <path d="M4 20h4L19 9l-4-4L4 16z" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
 /** Etiqueta del tipo: icono con su color + nombre (nunca solo color). */
 export function TypeTag({ type, manual = false }: { type: SessionType; manual?: boolean }) {
   const m = TYPE_META[type];
@@ -49,6 +60,7 @@ export function TypeTag({ type, manual = false }: { type: SessionType; manual?: 
         <SessionIcon type={type} size={13} />
       </span>
       {m.label}
+      {manual && <ManualMark />}
     </span>
   );
 }
