@@ -10,6 +10,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import { runImportStep } from "@/lib/import/pipeline";
+import { registerImportFromBlob } from "@/lib/import/register";
 import { bufferSource } from "@/lib/import/zip";
 import { REF_START, buildFixture } from "./helpers/fixture";
 
@@ -164,6 +165,18 @@ d("pipeline de importación", () => {
     const row = await runImportStep(id, deps(), Date.now() + 60_000);
     expect(row.phase).toBe("index");
     expect(row.status).toBe("uploaded");
+  });
+
+  it("crea la importación desde un zip ya subido y reutiliza la que esté a medias", async () => {
+    const blob = { url: "memory://imports/a.zip", pathname: "imports/a.zip", size: zip.length };
+    const a = await registerImportFromBlob(db, blob, "exportar.zip");
+    expect(a.reused).toBe(false);
+    expect(a.row).toMatchObject({ status: "uploaded", fileSize: zip.length, fileName: "exportar.zip" });
+    const again = await registerImportFromBlob(db, blob, "exportar.zip");
+    expect(again).toMatchObject({ reused: true, row: { id: a.row.id } });
+    await runImportStep(a.row.id, deps(), Date.now() + 60_000);
+    const fresh = await registerImportFromBlob(db, blob, "exportar.zip"); // la anterior terminó
+    expect(fresh.reused).toBe(false);
   });
 
   it("reimportar el mismo zip no duplica nada", async () => {

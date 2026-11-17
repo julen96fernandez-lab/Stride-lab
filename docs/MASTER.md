@@ -110,8 +110,9 @@ src/app/
   (app)/page.tsx                 Inicio (vacío hasta el paso 5)
   (app)/{plan,actividad,analisis,perfil}/page.tsx
   (app)/perfil/importar/         page.tsx + ImportFlow.tsx
-  api/import/upload/route.ts     token de subida directa a Blob
-  api/import/route.ts            registra un zip subido
+  api/import/upload/route.ts     token de cliente para la subida por partes
+  api/import/route.ts            crea la importación desde un zip ya en Blob
+  api/import/blobs/route.ts      lista los zips ya subidos
   api/import/[id]/route.ts       estado
   api/import/[id]/step/route.ts  avanza la importación (maxDuration 300, trabaja 240 s)
 src/components/ui/               primitives, TabBar, Logo, CountUp, Greeting
@@ -119,6 +120,9 @@ src/lib/
   auth/                          session (JWT), password (scrypt), store (app_settings)
   db/                            schema.ts, client.ts
   format.ts                      km, ritmo, duración… en es-ES (— si falta)
+  upload/resumable.ts            subida por partes reanudable (lógica pura, probada)
+  upload/blob-api.ts             implementación con @vercel/blob/client
+  import/register.ts             crear/recuperar importación desde un blob
   import/
     zip.ts        directorio central por rangos (Zip64), stream de una entrada
     blob.ts       origen por rangos sobre Blob privado + subida de GPX
@@ -136,13 +140,27 @@ tests/                           units.test.ts, pipeline.test.ts, helpers/ (expo
 
 ## Importador (implementado)
 
-1. **Subida.** El navegador sube el zip directo a Blob privado (`upload()`, multipart).
-   No pasa por la función ni por GitHub. Luego `POST /api/import` comprueba con `head()`
-   que existe y crea la fila en `imports`.
+1. **Subida reanudable** (`src/lib/upload/resumable.ts`). El navegador sube el zip
+   directo a Blob privado por partes de 8 MB (3 a la vez) con la API manual de multipart
+   (`createMultipartUpload` / `uploadPart` / `completeMultipartUpload`), usando un token
+   de cliente que da `POST /api/import/upload`. El `uploadId`, la clave y las partes
+   confirmadas se guardan en `localStorage`: tras un corte, al volver a Perfil → Importar
+   aparece «Continuar la subida» y, al elegir el mismo archivo (nombre, tamaño y fecha),
+   solo se envían las partes que faltan. Cada petición tiene tiempo máximo (2 min por
+   parte, 3 min para unir) y 3 intentos visibles. La pantalla muestra MB subidos, que
+   faltan y total, y la parte en curso.
+   **No hay callback de Blob hacia la app** (nada de `onUploadCompleted`): al terminar,
+   el propio navegador llama a `POST /api/import`, que comprueba el zip con `head()` (y su
+   tamaño) y crea la fila en `imports` (o devuelve la que haya a medias de ese zip).
+   `GET /api/import/blobs` lista los zips ya en Blob: «Usar este zip» crea la importación
+   sin volver a subirlo, y «Continuar» retoma una a medias.
 2. **Proceso por tramos.** La pantalla llama en bucle a `POST /api/import/:id/step`. Cada
-   llamada trabaja hasta 240 s, guarda punto de control y devuelve el estado. Si la red
-   o la función se cortan, se reintenta; si se cierra la pantalla, «Continuar» reanuda.
-   La pantalla pide `wakeLock` para no apagarse.
+   llamada trabaja hasta 240 s, guarda punto de control y devuelve el estado; mientras,
+   la pantalla consulta `GET /api/import/:id` cada 4 s para mostrar fase y progreso. Si la
+   red o la función se cortan, se reintenta; si se cierra la pantalla, «Continuar» reanuda.
+   La pantalla pide `wakeLock` para no apagarse. **Si nada cambia en 60 s** (subida,
+   creación o proceso) aparece un aviso con «Reintentar la subida», «Reintentar» o
+   «Continuar». Las fases sin bytes (series, rutas) emiten un latido de progreso.
 3. **Fases** (`imports.phase`):
    - `index`: directorio central del zip por rangos. XML = el `.xml` más grande que no sea
      CDA (el nombre puede ir traducido: `exportación.xml`). GPX: todos los `.gpx`.
@@ -205,6 +223,17 @@ el paso 5 desde `run_splits`/`run_series`.
 - Cambiar contraseña desde Perfil.
 - Zona horaria: se guarda en UTC; se muestra en Europe/Madrid.
 
+## Incidencias
+
+- **2026‑11‑17 · Subida parada al 99 %, sin fila en `imports`.** Diagnóstico: el almacén
+  Blob registraba 0 archivos (en multipart el archivo solo existe tras unir las partes);
+  no intervenía ningún callback de Blob (no se usaba `onUploadCompleted`), así que
+  Deployment Protection no era la causa. El 99 % significaba «todo enviado, esperando la
+  última parte o la unión»: el SDK reintenta en silencio hasta 10 veces con espera
+  creciente (~17 min) y sin tiempo máximo, y `POST /api/import` nunca llegó a llamarse.
+  Solución: subida propia reanudable con tiempos máximos y reintentos visibles, creación
+  de la importación desde el navegador o desde un zip ya subido, y aviso de parada a 60 s.
+
 ## Comprobación con datos reales
 
 Carrera del 17‑oct‑2026: 21,34 km · 1:41:41 · 4:46 /km · FC 156 · 252 W.
@@ -225,3 +254,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   pasadas, series, rutas, parciales, deduplicado, clasificación, reserva) y pantalla de
   importación con progreso y comprobación. 18 pruebas con export sintético, incluida la
   reanudación tras cortes en cualquier punto y la reimportación sin duplicados.
+- 2026‑11‑17 — Arreglo de la subida (ver Incidencias): subida por partes reanudable,
+  «Continuar la subida», MB subidos/que faltan, lista de zips ya subidos, creación de la
+  importación sin callbacks, aviso con «Reintentar/Continuar» tras 60 s sin cambios.
+  24 pruebas (5 nuevas de subida y 1 de creación desde un zip existente) y prueba en
+  navegador con Blob simulado: corte, recarga, reanudación enviando solo la parte que
+  faltaba.

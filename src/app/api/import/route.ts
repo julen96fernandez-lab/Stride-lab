@@ -1,25 +1,38 @@
 import { head } from "@vercel/blob";
 import { NextResponse } from "next/server";
-import { db, schema as s } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { isUploadPathname, registerImportFromBlob } from "@/lib/import/register";
 import { toView } from "@/lib/import/status";
 
-/** Registra un zip ya subido a Blob y crea la importación. */
+/**
+ * Crea la importación a partir de un zip que YA está en Blob (recién subido o de
+ * una subida anterior). Lo llama el navegador; no depende de ningún callback.
+ */
 export async function POST(request: Request) {
-  const { url, pathname, fileName } = (await request.json()) as { url?: string; pathname?: string; fileName?: string };
-  if (!url || !pathname || !pathname.startsWith("imports/")) {
-    return NextResponse.json({ error: "Datos de subida incompletos" }, { status: 400 });
+  const body = (await request.json().catch(() => ({}))) as { pathname?: string; fileName?: string; size?: number };
+  const pathname = body.pathname;
+  if (!pathname || !isUploadPathname(pathname)) {
+    return NextResponse.json({ error: "Ruta de zip no válida" }, { status: 400 });
   }
-  let size: number;
+  let meta: Awaited<ReturnType<typeof head>>;
   try {
-    const meta = await head(url);
-    if (meta.pathname !== pathname) throw new Error("La ruta no coincide");
-    size = meta.size;
+    meta = await Promise.race([
+      head(pathname, { abortSignal: AbortSignal.timeout(20_000) }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 25_000)),
+    ]);
   } catch {
-    return NextResponse.json({ error: "No encuentro el archivo subido en Blob" }, { status: 400 });
+    return NextResponse.json({ error: "Ese zip no está en el almacenamiento" }, { status: 404 });
   }
-  const [row] = await db()
-    .insert(s.imports)
-    .values({ blobUrl: url, blobPathname: pathname, fileName: fileName?.slice(0, 200) ?? null, fileSize: size })
-    .returning();
-  return NextResponse.json(toView(row));
+  if (typeof body.size === "number" && body.size !== meta.size) {
+    return NextResponse.json(
+      { error: `El zip guardado mide ${meta.size} bytes y el elegido ${body.size}: no coinciden` },
+      { status: 409 },
+    );
+  }
+  const { row, reused } = await registerImportFromBlob(
+    db(),
+    { url: meta.url, pathname: meta.pathname, size: meta.size },
+    body.fileName ?? null,
+  );
+  return NextResponse.json({ ...toView(row), reused });
 }

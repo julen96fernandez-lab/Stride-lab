@@ -457,6 +457,8 @@ async function phaseSeries(row: ImportRow, deps: ImportDeps, deadline: number): 
       await tx
         .delete(s.importSamples)
         .where(and(eq(s.importSamples.importId, row.id), inArray(s.importSamples.runId, ids)));
+      // Latido de progreso para la pantalla.
+      await saveState(tx as unknown as Db, row, {}, {}, { seriesRuns: ids.length });
     });
   }
   await saveState(db, row, { unrefIdx: 0 }, { phase: "routes" });
@@ -543,9 +545,10 @@ async function phaseRoutes(row: ImportRow, deps: ImportDeps, deadline: number): 
 
   let linked = 0;
   let missing = 0;
+  let processed = 0;
   for (const r of referenced) {
     if (skipped.has(r.id)) continue;
-    if (linked + missing > 0 && now() >= deadline) {
+    if (processed > 0 && now() >= deadline) {
       await saveState(db, row, { routeSkipped: [...skipped] }, {}, { routesLinked: linked, routesMissing: missing });
       return false;
     }
@@ -556,6 +559,12 @@ async function phaseRoutes(row: ImportRow, deps: ImportDeps, deadline: number): 
     else {
       missing++;
       skipped.add(r.id);
+    }
+    processed++;
+    if (processed % 5 === 0) {
+      await saveState(db, row, { routeSkipped: [...skipped] }, {}, { routesLinked: linked, routesMissing: missing });
+      linked = 0;
+      missing = 0;
     }
   }
   await saveState(db, row, { routeSkipped: [...skipped] }, {}, { routesLinked: linked, routesMissing: missing });
@@ -570,7 +579,7 @@ async function phaseRoutes(row: ImportRow, deps: ImportDeps, deadline: number): 
   let idx = state.unrefIdx ?? 0;
   let timeLinked = 0;
   const firstIdx = idx;
-  const workedBefore = linked + missing > 0;
+  const workedBefore = processed > 0;
   while (idx < unref.length) {
     if ((workedBefore || idx > firstIdx) && now() >= deadline) {
       await saveState(db, row, { unrefIdx: idx }, {}, { routesTimeLinked: timeLinked });

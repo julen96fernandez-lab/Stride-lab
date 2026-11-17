@@ -15,6 +15,7 @@ export type ImportView = {
   createdAt: string;
   finishedAt: string | null;
   exportDate: string | null;
+  updatedAt: string;
 };
 
 export type CheckRun = {
@@ -43,6 +44,7 @@ export function toView(r: Row): ImportView {
     createdAt: r.createdAt.toISOString(),
     finishedAt: r.finishedAt?.toISOString() ?? null,
     exportDate: r.exportDate?.toISOString() ?? null,
+    updatedAt: r.updatedAt.toISOString(),
   };
 }
 
