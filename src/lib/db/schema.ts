@@ -28,7 +28,7 @@ export const appSettings = pgTable("app_settings", {
 });
 
 export type ImportStatus = "uploaded" | "processing" | "done" | "failed";
-export type ImportPhase = "index" | "workouts" | "samples" | "routes" | "finalize" | "done";
+export type ImportPhase = "index" | "workouts" | "samples" | "series" | "routes" | "finalize" | "done";
 
 export const imports = pgTable("imports", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -46,6 +46,8 @@ export const imports = pgTable("imports", {
   state: jsonb("state").$type<Record<string, unknown>>().notNull().default({}),
   stats: jsonb("stats").$type<Record<string, number>>().notNull().default({}),
   error: text("error"),
+  /** Evita que dos invocaciones procesen la misma importación a la vez. */
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
   createdAt: createdAt(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true }),

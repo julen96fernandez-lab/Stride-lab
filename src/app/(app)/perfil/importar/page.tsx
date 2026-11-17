@@ -1,7 +1,18 @@
 import Link from "next/link";
-import { Card, PageHeader, Pill } from "@/components/ui/primitives";
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { PageHeader } from "@/components/ui/primitives";
+import { checkRun, latestImport } from "@/lib/import/status";
+import { ImportFlow } from "./ImportFlow";
 
 export const metadata = { title: "Importar · Stride Lab" };
+
+async function Flow() {
+  await connection();
+  const last = await latestImport();
+  const check = last?.status === "done" ? await checkRun() : null;
+  return <ImportFlow initial={last} initialCheck={check} />;
+}
 
 export default function ImportPage() {
   return (
@@ -13,16 +24,9 @@ export default function ImportPage() {
         Perfil
       </Link>
       <PageHeader title="Importar" subtitle="Tu export de Apple Health." />
-      <Card hero>
-        <div className="flex items-center justify-between">
-          <div className="eyebrow">Importador</div>
-          <Pill>En construcción</Pill>
-        </div>
-        <p className="relative mt-4 text-[15px] leading-relaxed text-fg">
-          Aquí podrás subir el .zip. Se guardará en Vercel Blob y se procesará en el servidor por lotes, con
-          progreso y reanudación.
-        </p>
-      </Card>
+      <Suspense fallback={<div className="card h-[260px]" aria-hidden="true" />}>
+        <Flow />
+      </Suspense>
     </div>
   );
 }
