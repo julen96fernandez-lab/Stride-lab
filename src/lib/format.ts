@@ -46,3 +46,8 @@ export function bytes(n: number | null | undefined): string {
 export function date(iso: string | Date, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }) {
   return new Intl.DateTimeFormat("es-ES", { timeZone: TZ, ...opts }).format(new Date(iso)).replace(".", "");
 }
+
+/** Primera letra en mayúscula ("sábado, 17 de octubre" → "Sábado, 17 de octubre"). */
+export function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}

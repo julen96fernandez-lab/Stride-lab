@@ -23,8 +23,8 @@
 | 1 | Esqueleto Next.js, diseño base, PWA, acceso privado, navegación inferior | **Hecho** |
 | 2 | Esquema Drizzle + migración en Neon + primer acceso `/setup` | **Hecho** |
 | 3 | Importador reanudable + pantalla de importación | **Hecho** (probado con export sintético) |
-| 4 | Importación real desde el iPhone + comprobación 17‑oct‑2026 | Pendiente (usuario) |
-| 5 | Inicio, Actividad + Detalle de carrera, Análisis | Pendiente |
+| 4 | Importación real desde el iPhone + comprobación 17‑oct‑2026 | **Hecho**: 256 válidas, 190 rutas, 413 lecturas de VO₂ máx.; 17‑oct exacta |
+| 5 | Inicio, Actividad + Detalle de carrera, Análisis | **Hecho** |
 
 Fuera de Fase 1: Plan, entrenador IA, predicciones, sincronización automática.
 
@@ -214,6 +214,36 @@ el paso 5 desde `run_splits`/`run_series`.
 "Ritmo a igual FC por año": válidas, no especiales, ≥ 5 km, con FC; franja
 **140–150 ppm** (ajustable), mostrando cuántas carreras entran cada año.
 
+## Pantallas (paso 5)
+
+Todas leen de Neon en servidor (`src/lib/db/queries.ts`) dentro de `<Suspense>`; donde
+falta un dato se muestra «—» o un texto de «sin datos», nunca un valor estimado.
+
+- **Inicio**: VO₂ máx. actual con tendencia de 14 meses (línea con degradado, punto final
+  con halo, tooltip táctil) y diferencia frente al pico del periodo; últimos 28 días
+  (distancia, ritmo medio sin sesiones especiales, tiempo, FC media ponderada por tiempo);
+  volumen de 12 meses por mes; última carrera con miniatura de la ruta.
+- **Actividad**: carreras válidas agrupadas por mes (miniatura SVG de la ruta generada en
+  servidor, distancia, ritmo, tiempo, FC, etiquetas Cinta/Especial/Strava) y recuento de
+  duplicadas y no válidas ocultas.
+- **Detalle** (`/actividad/[id]`): distancia, tiempo, ritmo, FC; mapa (ruta en SVG siempre
+  visible + MapLibre con OpenFreeMap `dark` encima si cargan las teselas; gestos
+  cooperativos para no atrapar el scroll); parciales por km (barra más larga = más rápido,
+  el más rápido en lima, FC y desnivel por km); durabilidad; gráficas de pulso y potencia
+  (una por medida, sin doble eje); métricas de técnica y entorno; anterior/siguiente.
+- **Análisis**: VO₂ máx. de todo el historial (media por día, zoom y arrastre táctil);
+  ritmo con el mismo pulso por año (franja 140–150 por defecto, botones 130–140 … 150–160
+  vía `?fc=`), con nº de carreras y FC media por año y años vacíos visibles; km por año
+  con los años sin carreras como hueco y listados debajo; totales.
+
+Durabilidad (`src/lib/analysis/durability.ts`): se parte la carrera por la mitad de la
+distancia (con la distancia del reloj; si no hay, con los parciales). Ritmo y FC media de
+cada mitad; desacople = caída de (velocidad / FC) de la 1.ª a la 2.ª mitad en %. Sin FC,
+el desacople queda vacío.
+
+Ritmo a igual FC (`src/lib/analysis/pace-at-hr.ts`): tiempo total / distancia total de las
+carreras del año que cumplen la regla; FC media ponderada por tiempo.
+
 ## Riesgos y pendientes
 
 - La 1.ª importación real dirá si el formato del export coincide con lo esperado
@@ -254,6 +284,10 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   pasadas, series, rutas, parciales, deduplicado, clasificación, reserva) y pantalla de
   importación con progreso y comprobación. 18 pruebas con export sintético, incluida la
   reanudación tras cortes en cualquier punto y la reimportación sin duplicados.
+- 2026‑11‑17 — Importación real hecha por el usuario: 256 válidas, 190 rutas GPX, 413
+  lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
+- 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
+  ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
 - 2026‑11‑17 — Arreglo de la subida (ver Incidencias): subida por partes reanudable,
   «Continuar la subida», MB subidos/que faltan, lista de zips ya subidos, creación de la
   importación sin callbacks, aviso con «Reintentar/Continuar» tras 60 s sin cambios.
