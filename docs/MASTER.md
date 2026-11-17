@@ -294,9 +294,9 @@ en lima. El color nunca va solo: siempre icono + nombre.
 
 ## Zonas de FC y carga
 
-- Ajustes en `app_settings` (`hr_zones`): FC máx. 181, reposo 46, método reserva
-  cardíaca; límites inferiores Z1…Z5 = 50/60/70/80/90 % de la reserva → 114, 127, 141,
-  154, 168 ppm. Editables en Perfil (a mano o «Calcular límites»; también % del máximo).
+- Ajustes en `app_settings` (`hr_zones`): las zonas del Apple Watch del usuario — reposo 47,
+  FC máx. 187, reserva cardíaca; Z1 < 131, Z2 131–144, Z3 145–158, Z4 159–172, Z5 ≥ 173
+  (= 60/70/80/90 % de la reserva; «Calcular límites» las reproduce). Editables en Perfil.
 - Tiempo en zona por carrera (`runs.hr_zone_seconds`): cada muestra de FC cuenta hasta la
   siguiente, como máximo 30 s (no rellena pausas); por debajo de Z1 cuenta como Z1.
 - Carga (`runs.training_load`): minutos en zona × 1…5 (TRIMP de Edwards). Rayo verde
@@ -374,6 +374,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Zonas reales del Apple Watch (47/187). Reclasificación: 7 carreras cambian
+  (6 Tempo → Rodaje con FC 141–144, ahora Z2; 1 Rodaje → Recuperación con 129). 16 Series
+  en 12 meses; el 10‑dic‑2025 (13 pasos `N.0.0`, sin repeticiones) no cuenta como Series.
 - 2026‑11‑17 — Tipo manual con hoja de selección y marca de lápiz; pruebas de que
   Reprocesar y recalcular no lo pisan y de «Volver a automático». 105 pruebas.
 - 2026‑11‑17 — Distancia sin duplicar (todas las apariciones de DistanceWalkingRunning;

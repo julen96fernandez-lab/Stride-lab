@@ -2,8 +2,10 @@
  * Zonas de frecuencia cardíaca, tiempo en zona y carga por carrera.
  *
  * - 5 zonas definidas por su límite inferior en ppm (editables en Perfil).
- * - Valores iniciales: FC máx. 181, reposo 46, método reserva cardíaca (Karvonen) con
- *   50/60/70/80/90 % de la reserva.
+ * - Valores: los del Apple Watch del usuario: reposo 47, FC máx. 187, reserva cardíaca;
+ *   Z2…Z5 = 60/70/80/90 % de la reserva → 131, 145, 159, 173. Z1 es «por debajo de 131»
+ *   (su límite inferior, 50 % → 117, solo sirve de referencia: lo que queda por debajo
+ *   también cuenta como Z1).
  * - Tiempo en zona: cada muestra de FC cuenta hasta la siguiente (máx. 30 s, para no
  *   rellenar pausas ni huecos); lo que queda por debajo de Z1 se suma a Z1.
  * - Carga: minutos en cada zona × 1…5 (TRIMP de Edwards). Sin muestras de FC no hay carga.
@@ -25,7 +27,7 @@ export function limitsFrom(maxHr: number, restHr: number, method: ZoneMethod): H
   return ZONE_PCTS.map((p) => Math.round(method === "reserve" ? restHr + p * (maxHr - restHr) : p * maxHr)) as HrZones["limits"];
 }
 
-export const DEFAULT_ZONES: HrZones = { maxHr: 181, restHr: 46, method: "reserve", limits: limitsFrom(181, 46, "reserve") };
+export const DEFAULT_ZONES: HrZones = { maxHr: 187, restHr: 47, method: "reserve", limits: limitsFrom(187, 47, "reserve") };
 
 /** Comprueba que los límites son crecientes y razonables. */
 export function validZones(z: HrZones): boolean {

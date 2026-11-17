@@ -106,7 +106,7 @@ export async function reclassifyAll(db: Db): Promise<number> {
  * que se abra una pantalla, todo se recalcula una vez.
  * 3 = Series por rutas de paso con repetición + tipos por zona de FC + carga.
  */
-const CLASSIFIER_VERSION = "3";
+const CLASSIFIER_VERSION = "4"; // 4 = zonas reales del Apple Watch (47/187)
 const VERSION_KEY = "classifier_version";
 
 /** Recalcula si las reglas cambiaron o si hay carreras válidas sin tipo automático. */

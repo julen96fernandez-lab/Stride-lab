@@ -41,7 +41,7 @@ describe("clasificación de tipos de sesión", () => {
     expect(r.get("long")!.type).toBe("tirada_larga");
     expect(r.get("trail")!.type).toBe("trail");
     expect(r.get("tempo")!.type).toBe("tempo");
-    expect(r.get("tempo")!.reason).toMatch(/FC media 156 ppm en Z4 y ritmo 9 % más rápido/);
+    expect(r.get("tempo")!.reason).toMatch(/FC media 156 ppm en Z3 y ritmo 9 % más rápido/);
     expect(r.get("z2")!.type).toBe("rodaje");
     expect(r.get("z2")!.reason).toMatch(/en Z2/);
     expect(r.get("z3slow")!.type).toBe("rodaje");
@@ -79,14 +79,17 @@ describe("detección de series", () => {
 });
 
 describe("zonas y carga", () => {
-  it("límites por reserva cardíaca con 181/46", async () => {
+  it("límites por reserva cardíaca con 187/47 (zonas del Apple Watch)", async () => {
     const { DEFAULT_ZONES, limitsFrom, zoneOf, timeInZones, trainingLoad, loadLevel, validZones } = await import("@/lib/analysis/hr-zones");
-    expect(DEFAULT_ZONES.limits).toEqual([114, 127, 141, 154, 168]);
+    expect(DEFAULT_ZONES.limits).toEqual([117, 131, 145, 159, 173]);
     expect(limitsFrom(181, 46, "max")).toEqual([91, 109, 127, 145, 163]);
+    // 4 nov: 143 ppm de media → Z2 (131–144) → Rodaje
+    expect(zoneOf(143, DEFAULT_ZONES.limits)).toBe(2);
+    expect(zoneOf(130, DEFAULT_ZONES.limits)).toBe(1);
     expect(zoneOf(100, DEFAULT_ZONES.limits)).toBe(1);
-    expect(zoneOf(141, DEFAULT_ZONES.limits)).toBe(3);
+    expect(zoneOf(145, DEFAULT_ZONES.limits)).toBe(3);
     expect(zoneOf(190, DEFAULT_ZONES.limits)).toBe(5);
-    // 10 min a 130 (Z2) y 10 min a 160 (Z4), muestras cada 5 s; un hueco de 5 min no cuenta entero
+    // 10 min a 130 (Z1, por debajo de 131) y 10 min a 160 (Z4), muestras cada 5 s; un hueco de 5 min no cuenta entero
     const t: number[] = [];
     const v: number[] = [];
     for (let s = 0; s < 600; s += 5) {
@@ -98,13 +101,13 @@ describe("zonas y carga", () => {
       v.push(160);
     }
     const z = timeInZones(t, v, DEFAULT_ZONES.limits);
-    expect(z[1]).toBe(595 + 30); // el salto de 300 s se recorta a 30 s
+    expect(z[0]).toBe(595 + 30); // el salto de 300 s se recorta a 30 s
     expect(z[3]).toBe(600);
-    expect(trainingLoad(z)).toBe(Math.round((625 / 60) * 2 + (600 / 60) * 4));
+    expect(trainingLoad(z)).toBe(Math.round((625 / 60) * 1 + (600 / 60) * 4));
     expect(trainingLoad(null)).toBeNull();
     expect(loadLevel(80)).toBe("low");
     expect(loadLevel(150)).toBe("moderate");
     expect(loadLevel(300)).toBe("high");
-    expect(validZones({ ...DEFAULT_ZONES, limits: [114, 113, 141, 154, 168] })).toBe(false);
+    expect(validZones({ ...DEFAULT_ZONES, limits: [131, 130, 145, 159, 173] })).toBe(false);
   });
 });

@@ -18,7 +18,8 @@ export function ZonesCard({ seconds, load, zones }: { seconds: number[] | null; 
   }
   const total = seconds.reduce((a, b) => a + b, 0);
   const max = Math.max(...seconds);
-  const ranges = zones.limits.map((lo, i) => (i < 4 ? `${lo}–${zones.limits[i + 1] - 1}` : `≥ ${lo}`));
+  // Como el Apple Watch: Z1 = por debajo de Z2.
+  const ranges = zones.limits.map((lo, i) => (i === 0 ? `< ${zones.limits[1]}` : i < 4 ? `${lo}–${zones.limits[i + 1] - 1}` : `≥ ${lo}`));
   return (
     <Card>
       <div className="flex items-center justify-between">
@@ -52,7 +53,7 @@ export function ZonesCard({ seconds, load, zones }: { seconds: number[] | null; 
       </ul>
       <p className="mt-4 text-[12px] leading-relaxed text-fg-2">
         Carga = minutos en cada zona × 1…5. Verde por debajo de {LOAD_LEVELS.moderate}, naranja hasta {LOAD_LEVELS.high - 1}, rojo desde{" "}
-        {LOAD_LEVELS.high}. Lo que queda por debajo de Z1 cuenta como Z1.
+        {LOAD_LEVELS.high}.
       </p>
     </Card>
   );
