@@ -287,9 +287,12 @@ export async function getTrainingSettingsView() {
 import { buildPeriods, compareLast, goalProgress, suggestGoals, yearsSinceFirst, type PeriodUnit, type RunForPeriod } from "@/lib/analysis/periods";
 import { getGoals } from "@/lib/analysis/goals-db";
 
-async function runsForPeriods(): Promise<RunForPeriod[]> {
-  return db()
+async function runsForPeriods() {
+  const rows = await db()
     .select({
+      id: s.runs.id,
+      avgPaceSPerKm: s.runs.avgPaceSPerKm,
+      type: effectiveType,
       startAt: s.runs.startAt,
       distanceM: s.runs.distanceM,
       durationS: s.runs.durationS,
@@ -301,6 +304,7 @@ async function runsForPeriods(): Promise<RunForPeriod[]> {
     })
     .from(s.runs)
     .where(valid);
+  return rows satisfies RunForPeriod[];
 }
 
 /** Tarjeta de objetivos de Inicio: semana y mes en curso. */
@@ -330,4 +334,19 @@ export async function getPeriodsView(unit: PeriodUnit, weeks: 12 | 26) {
 export async function getGoalsSettings() {
   const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
   return { goals, suggested: suggestGoals(runs) };
+}
+
+// ─── Evolución del ritmo, calendario y comparación de años ───────────────────
+
+import { calendarDays, pacePoints, smoothTrend, yearToDate, type PaceRange } from "@/lib/analysis/insights";
+
+export async function getInsights(range: PaceRange, paceType: SessionType | null) {
+  const runs = await runsForPeriods();
+  const points = pacePoints(runs, range, paceType);
+  return {
+    points,
+    trend: smoothTrend(points),
+    calendar: calendarDays(runs),
+    ytd: yearToDate(runs),
+  };
 }

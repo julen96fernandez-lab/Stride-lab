@@ -53,6 +53,7 @@ export function EChart({
   height,
   label,
   onSelect,
+  onItem,
 }: {
   option: EChartsCoreOption;
   height: number;
@@ -60,14 +61,18 @@ export function EChart({
   label: string;
   /** Se llama con el índice de la categoría tocada (barras o eje). */
   onSelect?: (index: number) => void;
+  /** Se llama al tocar un punto concreto (serie, índice). */
+  onItem?: (seriesIndex: number, dataIndex: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<echarts.ECharts | null>(null);
   const optionRef = useRef(option);
   const selectRef = useRef(onSelect);
+  const itemRef = useRef(onItem);
   useEffect(() => {
     selectRef.current = onSelect;
-  }, [onSelect]);
+    itemRef.current = onItem;
+  }, [onSelect, onItem]);
 
   const apply = () => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -82,6 +87,9 @@ export function EChart({
     const ro = new ResizeObserver(() => c.resize());
     ro.observe(ref.current);
     const off = onThemeChange(() => requestAnimationFrame(apply));
+    c.on("click", (e: { seriesIndex?: number; dataIndex?: number }) => {
+      if (itemRef.current && e.seriesIndex !== undefined && e.dataIndex !== undefined) itemRef.current(e.seriesIndex, e.dataIndex);
+    });
     // Toque en cualquier punto de la columna de una categoría (no solo sobre la barra).
     c.getZr().on("click", (e) => {
       if (!selectRef.current) return;
@@ -118,6 +126,7 @@ export const C = {
   axis: "var(--fg-2)",
   text: "var(--fg)",
   pointer: "var(--fg-3)",
+  fg3: "var(--fg-3)",
   surface: "var(--card)",
   bg: "var(--bg)",
   font: "Inter, system-ui, sans-serif",

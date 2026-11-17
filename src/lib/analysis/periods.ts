@@ -18,6 +18,8 @@ export interface RunForPeriod {
   elevationGainM: number | null;
   trainingLoad: number | null;
   hrZoneSeconds: number[] | null;
+  /** Tipo de sesión efectivo (manual o automático); opcional. */
+  type?: string | null;
 }
 
 export interface Period {
@@ -34,6 +36,8 @@ export interface Period {
   elevationGainM: number | null;
   load: number | null;
   zoneSeconds: number[] | null;
+  /** Km por tipo de sesión (los tipos sin km no aparecen; sin tipo → "sin_tipo"). */
+  kmByType: Record<string, number>;
 }
 
 const TZ = "Europe/Madrid";
@@ -88,9 +92,14 @@ function aggregate(runs: RunForPeriod[]) {
     load = 0,
     hasLoad = false;
   let zones: number[] | null = null;
+  const kmByType: Record<string, number> = {};
   for (const r of runs) {
     const dist = r.distanceM ?? 0;
     km += dist / 1000;
+    if (dist > 0) {
+      const t = r.type ?? "sin_tipo";
+      kmByType[t] = (kmByType[t] ?? 0) + dist / 1000;
+    }
     dur += r.durationS;
     if (!r.isSpecial && dist > 0) {
       nsDist += dist;
@@ -122,6 +131,7 @@ function aggregate(runs: RunForPeriod[]) {
     elevationGainM: hasElev ? elev : null,
     load: hasLoad ? load : null,
     zoneSeconds: zones,
+    kmByType,
   };
 }
 

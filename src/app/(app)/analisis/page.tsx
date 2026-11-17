@@ -7,7 +7,10 @@ import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { DEFAULT_HR_BAND, MIN_DISTANCE_M, parseBand } from "@/lib/analysis/pace-at-hr";
-import { getAnalysis, getPeriodsView } from "@/lib/db/queries";
+import { getAnalysis, getInsights, getPeriodsView } from "@/lib/db/queries";
+import { ConsistencyCalendar, PaceTrend, YearCumulative } from "@/components/charts/InsightCharts";
+import type { PaceRange } from "@/lib/analysis/insights";
+import { isSessionType, type SessionType } from "@/lib/analysis/session-type";
 import { PeriodCharts } from "@/components/charts/PeriodCharts";
 import type { PeriodUnit } from "@/lib/analysis/periods";
 import { DASH, date, dec, int, km, pace } from "@/lib/format";
@@ -89,6 +92,9 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
 
       {/* Volumen por semana / mes / año */}
       <PeriodsCard unit={unit} weeks={weeks} keep={keepFc} />
+
+      {/* Evolución del ritmo, calendario y comparación de años */}
+      <InsightsCards sp={sp} />
 
       {/* Ritmo a igual pulso */}
       <Card>
@@ -337,5 +343,170 @@ async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 
         sesiones especiales (más de 8:00 /km) suman km pero no cuentan en el ritmo medio.
       </p>
     </section>
+  );
+}
+
+const RANGES: [PaceRange, string][] = [
+  ["1m", "1 mes"],
+  ["3m", "3 meses"],
+  ["6m", "6 meses"],
+  ["1y", "1 año"],
+  ["all", "Todo"],
+];
+const PACE_TYPES: (SessionType | null)[] = [null, "rodaje", "series", "tempo", "tirada_larga", "recuperacion", "trail", "cinta", "competicion"];
+
+async function InsightsCards({ sp }: { sp: Record<string, string | string[] | undefined> }) {
+  const range = (RANGES.map((r) => r[0]) as string[]).includes(String(sp.rango)) ? (sp.rango as PaceRange) : "6m";
+  const paceType = isSessionType(sp.rtipo) ? sp.rtipo : null;
+  const calMetric = sp.cal === "carga" ? "load" : "km";
+  const { points, trend, calendar, ytd } = await getInsights(range, paceType);
+
+  // Enlaces que conservan el resto de parámetros.
+  const link = (patch: Record<string, string | null>, anchor: string) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(sp)) if (typeof v === "string") q.set(k, v);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === null) q.delete(k);
+      else q.set(k, v);
+    }
+    const qs = q.toString();
+    return `/analisis${qs ? `?${qs}` : ""}#${anchor}`;
+  };
+  const chip = (active: boolean) =>
+    `inline-flex min-h-[34px] flex-none items-center gap-1 rounded-full px-3 text-[12px] font-semibold ${
+      active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"
+    }`;
+  const c = ytd.current;
+  const p = ytd.previous;
+  const delta = (a: number | null, b: number | null, fmt: (n: number) => string, lowerIsBetter = false) => {
+    if (a === null || b === null) return <span className="text-fg-3">—</span>;
+    const d = a - b;
+    if (Math.abs(d) < 1e-9) return <span className="text-fg-2">=</span>;
+    const good = lowerIsBetter ? d < 0 : d > 0;
+    return <span className={good ? "text-lime-text" : "text-fg-2"}>{(d > 0 ? "+" : "−") + fmt(Math.abs(d))}</span>;
+  };
+  const rows: [string, string, string, React.ReactNode][] = [
+    ["Km", km(c.km * 1000, 1), km(p.km * 1000, 1), delta(c.km, p.km, (n) => km(n * 1000, 1))],
+    ["Horas", dec(c.hours), dec(p.hours), delta(c.hours, p.hours, (n) => dec(n))],
+    [
+      "Desnivel +",
+      c.elevationGainM === null ? "—" : `${int(c.elevationGainM)} m`,
+      p.elevationGainM === null ? "—" : `${int(p.elevationGainM)} m`,
+      delta(c.elevationGainM, p.elevationGainM, (n) => `${int(n)} m`),
+    ],
+    ["Carreras", String(c.runs), String(p.runs), delta(c.runs, p.runs, (n) => String(n))],
+    [
+      "Ritmo medio",
+      c.paceSPerKm === null ? "—" : pace(c.paceSPerKm),
+      p.paceSPerKm === null ? "—" : pace(p.paceSPerKm),
+      delta(c.paceSPerKm, p.paceSPerKm, (n) => `${Math.round(n)} s/km`, true),
+    ],
+  ];
+
+  return (
+    <>
+      <section id="ritmo" className="card scroll-mt-6 p-5">
+        <div className="eyebrow">Evolución del ritmo</div>
+        <div className="-mx-5 mt-3 overflow-x-auto px-5 [scrollbar-width:none]">
+          <div className="flex w-max gap-1.5" role="group" aria-label="Rango">
+            {RANGES.map(([r, label]) => (
+              <Link key={r} href={link({ rango: r === "6m" ? null : r }, "ritmo")} scroll={false} aria-current={r === range ? "true" : undefined} className={chip(r === range)}>
+                {label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="-mx-5 mt-2 overflow-x-auto px-5 [scrollbar-width:none]">
+          <div className="flex w-max gap-1.5" role="group" aria-label="Tipo de sesión">
+            {PACE_TYPES.map((t) => (
+              <Link
+                key={t ?? "todos"}
+                href={link({ rtipo: t }, "ritmo")}
+                scroll={false}
+                aria-current={t === paceType ? "true" : undefined}
+                className={chip(t === paceType)}
+              >
+                {t && (
+                  <span className="flex" style={{ color: t === paceType ? undefined : TYPE_META[t].color }}>
+                    <SessionIcon type={t} size={13} />
+                  </span>
+                )}
+                {t ? TYPE_META[t].label : "Todos"}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3">
+          <PaceTrend key={`${range}-${paceType}`} points={points} trend={trend} />
+        </div>
+        <p className="mt-2 text-[12px] text-fg-2">
+          {points.length} {points.length === 1 ? "carrera" : "carreras"}. Sin sesiones especiales (más de 8:00 /km).
+        </p>
+      </section>
+
+      <section id="calendario" className="card scroll-mt-6 p-5">
+        <div className="flex items-baseline justify-between">
+          <div className="eyebrow">Constancia · 12 meses</div>
+          <div className="flex gap-1.5" role="group" aria-label="Intensidad según">
+            {(
+              [
+                ["km", "Km"],
+                ["load", "Carga"],
+              ] as const
+            ).map(([m, label]) => (
+              <Link
+                key={m}
+                href={link({ cal: m === "load" ? "carga" : null }, "calendario")}
+                scroll={false}
+                aria-current={m === calMetric ? "true" : undefined}
+                className={chip(m === calMetric)}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4">
+          <ConsistencyCalendar key={calMetric} days={calendar} metric={calMetric} />
+        </div>
+        {calMetric === "load" && (
+          <p className="mt-2 text-[12px] text-fg-2">Los días con carrera pero sin pulso no tienen carga y salen en gris.</p>
+        )}
+      </section>
+
+      <section id="anios" className="card scroll-mt-6 p-5">
+        <div className="eyebrow">
+          {ytd.year} frente a {ytd.year - 1}
+        </div>
+        <div className="mt-3">
+          <YearCumulative year={ytd.year} current={ytd.currentCum} previous={ytd.previousCum} />
+        </div>
+        <table className="mt-4 w-full text-[14px]">
+          <caption className="mb-2 text-left text-[12px] text-fg-2">
+            Del 1 de enero hasta hoy, frente al mismo tramo de {ytd.year - 1}. Ritmo sin sesiones especiales.
+          </caption>
+          <thead>
+            <tr className="text-[11px] tracking-[0.06em] text-fg-2 uppercase">
+              <th scope="col" className="pb-1 text-left font-semibold"></th>
+              <th scope="col" className="pb-1 text-right font-semibold">{ytd.year}</th>
+              <th scope="col" className="pb-1 text-right font-semibold">{ytd.year - 1}</th>
+              <th scope="col" className="pb-1 text-right font-semibold">Dif.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map(([label, a, b, d]) => (
+              <tr key={label}>
+                <th scope="row" className="py-2 text-left font-normal text-fg-2">
+                  {label}
+                </th>
+                <td className="num py-2 text-right text-[15px]">{a}</td>
+                <td className="num py-2 text-right text-[15px] text-fg-2">{b}</td>
+                <td className="py-2 text-right text-[13px] font-semibold">{d}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
   );
 }

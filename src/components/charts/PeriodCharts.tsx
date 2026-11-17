@@ -2,7 +2,15 @@
 
 import { useMemo, useState } from "react";
 import type { Period, PeriodUnit } from "@/lib/analysis/periods";
+import { movingAverage } from "@/lib/analysis/insights";
+import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
+import { SessionIcon } from "@/components/ui/SessionType";
 import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+
+/** Orden fijo de las capas apiladas (la paleta de tipos), más «sin tipo» al final. */
+const STACK = [...SESSION_TYPES, "sin_tipo"] as const;
+const stackColor = (t: string) => (t === "sin_tipo" ? C.bar : TYPE_META[t as keyof typeof TYPE_META].color);
+const stackLabel = (t: string) => (t === "sin_tipo" ? "Sin tipo" : TYPE_META[t as keyof typeof TYPE_META].label);
 
 const paceStr = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
 const km1 = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 1 });
@@ -25,8 +33,32 @@ const ZONE_NAMES = ["Z1", "Z2", "Z3", "Z4", "Z5"];
  */
 export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; unit: PeriodUnit; goalKm: number | null }) {
   const [sel, setSel] = useState(periods.length - 1);
+  const [byType, setByType] = useState(false);
   const p = periods[Math.min(sel, periods.length - 1)];
   const many = periods.length > 14;
+  const stackable = unit !== "year";
+  const stacked = byType && stackable;
+  const ma = unit === "week" ? movingAverage(periods.map((x) => x.km), 4) : null;
+  const typesShown = STACK.filter((t) => periods.some((x) => (x.kmByType[t] ?? 0) > 0));
+
+  const goalLine = useMemo(
+    () =>
+      goalKm
+        ? {
+            symbol: "none",
+            silent: true,
+            lineStyle: { color: C.text, type: [4, 4], width: 1.2, opacity: 0.8 },
+            label: { formatter: `Objetivo ${km1(goalKm)} km`, color: C.axis, fontFamily: C.font, fontSize: 10, position: "insideEndTop" },
+            data: [{ yAxis: goalKm }],
+          }
+        : undefined,
+    [goalKm],
+  );
+  // Columna seleccionada en la vista por tipo (el periodo actual se indica en el detalle).
+  const selArea = useMemo(
+    () => ({ silent: true, itemStyle: { color: "var(--ov-2)" }, data: [[{ xAxis: periods[sel]?.label }, { xAxis: periods[sel]?.label }]] }),
+    [periods, sel],
+  );
 
   const bars = useMemo(
     () => ({
@@ -52,31 +84,55 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
         splitLine: { lineStyle: { color: C.grid } },
       },
       series: [
-        {
-          type: "bar",
-          barCategoryGap: many ? "22%" : "30%",
-          data: periods.map((x, i) => ({
-            value: Math.round(x.km * 10) / 10,
-            itemStyle: {
-              color: x.current ? C.lime : C.bar,
-              borderRadius: [5, 5, 2, 2],
-              borderColor: i === sel ? C.text : "transparent",
-              borderWidth: i === sel ? 1.5 : 0,
-            },
-          })),
-          markLine: goalKm
-            ? {
-                symbol: "none",
-                silent: true,
-                lineStyle: { color: C.text, type: [4, 4], width: 1.2, opacity: 0.8 },
-                label: { formatter: `Objetivo ${km1(goalKm)} km`, color: C.axis, fontFamily: C.font, fontSize: 10, position: "insideEndTop" },
-                data: [{ yAxis: goalKm }],
-              }
-            : undefined,
-        },
+        ...(stacked
+          ? typesShown.map((t, k) => ({
+              name: stackLabel(t),
+              type: "bar",
+              stack: "km",
+              barCategoryGap: many ? "22%" : "30%",
+              data: periods.map((x) => Math.round((x.kmByType[t] ?? 0) * 10) / 10),
+              itemStyle: {
+                color: stackColor(t),
+                borderColor: C.surface,
+                borderWidth: 1,
+                borderRadius: k === typesShown.length - 1 ? [4, 4, 0, 0] : 0,
+              },
+              markLine: k === 0 ? goalLine : undefined,
+              markArea: k === 0 ? selArea : undefined,
+            }))
+          : [
+              {
+                type: "bar",
+                barCategoryGap: many ? "22%" : "30%",
+                data: periods.map((x, i) => ({
+                  value: Math.round(x.km * 10) / 10,
+                  itemStyle: {
+                    color: x.current ? C.lime : C.bar,
+                    borderRadius: [5, 5, 2, 2],
+                    borderColor: i === sel ? C.text : "transparent",
+                    borderWidth: i === sel ? 1.5 : 0,
+                  },
+                })),
+                markLine: goalLine,
+              },
+            ]),
+        ...(ma
+          ? [
+              {
+                name: "Media móvil 4 semanas",
+                type: "line",
+                data: ma.map((v) => (v === null ? null : Math.round(v * 10) / 10)),
+                connectNulls: false,
+                showSymbol: false,
+                smooth: 0.3,
+                lineStyle: { color: C.text, width: 1.6 },
+                z: 5,
+              },
+            ]
+          : []),
       ],
     }),
-    [periods, sel, goalKm, many, unit],
+    [periods, sel, goalKm, many, unit, stacked, typesShown, ma, goalLine, selArea],
   );
 
   const paceVals = periods.map((x) => x.paceSPerKm);
@@ -120,7 +176,55 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
 
   return (
     <div>
-      <EChart option={bars} height={170} label={`Kilómetros por ${UNIT_NAME[unit][0].toLowerCase()}`} onSelect={setSel} />
+      {stackable && (
+        <div className="mb-2 flex justify-end">
+          <div className="flex rounded-full border border-line-strong p-0.5 text-[12px] font-semibold" role="group" aria-label="Vista de barras">
+            {[
+              [false, "Total"],
+              [true, "Por tipo"],
+            ].map(([v, label]) => (
+              <button
+                key={String(v)}
+                type="button"
+                aria-pressed={byType === v}
+                onClick={() => setByType(v as boolean)}
+                className={`min-h-[32px] rounded-full px-3 ${byType === v ? "bg-lime text-lime-ink" : "text-fg-2"}`}
+              >
+                {label as string}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <EChart
+        option={bars}
+        height={stacked ? 190 : 170}
+        label={`Kilómetros por ${UNIT_NAME[unit][0].toLowerCase()}${stacked ? " y tipo" : ""}`}
+        onSelect={setSel}
+      />
+      {(stacked || ma) && (
+        <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 px-1" aria-label="Leyenda">
+          {stacked &&
+            typesShown.map((t) => (
+              <li key={t} className="flex items-center gap-1 text-[11px] text-fg-2">
+                {t === "sin_tipo" ? (
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--chart-bar)" }} />
+                ) : (
+                  <span className="flex" style={{ color: stackColor(t) }}>
+                    <SessionIcon type={t as (typeof SESSION_TYPES)[number]} size={12} />
+                  </span>
+                )}
+                {stackLabel(t)}
+              </li>
+            ))}
+          {ma && (
+            <li className="flex items-center gap-1 text-[11px] text-fg-2">
+              <span className="h-[2px] w-4 rounded" style={{ background: "var(--fg)" }} />
+              Media móvil 4 semanas
+            </li>
+          )}
+        </ul>
+      )}
       <div className="mt-1 flex items-baseline justify-between px-1">
         <span className="text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">Ritmo medio</span>
         <span className="text-[11px] text-fg-2">más arriba = más rápido · sin especiales</span>
@@ -146,6 +250,27 @@ export function PeriodCharts({ periods, unit, goalKm }: { periods: Period[]; uni
           <D label="Desnivel +" value={p.elevationGainM !== null ? String(Math.round(p.elevationGainM)) : "—"} unit={p.elevationGainM !== null ? "m" : undefined} />
           <D label="Carga" value={p.load !== null ? String(Math.round(p.load)) : "—"} />
         </dl>
+        {Object.keys(p.kmByType).length > 0 && (
+          <div className="mt-4">
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">Km por tipo</div>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {STACK.filter((t) => (p.kmByType[t] ?? 0) > 0).map((t) => (
+                <li
+                  key={t}
+                  className="flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                  style={{ borderColor: `color-mix(in srgb, ${stackColor(t)} 45%, transparent)` }}
+                >
+                  {t !== "sin_tipo" && (
+                    <span className="flex" style={{ color: stackColor(t) }}>
+                      <SessionIcon type={t as (typeof SESSION_TYPES)[number]} size={12} />
+                    </span>
+                  )}
+                  {stackLabel(t)} {km1(p.kmByType[t])} km
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="mt-4">
           <div className="text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">Tiempo en zonas</div>
           {p.zoneSeconds ? (

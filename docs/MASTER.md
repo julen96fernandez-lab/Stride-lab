@@ -98,6 +98,24 @@ Nada de Horizonte ni de la app de limpieza (repos, proyectos, BD, variables, cla
 - Semanas de lunes a domingo en hora de Madrid. Km: todas las válidas; ritmo medio sin
   sesiones especiales; FC ponderada por tiempo; periodos sin carreras a 0 (sin rellenar).
 
+## Análisis: tipos, ritmo, constancia y años
+
+Cálculos en `src/lib/analysis/insights.ts` (y `kmByType` en `periods.ts`), con pruebas.
+- **Volumen → Total / Por tipo** (semana y mes): barras apiladas por tipo de sesión con
+  los colores de los tipos (orden fijo; «sin tipo» en gris), leyenda con icono. En la vista
+  semanal, **media móvil de 4 semanas** (línea; solo cuando hay 4 semanas completas de datos
+  en la ventana, sin inventar las primeras). El detalle del periodo lista km por tipo.
+- **Evolución del ritmo**: un punto por carrera (color de su tipo) y tendencia suavizada
+  (núcleo gaussiano en el tiempo, ancho = 1/6 del intervalo, mínimo 5 días; con < 3
+  carreras no hay tendencia). Rangos 1 mes / 3 / 6 / 1 año / Todo (`?rango=`) y tipo
+  (`?rtipo=`). Sin sesiones especiales. Tocar un punto muestra la carrera y enlaza a ella.
+- **Constancia · 12 meses**: un cuadrado por día (columnas = semanas lun→dom), intensidad
+  por cuartiles de km o de carga (`?cal=carga`), gris = sin correr (o sin carga). Tocar un
+  día lista sus carreras.
+- **Año actual frente al anterior**: km acumulados día a día (actual hasta hoy, anterior
+  completo, discontinuo) y tabla del 1 de enero hasta hoy frente al mismo tramo del año
+  pasado: km, horas, desnivel, carreras y ritmo medio (sin especiales).
+
 ## Tema día / noche
 
 - Selector en Perfil → Apariencia: **Sistema** (por defecto, sigue al iPhone), **Día** o
@@ -392,6 +410,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Análisis: km por tipo apilados y media móvil de 4 semanas, evolución del
+  ritmo, calendario de constancia y comparación de años. 121 pruebas.
 - 2026‑11‑17 — Objetivos de km (semana/mes/año) y volumen por periodo con detalle,
   objetivo, ritmo medio y comparación. 113 pruebas.
 - 2026‑11‑17 — Zonas reales del Apple Watch (47/187). Reclasificación: 7 carreras cambian
