@@ -53,6 +53,8 @@ export function PeriodCharts({
   const ma = unit === "week" ? movingAverage(periods.map((x) => x.km), 4) : null;
   const typesShown = STACK.filter((t) => periods.some((x) => (x.kmByType[t] ?? 0) > 0));
 
+  // ¿Hay una banda de lesión en las últimas columnas? Entonces la etiqueta del objetivo va a la izquierda.
+  const bandAtEnd = injuryRanges.some(([, z]) => z >= periods.length - 3);
   const goalLine = useMemo(
     () =>
       goalKm
@@ -60,53 +62,70 @@ export function PeriodCharts({
             symbol: "none",
             silent: true,
             lineStyle: { color: C.text, type: [4, 4], width: 1.2, opacity: 0.8 },
-            label: { formatter: `Objetivo ${km1(goalKm)} km`, color: C.axis, fontFamily: C.font, fontSize: 10, position: "insideEndTop" },
+            label: {
+              formatter: `Objetivo ${km1(goalKm)} km`,
+              color: C.axis,
+              fontFamily: C.font,
+              fontSize: 10,
+              position: bandAtEnd ? "insideStartTop" : "insideEndTop",
+            },
             data: [{ yAxis: goalKm }],
           }
         : undefined,
-    [goalKm],
+    [goalKm, bandAtEnd],
   );
-  // Columna seleccionada en la vista por tipo (el periodo actual se indica en el detalle).
-  const injuryItems = useMemo(
-    () => injuryAreaItems(injuryRanges.map(([a, z]): [string, string] => [periods[a].label, periods[z].label])),
-    [periods, injuryRanges],
-  );
-  // Columna seleccionada (solo en la vista por tipo) y bandas «Lesión», en la misma markArea.
-  const selArea = useMemo(
-    () => ({
-      silent: true,
-      data: [
-        ...(byType && unit !== "year" ? [[{ xAxis: periods[sel]?.label, itemStyle: { color: "var(--ov-2)" } }, { xAxis: periods[sel]?.label }]] : []),
-        ...injuryItems,
-      ],
-    }),
-    [periods, sel, byType, unit, injuryItems],
-  );
+  // Fondo en un eje numérico oculto (columna i = [i − 0,5, i + 0,5]) para cubrir columnas
+  // enteras: bandas «Lesión» y, en la vista por tipo, la columna seleccionada. Va al fondo
+  // (z 0), así no tapa barras, media móvil ni la línea del objetivo.
+  const backdrop = useMemo(() => {
+    const items = injuryAreaItems(injuryRanges.map(([a, z]): [number, number] => [a - 0.5, z + 0.5]));
+    if (byType && unit !== "year" && periods[sel]) {
+      items.push([{ xAxis: sel - 0.5, itemStyle: { color: "var(--ov-2)" }, label: { show: false } }, { xAxis: sel + 0.5 }]);
+    }
+    return items;
+  }, [injuryRanges, byType, unit, periods, sel]);
 
   const bars = useMemo(
     () => ({
       grid: { left: 30, right: 6, top: 14, bottom: 22 },
       tooltip: { show: false },
-      xAxis: {
+      xAxis: [
+        {
         type: "category",
         data: periods.map((x) => x.label),
         axisLine: { show: false },
         axisTick: { show: false },
         axisLabel: {
           ...axisLabel,
-          interval: many ? 3 : unit === "month" ? 1 : unit === "year" && periods.length > 7 ? 0 : 0,
+          interval: many ? 3 : unit === "year" ? 0 : 1, // 12 semanas o 12 meses: una etiqueta sí y otra no
           formatter: (v: string) => (unit === "month" ? v.split(" ")[0] : unit === "year" ? `'${v.slice(2)}` : v),
         },
-      },
+        },
+        { type: "value", show: false, min: -0.5, max: periods.length - 0.5 },
+      ],
       yAxis: {
         type: "value",
         splitNumber: 3,
+        axisLine: { show: false }, // sin línea vertical (el eje X oculto la pondría en la columna 0)
         // La línea de objetivo siempre visible, aunque esté por encima de todas las barras.
         max: goalKm ? Math.ceil(Math.max(goalKm, ...periods.map((x) => x.km)) * 1.12) : undefined,
         axisLabel,
         splitLine: { lineStyle: { color: C.grid } },
       },
       series: [
+        ...(backdrop.length
+          ? [
+              {
+                type: "line",
+                xAxisIndex: 1,
+                data: [],
+                showSymbol: false,
+                silent: true,
+                z: 0,
+                markArea: { silent: true, z: 0, data: backdrop },
+              },
+            ]
+          : []),
         ...(stacked
           ? typesShown.map((t, k) => ({
               name: stackLabel(t),
@@ -121,7 +140,6 @@ export function PeriodCharts({
                 borderRadius: k === typesShown.length - 1 ? [4, 4, 0, 0] : 0,
               },
               markLine: k === 0 ? goalLine : undefined,
-              markArea: k === 0 ? selArea : undefined,
             }))
           : [
               {
@@ -137,7 +155,6 @@ export function PeriodCharts({
                   },
                 })),
                 markLine: goalLine,
-                markArea: injuryItems.length ? { silent: true, data: injuryItems } : undefined,
               },
             ]),
         ...(ma
@@ -156,7 +173,7 @@ export function PeriodCharts({
           : []),
       ],
     }),
-    [periods, sel, goalKm, many, unit, stacked, typesShown, ma, goalLine, selArea, injuryItems],
+    [periods, sel, goalKm, many, unit, stacked, typesShown, ma, goalLine, backdrop],
   );
 
   const paceVals = periods.map((x) => x.paceSPerKm);

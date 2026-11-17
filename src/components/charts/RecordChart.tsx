@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 import type { RecordPoint } from "@/lib/analysis/best-efforts";
 import { bandsToMs, type InjuryBand } from "@/lib/analysis/injuries";
 import { injuryMarkArea } from "./injury";
-import { C, EChart, axisLabel, timeLabel, tooltipBase } from "./EChart";
+import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { timeTicks } from "@/lib/analysis/time-ticks";
 
 const clock = (s: number) => {
   const t = Math.round(s);
@@ -44,6 +45,9 @@ export function RecordChart({
       return [p.startAt.getTime(), best];
     });
     if (steps.length) steps.push([nowMs, best]);
+    const first = points.length ? points[0].startAt.getTime() : nowMs - 365 * 86_400_000;
+    const x0 = first - Math.max(7 * 86_400_000, (nowMs - first) * 0.03);
+    const ticks = timeTicks(x0, nowMs);
     return {
       grid: { left: 46, right: 10, top: 16, bottom: 24 },
       tooltip: {
@@ -57,10 +61,13 @@ export function RecordChart({
       },
       xAxis: {
         type: "time",
+        min: x0,
+        max: nowMs,
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { show: false },
-        axisLabel: { ...axisLabel, hideOverlap: true, formatter: timeLabel },
+        // Marcas regulares (mismo paso de calendario) con fechas en español.
+        axisLabel: { ...axisLabel, customValues: ticks.values, formatter: ticks.label },
       },
       yAxis: {
         type: "value",

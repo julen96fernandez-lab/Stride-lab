@@ -6,7 +6,8 @@ import type { CalendarDay, PacePoint } from "@/lib/analysis/insights";
 import { intensityLevels } from "@/lib/analysis/insights";
 import { TYPE_META, isSessionType } from "@/lib/analysis/session-type";
 import { SessionIcon } from "@/components/ui/SessionType";
-import { C, EChart, axisLabel, timeLabel, tooltipBase } from "./EChart";
+import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { timeTicks } from "@/lib/analysis/time-ticks";
 import { injuryMarkArea } from "./injury";
 import { bandsToMs, isInjuryDay, type InjuryBand } from "@/lib/analysis/injuries";
 
@@ -43,6 +44,11 @@ export function PaceTrend({
   const [sel, setSel] = useState<PacePoint | null>(points.at(-1) ?? null);
   const option = useMemo(() => {
     const paces = points.map((p) => p.pace);
+    const tFirst = points[0]?.t ?? nowMs;
+    const tLast = points.at(-1)?.t ?? nowMs;
+    const pad = Math.max(3 * 86_400_000, (tLast - tFirst) * 0.03);
+    const [x0, x1] = [tFirst - pad, tLast + pad];
+    const ticks = timeTicks(x0, x1);
     return {
       grid: { left: 36, right: 10, top: 12, bottom: 24 },
       tooltip: {
@@ -56,10 +62,12 @@ export function PaceTrend({
       },
       xAxis: {
         type: "time",
+        min: x0,
+        max: x1,
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { show: false },
-        axisLabel: { ...axisLabel, hideOverlap: true, formatter: timeLabel },
+        axisLabel: { ...axisLabel, customValues: ticks.values, formatter: ticks.label },
       },
       yAxis: {
         type: "value",
@@ -193,8 +201,9 @@ export function ConsistencyCalendar({ days, metric, bands = [] }: { days: Calend
                       className={`h-4 w-4 rounded-[4px] ${active ? "ring-2 ring-[var(--fg)] ring-offset-1 ring-offset-[var(--card)]" : ""}`}
                       style={{
                         background: lv === 0 ? "var(--ov-2)" : `color-mix(in srgb, var(--chart-line) ${LEVEL_MIX[lv]}%, var(--ov-2))`,
-                        // Día en periodo de lesión: raya inferior gris.
-                        boxShadow: hurt ? "inset 0 -4px 0 var(--fg-3)" : undefined,
+                        // Día en periodo de lesión: contorno gris fuera de la casilla (no tapa su color).
+                        outline: hurt ? "1px solid var(--fg-3)" : undefined,
+                        outlineOffset: hurt ? 1 : undefined,
                       }}
                     />
                   );
@@ -222,7 +231,7 @@ export function ConsistencyCalendar({ days, metric, bands = [] }: { days: Calend
       </div>
       {bands.length > 0 && days.some((d) => isInjuryDay(d.date, bands)) && (
         <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-fg-2">
-          <span className="h-3 w-3 rounded-[3px]" style={{ background: "var(--ov-2)", boxShadow: "inset 0 -3px 0 var(--fg-3)" }} />
+          <span className="h-3 w-3 rounded-[3px]" style={{ background: "var(--ov-2)", outline: "1px solid var(--fg-3)", outlineOffset: 1 }} />
           Día en periodo de lesión
         </div>
       )}

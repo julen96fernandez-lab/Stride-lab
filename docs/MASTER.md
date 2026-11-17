@@ -130,7 +130,13 @@ nota corta; añadir, editar y borrar (con segundo toque para confirmar). Tabla `
 - **Sí cuentan** en los récords.
 - Gráficos: banda gris suave «Lesión» (Volumen por columnas, evolución del ritmo, km
   acumulados del año, evolución de récords); en el calendario, raya inferior gris. En la
-  evolución del ritmo, los puntos en lesión se ven apagados. Cálculos puros en
+  evolución del ritmo, los puntos en lesión se ven apagados. En Volumen las bandas van en
+  un eje numérico oculto (cubren columnas enteras) y al fondo: no tapan barras, media
+  móvil ni objetivo; si hay banda en las 3 últimas columnas, la etiqueta del objetivo pasa
+  a la izquierda. En el calendario, contorno gris fuera de la casilla (no tapa su color).
+- Ejes de tiempo (evolución del ritmo y de récords): marcas regulares el día 1 de cada N
+  meses (o cada N días en rangos cortos), como mucho 5, en español
+  (`src/lib/analysis/time-ticks.ts`, con pruebas). Cálculos puros en
   `src/lib/analysis/injuries.ts` (con pruebas).
 
 ## Récords personales
@@ -432,6 +438,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑17 — Revisión visual: bandas «Lesión» al fondo y por columnas enteras, objetivo
+  sin tapar, contorno en el calendario, marcas de fecha regulares en español, etiquetas de
+  semana sin solaparse. 139 pruebas.
 - 2026‑11‑17 — Periodos de lesión (Perfil) excluidos de ritmos medios, sugerencias,
   comparaciones y clasificador, con bandas «Lesión» en los gráficos. Récords personales
   con mejor esfuerzo por tramos continuos y su evolución. Arreglo: el componente MarkArea
