@@ -29,6 +29,16 @@
 
 Fuera de Fase 1: Plan, entrenador IA, predicciones, sincronización automática.
 
+## Infraestructura (estado)
+
+| Pieza | Estado |
+|---|---|
+| Repo GitHub `julen8fernandez/stride-lab` | Creado |
+| Proyecto Vercel `stride-lab` (equipo JULEN) | **Pendiente (acción del usuario):** la app de GitHub de Vercel no tiene acceso al repo (`repo_no_access`) |
+| Neon `stride-lab` (Fráncfort) | **Pendiente (acción del usuario):** la organización de Neon está gestionada por Vercel; la API de Neon no deja crear proyectos y hay que crearlo desde Vercel → Storage |
+| Blob `stride-lab` (privado, fra1) | Pendiente: se crea y conecta con el proyecto de Vercel |
+| Variables `AUTH_SECRET`, `AUTH_PASSWORD_HASH` | Pendiente: se configuran en el proyecto de Vercel |
+
 ## Independencia
 
 Repo `stride-lab` propio, proyecto de Vercel propio y proyecto de Neon propio.
