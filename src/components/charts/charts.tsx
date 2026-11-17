@@ -235,3 +235,63 @@ export function RunLineChart({
 }
 
 export { paceStr };
+
+/**
+ * Km por año apilados por tipo de sesión. Orden de tipos fijo (paleta validada),
+ * 2 px de separación entre segmentos, leyenda siempre visible y tooltip por año.
+ */
+export function StackedTypeYears({
+  years,
+  types,
+  height = 220,
+  label,
+}: {
+  years: { year: number; km: Record<string, number> }[];
+  types: { key: string; label: string; color: string }[];
+  height?: number;
+  label: string;
+}) {
+  const option = useMemo(
+    () => ({
+      grid: { left: 2, right: 2, top: 10, bottom: 22 },
+      tooltip: {
+        ...tooltipBase,
+        trigger: "axis",
+        axisPointer: { type: "shadow", shadowStyle: { color: "rgba(255,255,255,0.04)" } },
+        formatter: (ps: { dataIndex: number }[]) => {
+          const y = years[ps[0].dataIndex];
+          const tot = types.reduce((a, t) => a + (y.km[t.key] ?? 0), 0);
+          if (tot <= 0) return `<div style="color:${C.axis};font-size:11px">${y.year}</div><div>Sin carreras</div>`;
+          const rows = types
+            .filter((t) => (y.km[t.key] ?? 0) > 0)
+            .sort((a, b) => (y.km[b.key] ?? 0) - (y.km[a.key] ?? 0))
+            .map(
+              (t) =>
+                `<div style="display:flex;gap:10px;justify-content:space-between"><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${t.color};margin-right:6px"></span>${t.label}</span><b>${Math.round(y.km[t.key])} km</b></div>`,
+            )
+            .join("");
+          return `<div style="color:${C.axis};font-size:11px;margin-bottom:4px">${y.year} · ${Math.round(tot)} km</div>${rows}`;
+        },
+      },
+      xAxis: {
+        type: "category",
+        data: years.map((y) => String(y.year).slice(2)),
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { ...axisLabel, interval: 0 },
+      },
+      yAxis: { type: "value", show: false },
+      series: types.map((t, i) => ({
+        name: t.label,
+        type: "bar",
+        stack: "km",
+        barCategoryGap: "28%",
+        data: years.map((y) => (y.km[t.key] ? Math.round(y.km[t.key] * 10) / 10 : 0)),
+        itemStyle: { color: t.color, borderColor: "#151712", borderWidth: 1, borderRadius: i === types.length - 1 ? [5, 5, 0, 0] : 0 },
+        emphasis: { focus: "series" },
+      })),
+    }),
+    [years, types],
+  );
+  return <EChart option={option} height={height} label={label} />;
+}

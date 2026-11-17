@@ -7,6 +7,7 @@ import { Logo } from "@/components/ui/Logo";
 import { RouteThumb } from "@/components/map/RouteMap";
 import { ButtonLink, Card, SectionTitle, Stat } from "@/components/ui/primitives";
 import { CountUp } from "@/components/ui/CountUp";
+import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { getHome } from "@/lib/db/queries";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
 
@@ -158,6 +159,17 @@ async function HomeData() {
             }))}
           />
         </div>
+      </Card>
+
+      {/* Km por tipo */}
+      <Card>
+        <div className="flex items-baseline justify-between">
+          <div className="eyebrow">Km por tipo · 12 meses</div>
+          <Link href="/analisis#tipos" className="text-[12px] text-fg-2">
+            Ver historial
+          </Link>
+        </div>
+        <TypeBreakdown data={h.byType} />
       </Card>
 
       {/* Última carrera */}

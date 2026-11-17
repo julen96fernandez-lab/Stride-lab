@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { RouteThumb } from "@/components/map/RouteMap";
 import type { RunListItem } from "@/lib/db/queries";
+import { TypeTag } from "./SessionType";
 import { DASH, cap, date, duration, int, km, pace } from "@/lib/format";
 
 /** Fila de carrera para listas (Actividad e Inicio). */
@@ -11,7 +12,6 @@ export function RunRow({ run }: { run: RunListItem }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-[12px] text-fg-2">
           <span>{cap(date(run.startAt, { weekday: "short", day: "numeric", month: "short" }))}</span>
-          {run.isIndoor && <Tag>Cinta</Tag>}
           {run.isSpecial && <Tag>Especial</Tag>}
           {run.source === "strava" && <Tag>Strava</Tag>}
         </div>
@@ -19,6 +19,11 @@ export function RunRow({ run }: { run: RunListItem }) {
           <span className="num text-[24px]">{km(run.distanceM)}</span>
           <span className="text-[12px] text-fg-2">km</span>
         </div>
+        {run.type && (
+          <div className="mt-1">
+            <TypeTag type={run.type} manual={run.typeManual} />
+          </div>
+        )}
       </div>
       <div className="flex-none text-right text-[13px] leading-[1.5]">
         <div>

@@ -7,6 +7,8 @@ import { RouteMap } from "@/components/map/RouteMap";
 import { CountUp } from "@/components/ui/CountUp";
 import { Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/RunRow";
+import { TypePicker } from "@/components/ui/TypePicker";
+import { isSessionType } from "@/lib/analysis/session-type";
 import type { Durability } from "@/lib/analysis/durability";
 import { getRun } from "@/lib/db/queries";
 import { DASH, cap, date, dec, duration, int, pace } from "@/lib/format";
@@ -50,7 +52,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Tag>{run.source === "apple_watch" ? "Apple Watch" : run.source === "strava" ? "Strava" : (run.sourceName ?? "Otra fuente")}</Tag>
-          {run.isIndoor && <Tag>Cinta</Tag>}
+          {run.isIndoor && <Tag>Indoor</Tag>}
           {run.isSpecial && <Tag tone="lime">Sesión especial</Tag>}
           {run.status !== "valid" && <Tag>{run.status === "duplicate" ? "Duplicada" : "No válida"}</Tag>}
         </div>
@@ -72,6 +74,16 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
           <p className="relative mt-4 text-[12px] text-fg-2">Ritmo medio por encima de 8:00 /km: no cuenta en los ritmos medios.</p>
         )}
       </section>
+
+      {/* Tipo de sesión: un toque para cambiarlo */}
+      {run.status === "valid" && (
+        <TypePicker
+          runId={run.id}
+          autoType={isSessionType(run.sessionTypeAuto) ? run.sessionTypeAuto : null}
+          autoReason={run.sessionTypeReason}
+          manualType={isSessionType(run.sessionTypeManual) ? run.sessionTypeManual : null}
+        />
+      )}
 
       {/* Mapa */}
       {route ? (

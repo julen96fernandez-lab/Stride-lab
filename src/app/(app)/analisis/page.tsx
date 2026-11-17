@@ -1,7 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { BarsChart, TrendChart } from "@/components/charts/charts";
+import { BarsChart, StackedTypeYears, TrendChart } from "@/components/charts/charts";
+import { SessionIcon } from "@/components/ui/SessionType";
+import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
+import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { DEFAULT_HR_BAND, MIN_DISTANCE_M, parseBand } from "@/lib/analysis/pace-at-hr";
 import { getAnalysis } from "@/lib/db/queries";
@@ -34,6 +37,8 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
   await connection();
   const sp = await searchParams;
   const band = parseBand(typeof sp.fc === "string" ? sp.fc : undefined);
+  const allTime = sp.periodo === "todo";
+  const keepFc = typeof sp.fc === "string" ? `fc=${sp.fc}&` : "";
   const a = await getAnalysis(band);
 
   const latest = a.vo2.at(-1) ?? null;
@@ -174,6 +179,53 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
           </p>
         )}
       </Card>
+
+      {/* Km por tipo */}
+      <section id="tipos" className="card scroll-mt-6 p-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="eyebrow">Km por tipo</div>
+          <div className="flex gap-1.5" role="group" aria-label="Periodo">
+            {[
+              { k: "12m", label: "12 meses", href: `/analisis?${keepFc}#tipos`.replace("?#", "#") },
+              { k: "todo", label: "Todo", href: `/analisis?${keepFc}periodo=todo#tipos` },
+            ].map((o) => {
+              const active = (o.k === "todo") === allTime;
+              return (
+                <Link
+                  key={o.k}
+                  href={o.href}
+                  scroll={false}
+                  aria-current={active ? "true" : undefined}
+                  className={`inline-flex min-h-[32px] items-center rounded-full px-2.5 text-[12px] font-semibold ${
+                    active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"
+                  }`}
+                >
+                  {o.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+        <TypeBreakdown data={allTime ? a.byTypeAll : a.byType12} />
+        <div className="mt-6 eyebrow">Por año</div>
+        <div className="mt-2">
+          <StackedTypeYears
+            label="Kilómetros por año y tipo de sesión"
+            years={a.typeByYear}
+            types={SESSION_TYPES.map((t) => ({ key: t, label: TYPE_META[t].label, color: TYPE_META[t].color }))}
+          />
+        </div>
+        <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5" aria-label="Leyenda">
+          {SESSION_TYPES.map((t) => (
+            <li key={t} className="flex items-center gap-1 text-[11px] text-fg-2">
+              <span style={{ color: TYPE_META[t].color }} className="flex">
+                <SessionIcon type={t} size={13} />
+              </span>
+              {TYPE_META[t].label}
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <div className="grid grid-cols-2 gap-3">
         <Card>

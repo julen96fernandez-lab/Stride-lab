@@ -114,6 +114,12 @@ d("pipeline de importación", () => {
     expect(vo2.map((v) => v.value)).toEqual([60.1, 50.8]);
 
     expect(await db.select().from(s.importSamples)).toHaveLength(0);
+
+    // Tipos de sesión automáticos: cinta para la indoor; las no válidas sin tipo.
+    expect(indoor.sessionTypeAuto ?? (await db.select().from(s.runs).where(eq(s.runs.id, indoor.id)))[0].sessionTypeAuto).toBe("cinta");
+    const typed = await db.select({ st: s.runs.status, t: s.runs.sessionTypeAuto }).from(s.runs);
+    expect(typed.filter((x) => x.st === "valid").every((x) => x.t !== null)).toBe(true);
+    expect(typed.filter((x) => x.st !== "valid").every((x) => x.t === null)).toBe(true);
   }
 
   it("importa todo en una sola invocación", async () => {

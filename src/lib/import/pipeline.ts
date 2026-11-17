@@ -18,6 +18,7 @@ import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import type { ImportPhase, SeriesMetric } from "@/lib/db/schema";
 import { classifyRuns } from "./classify";
+import { reclassifyAll } from "@/lib/analysis/session-type-db";
 import { bbox, cumulativeDistance, elevationGainLoss, encodePolyline, parseGpx, simplify, type GpxPoint } from "./gpx";
 import { XmlScanner, type ScanTarget } from "./scanner";
 import { computeSplits, cumulativeFromIntervals, type Series } from "./splits";
@@ -690,6 +691,8 @@ async function phaseFinalize(row: ImportRow, deps: ImportDeps, deadline: number)
     runsDuplicate: count((c) => c.status === "duplicate"),
     runsSpecial: count((c) => c.status === "valid" && c.isSpecial),
   };
+  // Tipos de sesión automáticos (el tipo manual no se toca).
+  await reclassifyAll(db);
   await db
     .update(s.imports)
     .set({ phase: "done", status: "done", stats, finishedAt: new Date(), updatedAt: new Date() })

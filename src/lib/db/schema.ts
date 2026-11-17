@@ -104,6 +104,12 @@ export const runs = pgTable(
     invalidReason: text("invalid_reason"),
     duplicateOf: uuid("duplicate_of").references((): AnyPgColumn => runs.id, { onDelete: "set null" }),
     isSpecial: boolean("is_special").notNull().default(false),
+    /** Tipo de sesión calculado por reglas (ver src/lib/analysis/session-type.ts). */
+    sessionTypeAuto: text("session_type_auto"),
+    /** Por qué se eligió el tipo automático (texto corto). */
+    sessionTypeReason: text("session_type_reason"),
+    /** Tipo elegido a mano; si existe, manda sobre el automático. */
+    sessionTypeManual: text("session_type_manual"),
     shoeId: uuid("shoe_id").references(() => shoes.id, { onDelete: "set null" }),
     importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     /** Metadatos y estadísticas originales, para trazabilidad. */

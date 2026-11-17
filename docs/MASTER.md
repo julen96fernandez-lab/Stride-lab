@@ -244,6 +244,35 @@ el desacople queda vacío.
 Ritmo a igual FC (`src/lib/analysis/pace-at-hr.ts`): tiempo total / distancia total de las
 carreras del año que cumplen la regla; FC media ponderada por tiempo.
 
+## Tipos de sesión
+
+Tipos: Rodaje, Tirada larga, Series, Tempo, Recuperación, Competición, Trail, Cinta. Cada
+uno con icono y color (paleta categórica validada sobre la superficie #151712, orden fijo:
+azul, naranja, aqua, amarillo, magenta, verde, violeta, rojo); el tipo **seleccionado** va
+en lima. El color nunca va solo: siempre icono + nombre.
+
+- Columnas en `runs`: `session_type_auto`, `session_type_reason` (por qué) y
+  `session_type_manual`. Tipo efectivo = manual si existe; si no, automático.
+- **Reglas automáticas** (`src/lib/analysis/session-type.ts`, la primera que se cumple):
+  1. Series: el reloj registró intervalos (`WOIntervalStepKeyPath` en los metadatos; 40
+     carreras en los datos reales).
+  2. Cinta: indoor.
+  3. Tirada larga: ≥ 15 km (configurable en Perfil).
+  4. Trail: desnivel positivo ≥ 25 m por km (configurable; mediana real 7 m/km, p90 27).
+  5. Frente a tu media de los 12 meses anteriores (mediana de ritmo y de FC de carreras
+     comparables: sin cinta, series ni especiales; si hay < 5, todo el historial):
+     Tempo = ≥ 4 % más rápido y ≥ 3 ppm más (sin pulso: ≥ 7 % más rápido);
+     Recuperación = ≥ 6 % más lento y ≥ 3 ppm menos (sin pulso: ≥ 10 % más lento);
+     si no, Rodaje. Sin media suficiente → Rodaje con ese motivo.
+  Competición nunca se adivina.
+- Se recalcula al terminar cada importación, al guardar los umbrales en Perfil y, si hay
+  carreras válidas sin tipo, al abrir cualquier pantalla. El manual nunca se toca.
+- **Cambio manual**: en el detalle, fila de chips; un toque elige el tipo (se guarda al
+  momento), otro toque sobre el elegido o «Volver a automático» lo quita.
+- **Actividad**: filtros por tipo (`?tipo=`) con recuento y etiqueta del tipo en cada fila.
+- **Inicio**: km por tipo de los últimos 12 meses. **Análisis**: km por tipo (12 meses o
+  todo) y km por año apilados por tipo, con leyenda.
+
 ## Riesgos y pendientes
 
 - La 1.ª importación real dirá si el formato del export coincide con lo esperado
@@ -288,6 +317,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Tipos de sesión: clasificación automática por reglas, tipo manual aparte
+  con un toque, filtros en Actividad y km por tipo en Inicio y Análisis. 32 pruebas.
 - 2026‑11‑17 — Arreglo de la subida (ver Incidencias): subida por partes reanudable,
   «Continuar la subida», MB subidos/que faltan, lista de zips ya subidos, creación de la
   importación sin callbacks, aviso con «Reintentar/Continuar» tras 60 s sin cambios.

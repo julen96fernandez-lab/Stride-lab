@@ -5,6 +5,8 @@ import { decodePolyline } from "@/lib/import/gpx";
 import { paceAtHrByYear, type YearPace } from "@/lib/analysis/pace-at-hr";
 import { durabilityFromSeries, durabilityFromSplits, type Durability } from "@/lib/analysis/durability";
 import type { SeriesMetric } from "./schema";
+import { effectiveType, ensureClassified, getTypeSettings } from "@/lib/analysis/session-type-db";
+import { SESSION_TYPES, isSessionType, type SessionType } from "@/lib/analysis/session-type";
 
 const TZ = "Europe/Madrid";
 const valid = eq(s.runs.status, "valid");
@@ -56,6 +58,8 @@ export interface RunListItem {
   isIndoor: boolean | null;
   source: string;
   route: RouteShape | null;
+  type: SessionType | null;
+  typeManual: boolean;
 }
 
 function listColumns() {
@@ -70,11 +74,34 @@ function listColumns() {
     isIndoor: s.runs.isIndoor,
     source: s.runs.source,
     polyline: s.runRoutes.polyline,
+    type: effectiveType,
+    typeManual: sql<boolean>`${s.runs.sessionTypeManual} IS NOT NULL`,
   };
+}
+
+function toItem(r: { polyline: string | null; type: string | null } & Omit<RunListItem, "route" | "type">, maxPts = 40): RunListItem {
+  const { polyline, type, ...rest } = r;
+  return { ...rest, type: isSessionType(type) ? type : null, route: routeShape(polyline, maxPts) };
+}
+
+export interface KmByType {
+  type: SessionType;
+  km: number;
+  runs: number;
+}
+
+/** Km y nº de carreras por tipo efectivo (todos los tipos, también los que suman 0). */
+async function kmByType(where: ReturnType<typeof sql>): Promise<KmByType[]> {
+  const res = await db().execute(sql`
+    SELECT coalesce(session_type_manual, session_type_auto) AS t, sum(distance_m) / 1000 AS km, count(*)::int AS n
+    FROM runs WHERE status = 'valid' AND ${where} GROUP BY 1`);
+  const m = new Map((res.rows as { t: string | null; km: string | null; n: number }[]).map((r) => [r.t, r]));
+  return SESSION_TYPES.map((t) => ({ type: t, km: Number(m.get(t)?.km ?? 0), runs: m.get(t)?.n ?? 0 }));
 }
 
 export async function getHome() {
   const d = db();
+  await ensureClassified(d);
   const [last28Rows, monthsRows, vo2Rows, lastRuns, totals] = await Promise.all([
     d.execute(sql`
       SELECT count(*)::int AS runs,
@@ -125,26 +152,29 @@ export async function getHome() {
   }));
   const vo2 = (vo2Rows.rows as { day: string; v: string }[]).map((r) => ({ day: r.day, value: Number(r.v) }));
   const lr = lastRuns[0];
-  const lastRun: RunListItem | null = lr ? { ...lr, route: routeShape(lr.polyline) } : null;
-  return { last28, months, vo2, lastRun, totalRuns: (totals.rows[0] as { n: number }).n };
+  const lastRun: RunListItem | null = lr ? toItem(lr, 60) : null;
+  const byType = await kmByType(sql`start_at >= date_trunc('month', now() AT TIME ZONE ${TZ}) - interval '11 months'`);
+  return { last28, months, vo2, lastRun, byType, totalRuns: (totals.rows[0] as { n: number }).n };
 }
 
 // ─── Actividad ───────────────────────────────────────────────────────────────
 
-export async function listRuns() {
+export async function listRuns(filter: SessionType | null) {
   const d = db();
-  const [rows, hidden] = await Promise.all([
+  await ensureClassified(d);
+  const [rows, hidden, counts] = await Promise.all([
     d
       .select(listColumns())
       .from(s.runs)
       .leftJoin(s.runRoutes, eq(s.runRoutes.runId, s.runs.id))
-      .where(valid)
+      .where(filter ? and(valid, sql`${effectiveType} = ${filter}`) : valid)
       .orderBy(desc(s.runs.startAt)),
     d.execute(sql`SELECT status, count(*)::int AS n FROM runs WHERE status <> 'valid' GROUP BY status`),
+    kmByType(sql`true`),
   ]);
-  const items: RunListItem[] = rows.map((r) => ({ ...r, route: routeShape(r.polyline, 40) }));
+  const items: RunListItem[] = rows.map((r) => toItem(r));
   const h = Object.fromEntries((hidden.rows as { status: string; n: number }[]).map((x) => [x.status, x.n]));
-  return { items, hiddenDuplicates: h.duplicate ?? 0, hiddenInvalid: h.invalid ?? 0 };
+  return { items, counts, hiddenDuplicates: h.duplicate ?? 0, hiddenInvalid: h.invalid ?? 0 };
 }
 
 // ─── Detalle ─────────────────────────────────────────────────────────────────
@@ -152,6 +182,7 @@ export async function listRuns() {
 export async function getRun(id: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const d = db();
+  await ensureClassified(d);
   const runRows = await d.select().from(s.runs).where(eq(s.runs.id, id)).limit(1);
   const run = runRows[0];
   if (!run) return null;
@@ -190,6 +221,7 @@ export async function getRun(id: string) {
 
 export async function getAnalysis(band: [number, number]) {
   const d = db();
+  await ensureClassified(d);
   const [vo2Rows, runRows] = await Promise.all([
     d.execute(sql`
       SELECT to_char((measured_at AT TIME ZONE ${TZ})::date, 'YYYY-MM-DD') AS day, avg(value) AS v
@@ -223,5 +255,24 @@ export async function getAnalysis(band: [number, number]) {
   const longest = runRows.reduce<number | null>((m, r) => (r.distanceM !== null && (m === null || r.distanceM > m) ? r.distanceM : m), null);
   const hrYears = runRows.filter((r) => r.avgHr !== null).map((r) => Number(r.year));
   const firstHrYear = hrYears.length ? Math.min(...hrYears) : null;
-  return { vo2, kmByYear, paceAtHr, totalRuns: runRows.length, longestM: longest, firstHrYear };
+  const typeYearRows = await d.execute(sql`
+    SELECT extract(year from start_at AT TIME ZONE ${TZ})::int AS y, coalesce(session_type_manual, session_type_auto) AS t,
+           sum(distance_m) / 1000 AS km
+    FROM runs WHERE status = 'valid' GROUP BY 1, 2`);
+  const typeByYear = kmByYear.map((y) => {
+    const row: Record<SessionType, number> = Object.fromEntries(SESSION_TYPES.map((t) => [t, 0])) as Record<SessionType, number>;
+    for (const r of typeYearRows.rows as { y: number; t: string | null; km: string | null }[]) {
+      if (r.y === y.year && isSessionType(r.t)) row[r.t] = Number(r.km ?? 0);
+    }
+    return { year: y.year, km: row };
+  });
+  const [byType12, byTypeAll] = await Promise.all([
+    kmByType(sql`start_at >= now() - interval '12 months'`),
+    kmByType(sql`true`),
+  ]);
+  return { vo2, kmByYear, paceAtHr, totalRuns: runRows.length, longestM: longest, firstHrYear, typeByYear, byType12, byTypeAll };
+}
+
+export async function getTypeSettingsView() {
+  return getTypeSettings(db());
 }
