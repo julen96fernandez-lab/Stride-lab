@@ -184,6 +184,67 @@ export function compareLast(periods: Period[]): Comparison | null {
   };
 }
 
+const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+/** «1–18 oct», «9–11 nov», «30 oct – 2 nov» o «1 ene – 18 nov 2025» (años distintos o rango anual). */
+export function rangeLabel(from: string, to: string, withYear = false): string {
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  const yr = withYear ? ` ${ty}` : "";
+  if (from === to) return `${fd} ${MES_CORTO[fm - 1]}${yr}`;
+  if (fy === ty && fm === tm) return `${fd}–${td} ${MES_CORTO[tm - 1]}${yr}`;
+  return `${fd} ${MES_CORTO[fm - 1]} – ${td} ${MES_CORTO[tm - 1]}${yr}`;
+}
+
+export interface StretchComparison extends Comparison {
+  /** Rangos comparados (AAAA-MM-DD, ambos incluidos): el periodo actual hasta hoy y el mismo tramo del anterior. */
+  currentFrom: string;
+  currentTo: string;
+  previousFrom: string;
+  previousTo: string;
+  /** true si el periodo anterior es más corto que lo transcurrido (p. ej. 31 mar frente a febrero) y se comparó entero. */
+  capped: boolean;
+}
+
+/**
+ * Periodo actual hasta hoy frente al **mismo tramo** del periodo anterior: los mismos días desde
+ * el inicio (lunes→hoy frente a lunes→mismo día de la semana pasada; 1→hoy del mes o del año
+ * frente a 1→mismo día del anterior). No se compara con el periodo anterior entero.
+ */
+export function comparePeriodToDate(runs: RunForPeriod[], unit: PeriodUnit, now: Date = new Date()): StretchComparison {
+  const today = localDay(now);
+  const curStart = periodStart(today, unit);
+  const prevFrom = prevStart(curStart, unit);
+  const elapsed = today - curStart; // días ya transcurridos (0 = primer día)
+  const prevLen = curStart - prevFrom;
+  const capped = elapsed > prevLen - 1;
+  const prevTo = prevFrom + Math.min(elapsed, prevLen - 1);
+  const within = (from: number, to: number) =>
+    runs.filter((r) => {
+      const d = localDay(r.startAt);
+      return d >= from && d <= to;
+    });
+  const mk = (from: number, to: number, current: boolean): Period => ({
+    key: `${unit}:${ymd(from)}`,
+    start: ymd(from),
+    label: label(from, unit),
+    current,
+    ...aggregate(within(from, to)),
+  });
+  const current = mk(curStart, today, true);
+  const previous = mk(prevFrom, prevTo, false);
+  return {
+    current,
+    previous,
+    kmDelta: current.km - previous.km,
+    paceDeltaS: current.paceSPerKm !== null && previous.paceSPerKm !== null ? current.paceSPerKm - previous.paceSPerKm : null,
+    currentFrom: ymd(curStart),
+    currentTo: ymd(today),
+    previousFrom: ymd(prevFrom),
+    previousTo: ymd(prevTo),
+    capped,
+  };
+}
+
 // ─── Objetivos ───────────────────────────────────────────────────────────────
 
 export interface Goal {

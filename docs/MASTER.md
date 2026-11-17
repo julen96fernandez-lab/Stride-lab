@@ -116,6 +116,16 @@ Cálculos en `src/lib/analysis/insights.ts` (y `kmByType` en `periods.ts`), con 
   completo, discontinuo) y tabla del 1 de enero hasta hoy frente al mismo tramo del año
   pasado: km, horas, desnivel, carreras y ritmo medio (sin especiales).
 
+## Comparación con el mismo tramo
+
+Las tarjetas de Volumen (semana, mes, año) comparan lo transcurrido del periodo con el
+**mismo tramo del anterior** (`comparePeriodToDate`): lunes→hoy frente a lunes→mismo día de
+la semana pasada; 1→hoy del mes o del año frente a 1→mismo día del anterior (si el anterior
+es más corto, p. ej. 31 mar frente a febrero, se compara entero y se avisa). El texto muestra
+los dos rangos («1–18 oct»). Sin carreras en lesión. Ejes de ritmo: marcas cada 15/30 s y
+rango ajustado a los datos (`src/lib/analysis/axis.ts`). Vista Año: una columna por año
+desde el primero hasta el actual y un punto de ritmo por año con datos, alineados.
+
 ## Periodos de lesión
 
 En **Perfil → Periodos de lesión**: inicio, fin opcional (sin fin = abierto hasta hoy) y
@@ -153,6 +163,16 @@ carrera** en tramos continuos y un esfuerzo nunca las cruza: hueco > 15 s cuya m
 cubre < 1 m/s (un hueco largo con distancia de carrera es una muestra continua, no una
 pausa). Se descartan esfuerzos más rápidos de 2:30 /km. Resultado en `run_efforts`
 (se recalcula al reprocesar o al cambiar la versión de reglas).
+
+**Muestras anómalas** (reglas versión 6): de cada muestra solo se guarda el final de su
+intervalo, así que si la anterior terminó mucho antes, el hueco no es su duración real y la
+velocidad implícita sale imposible (4‑jul‑2026: 886 m en 105 s = 2:00 /km, tras muestras finas
+casi paradas; daba un «1 km en 2:32»). Una muestra con hueco ≥ 10 s y velocidad implícita
+> 7 m/s (≈ 2:23 /km) se descarta y parte el tramo antes y después: ningún esfuerzo la cruza, y
+el tramo siguiente empieza donde ella termina. Con huecos < 10 s no se juzga: las muestras de
+2–3 s con 14–17 m son redondeo de segundos (aparecen por cientos). Si el mejor esfuerzo de un
+tramo baja de 2:30 /km, se ignora ese tramo (no toda la distancia). Pruebas con la secuencia
+real del 4‑jul y del 5 km de 2021.
 
 Datos reales: 1202 huecos > 15 s; 164 son pausas (57 carreras, mediana 58 s); 1038 son
 muestras largas continuas. Las 15 carreras válidas sin muestras de distancia tienen su
@@ -438,6 +458,10 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑17 — Récords: las muestras con velocidad implícita imposible (hueco ≥ 10 s y
+  > 7 m/s) se descartan y parten el tramo; reglas versión 6; el build recalcula tras migrar
+  (`scripts/recompute.mts`, no rompe el despliegue si falla). Análisis: tarjetas con el mismo
+  tramo del periodo anterior y ejes de ritmo regulares.
 - 2026‑11‑17 — Revisión visual: bandas «Lesión» al fondo y por columnas enteras, objetivo
   sin tapar, contorno en el calendario, marcas de fecha regulares en español, etiquetas de
   semana sin solaparse. 139 pruebas.

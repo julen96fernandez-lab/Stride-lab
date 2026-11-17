@@ -7,6 +7,7 @@ import { bandsToMs, type InjuryBand } from "@/lib/analysis/injuries";
 import { injuryMarkArea } from "./injury";
 import { C, EChart, axisLabel, tooltipBase } from "./EChart";
 import { timeTicks } from "@/lib/analysis/time-ticks";
+import { regularAxis, TIME_STEPS } from "@/lib/analysis/axis";
 
 const clock = (s: number) => {
   const t = Math.round(s);
@@ -39,15 +40,14 @@ export function RecordChart({
   const yearAgo = nowMs - 365 * 86_400_000;
   const option = useMemo(() => {
     const t = points.map((p) => p.timeS);
-    let best = Infinity;
-    const steps = points.map((p) => {
-      best = Math.min(best, p.timeS);
-      return [p.startAt.getTime(), best];
-    });
-    if (steps.length) steps.push([nowMs, best]);
+    // Récord vigente tras cada carrera (mínimo acumulado) y, al final, hasta hoy.
+    const running = t.map((_, i) => Math.min(...t.slice(0, i + 1)));
+    const steps = points.map((p, i) => [p.startAt.getTime(), running[i]]);
+    if (steps.length) steps.push([nowMs, running[running.length - 1]]);
     const first = points.length ? points[0].startAt.getTime() : nowMs - 365 * 86_400_000;
     const x0 = first - Math.max(7 * 86_400_000, (nowMs - first) * 0.03);
     const ticks = timeTicks(x0, nowMs);
+    const yAx = regularAxis(t, 4, TIME_STEPS);
     return {
       grid: { left: 46, right: 10, top: 16, bottom: 24 },
       tooltip: {
@@ -72,9 +72,9 @@ export function RecordChart({
       yAxis: {
         type: "value",
         inverse: true, // más arriba = más rápido
-        min: Math.floor((Math.min(...t) * 0.97) / 10) * 10,
-        max: Math.ceil((Math.max(...t) * 1.03) / 10) * 10,
-        splitNumber: 3,
+        min: yAx.min,
+        max: yAx.max,
+        interval: yAx.interval,
         axisLabel: { ...axisLabel, formatter: (v: number) => clock(v) },
         splitLine: { lineStyle: { color: C.grid } },
       },

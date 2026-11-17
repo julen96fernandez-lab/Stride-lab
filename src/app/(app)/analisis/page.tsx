@@ -12,7 +12,7 @@ import { ConsistencyCalendar, PaceTrend, YearCumulative } from "@/components/cha
 import type { PaceRange } from "@/lib/analysis/insights";
 import { isSessionType, type SessionType } from "@/lib/analysis/session-type";
 import { PeriodCharts } from "@/components/charts/PeriodCharts";
-import type { PeriodUnit } from "@/lib/analysis/periods";
+import { rangeLabel, type PeriodUnit } from "@/lib/analysis/periods";
 import { DASH, date, dec, int, km, pace } from "@/lib/format";
 
 export const metadata = { title: "Análisis · Stride Lab" };
@@ -276,10 +276,16 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
 
 const UNIT_LABEL: Record<PeriodUnit, string> = { week: "Semana", month: "Mes", year: "Año" };
 const UNIT_PARAM: Record<PeriodUnit, string> = { week: "semana", month: "mes", year: "año" };
-const PREV_LABEL: Record<PeriodUnit, [string, string]> = {
-  week: ["Esta semana", "la semana pasada"],
-  month: ["Este mes", "el mes pasado"],
-  year: ["Este año", "el año pasado"],
+const STRETCH_TEXT: Record<PeriodUnit, { now: string; prev: string; whole: string; short: string }> = {
+  week: { now: "semana", prev: "de la semana pasada", whole: "la semana pasada entera", short: "la semana pasada" },
+  month: { now: "mes", prev: "del mes pasado", whole: "el mes pasado entero", short: "el mes pasado" },
+  year: { now: "año", prev: "del año pasado", whole: "el año pasado entero", short: "el año pasado" },
+};
+// [actual, anterior con artículo, «frente a …»]
+const PREV_LABEL: Record<PeriodUnit, [string, string, string]> = {
+  week: ["Esta semana", "la semana pasada", "la semana pasada"],
+  month: ["Este mes", "el mes pasado", "el mes pasado"],
+  year: ["Este año", "el año pasado", "el año pasado"],
 };
 
 async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 | 26; keep: string }) {
@@ -320,33 +326,42 @@ async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 
       </div>
 
       {c && (
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-line bg-inset p-3.5">
-            <div className="text-[12px] text-fg-2">{PREV_LABEL[unit][0]} (hasta hoy)</div>
-            <div className="mt-1 flex items-baseline gap-1">
-              <span className="num text-[24px]">{km(c.current.km * 1000, 1)}</span>
-              <span className="text-[11px] text-fg-2">km</span>
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-line bg-inset p-3.5">
+              <div className="text-[12px] text-fg-2">
+                {PREV_LABEL[unit][0]} · {rangeLabel(c.currentFrom, c.currentTo)}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="num text-[24px]">{km(c.current.km * 1000, 1)}</span>
+                <span className="text-[11px] text-fg-2">km</span>
+              </div>
+              <div className="mt-0.5 text-[12px] text-fg-2">
+                {c.kmDelta === 0 ? "Igual que" : `${c.kmDelta > 0 ? "+" : "−"}${km(Math.abs(c.kmDelta) * 1000, 1)} km frente a`}{" "}
+                {rangeLabel(c.previousFrom, c.previousTo, unit === "year")} ({km(c.previous.km * 1000, 1)})
+              </div>
             </div>
-            <div className="mt-0.5 text-[12px] text-fg-2">
-              {c.kmDelta === 0 ? "Igual que" : `${c.kmDelta > 0 ? "+" : "−"}${km(Math.abs(c.kmDelta) * 1000, 1)} km frente a`} {PREV_LABEL[unit][1]} (
-              {km(c.previous.km * 1000, 1)})
+            <div className="rounded-2xl border border-line bg-inset p-3.5">
+              <div className="text-[12px] text-fg-2">Ritmo medio · mismo tramo</div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="num text-[24px]">{pace(c.current.paceSPerKm)}</span>
+                <span className="text-[11px] text-fg-2">/km</span>
+              </div>
+              <div className="mt-0.5 text-[12px] text-fg-2">
+                {c.paceDeltaS === null
+                  ? `Sin datos para comparar con ${rangeLabel(c.previousFrom, c.previousTo, unit === "year")}`
+                  : Math.round(c.paceDeltaS) === 0
+                    ? `Igual que ${rangeLabel(c.previousFrom, c.previousTo, unit === "year")}`
+                    : `${Math.abs(Math.round(c.paceDeltaS))} s/km ${c.paceDeltaS < 0 ? "más rápido" : "más lento"} que ${rangeLabel(c.previousFrom, c.previousTo, unit === "year")} (${pace(c.previous.paceSPerKm)})`}
+              </div>
             </div>
           </div>
-          <div className="rounded-2xl border border-line bg-inset p-3.5">
-            <div className="text-[12px] text-fg-2">Ritmo medio</div>
-            <div className="mt-1 flex items-baseline gap-1">
-              <span className="num text-[24px]">{pace(c.current.paceSPerKm)}</span>
-              <span className="text-[11px] text-fg-2">/km</span>
-            </div>
-            <div className="mt-0.5 text-[12px] text-fg-2">
-              {c.paceDeltaS === null
-                ? `Sin datos para comparar con ${PREV_LABEL[unit][1]}`
-                : Math.round(c.paceDeltaS) === 0
-                  ? `Igual que ${PREV_LABEL[unit][1]}`
-                  : `${Math.abs(Math.round(c.paceDeltaS))} s/km ${c.paceDeltaS < 0 ? "más rápido" : "más lento"} que ${PREV_LABEL[unit][1]} (${pace(c.previous.paceSPerKm)})`}
-            </div>
-          </div>
-        </div>
+          <p className="mt-2 text-[12px] text-fg-2">
+            Compara lo que llevas de {STRETCH_TEXT[unit].now} con el mismo tramo {STRETCH_TEXT[unit].prev} (
+            {rangeLabel(c.previousFrom, c.previousTo, unit === "year")}), no con {STRETCH_TEXT[unit].whole}.
+            {c.capped && ` Como ${STRETCH_TEXT[unit].short} fue más corto, se compara completo.`}
+          </p>
+        </>
       )}
 
       <div className="mt-4">

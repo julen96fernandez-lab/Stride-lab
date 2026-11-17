@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestEfforts, continuousSegments, improvementPct, recordProgression } from "@/lib/analysis/best-efforts";
+import { bestEfforts, continuousSegments, improvementPct, MAX_SPEED_MPS, recordProgression } from "@/lib/analysis/best-efforts";
 
 /** Muestras cada `step` s a velocidades por tramos: [segundos, m/s][] */
 function samples(parts: [number, number][], step = 3, pauseAfter?: { at: number; gap: number }) {
@@ -84,5 +84,76 @@ describe("evolución de los récords", () => {
     expect(p.map((x) => x.isRecord)).toEqual([true, true, false, true]);
     expect(improvementPct(p)).toBeCloseTo(((1560 - 1440) / 1560) * 100, 5);
     expect(improvementPct(recordProgression([e("2024-05-01", 1500)]))).toBeNull();
+  });
+});
+
+describe("muestras anómalas (velocidad implícita imposible)", () => {
+  // Carrera real del 4-jul-2026 (21,4 km, parciales 5:16–8:46 /km): muestras finas casi paradas
+  // hasta t=3000 s y, a t=3105, una muestra de 886,4 m con solo 105 s de hueco (8,44 m/s). Antes
+  // daba un «1 km en 2:32». Después, el reloj sigue con muestras de ~305 s a ~2,2 m/s.
+  const realistic = () => {
+    const t: number[] = [];
+    const v: number[] = [];
+    // 0–2883 s: carrera a 2,6 m/s en muestras de 3 s
+    for (let s = 3; s <= 2883; s += 3) {
+      t.push(s);
+      v.push(7.8);
+    }
+    // muestras finas casi paradas (como las reales) hasta 3000 s
+    for (const [tt, vv] of [[2906, 3.4], [2908, 3.2], [2911, 1.7], [2913, 4.7], [2916, 5.7], [2931, 1.3], [2936, 6.8], [2970, 6.4], [2985, 2.6], [3000, 10.0]]) {
+      t.push(tt);
+      v.push(vv);
+    }
+    t.push(3105, 3410, 3715, 4020, 4324);
+    v.push(886.4, 737.1, 612.6, 624.0, 698.5);
+    return { t, v };
+  };
+
+  it("la muestra anómala no es continua: parte el tramo antes y después", () => {
+    const { t, v } = realistic();
+    const segs = continuousSegments(t, v);
+    expect(v[t.indexOf(3105)] / (3105 - 3000)).toBeGreaterThan(MAX_SPEED_MPS);
+    // ningún tramo contiene la muestra de 886 m: el último tramo empieza donde ella termina
+    for (const s of segs) expect(s.t.some((x, k) => k > 0 && s.d[k] - s.d[k - 1] > 800)).toBe(false);
+    expect(segs.some((s) => s.t.includes(3000) && s.t.includes(3105))).toBe(false);
+    expect(segs.at(-1)!.t[0]).toBe(3105);
+    expect(segs.at(-1)!.d[1]).toBeCloseTo(737.1, 5);
+  });
+
+  it("el 1 km más rápido es coherente con la carrera (nunca 2:32)", () => {
+    const { t, v } = realistic();
+    const k1 = bestEfforts(t, v).find((e) => e.key === "1k")!;
+    expect(k1.timeS).toBeGreaterThan(300); // ~2,6 m/s → ~6:25 /km, no 2:32
+    expect(k1.startS).not.toBe(3000);
+  });
+
+  it("5 km de 2021: 1250 m en 20 s en la 2.ª muestra de la carrera no se usa", () => {
+    // 1.ª muestra a 621 s con 80 m; 2.ª a 641 s con 1250,3 m (62 m/s); después 4 m/s a 3 s
+    const t = [621, 641];
+    const v = [80, 1250.3];
+    for (let s = 644; s <= 2200; s += 3) {
+      t.push(s);
+      v.push(12); // 4 m/s → 4:10 /km
+    }
+    const k5 = bestEfforts(t, v).find((e) => e.key === "5k")!;
+    expect(k5.timeS / 5).toBeGreaterThanOrEqual(249); // 4:10 /km, no 3:23
+    expect(k5.startS).toBeGreaterThanOrEqual(641);
+  });
+
+  it("muestras de 2–3 s con 14–17 m (redondeo de segundos) no se tocan", () => {
+    const t: number[] = [];
+    const v: number[] = [];
+    for (let s = 2; s <= 1200; s += 2) {
+      t.push(s);
+      v.push(s % 8 === 0 ? 17 : 6); // media ~ 5,7 m/s → picos de 8,5 m/s
+    }
+    expect(continuousSegments(t, v)).toHaveLength(1);
+    expect(bestEfforts(t, v).some((e) => e.key === "1k")).toBe(true);
+  });
+
+  it("una muestra larga y plausible (305 s a 2,4 m/s) sigue siendo válida", () => {
+    const t = [305, 610, 915, 1220, 1525];
+    const v = [732, 732, 732, 732, 732];
+    expect(continuousSegments(t, v)).toHaveLength(1);
   });
 });

@@ -287,7 +287,7 @@ export async function getTrainingSettingsView() {
 
 // ─── Periodos y objetivos ────────────────────────────────────────────────────
 
-import { buildPeriods, compareLast, localDay, goalProgress, suggestGoals, yearsSinceFirst, type PeriodUnit, type RunForPeriod } from "@/lib/analysis/periods";
+import { buildPeriods, comparePeriodToDate, localDay, goalProgress, suggestGoals, yearsSinceFirst, type PeriodUnit, type RunForPeriod } from "@/lib/analysis/periods";
 import { getGoals } from "@/lib/analysis/goals-db";
 import { listInjuries } from "@/lib/analysis/injuries-db";
 
@@ -334,7 +334,8 @@ export async function getPeriodsView(unit: PeriodUnit, weeks: 12 | 26) {
   const periods = buildPeriods(runs, unit, count);
   const goal = goals[unit];
   // Comparación con el periodo anterior: sin las carreras en periodo de lesión.
-  const comparison = compareLast(buildPeriods(runs.filter((r) => !r.inInjury), unit, 2));
+  // Mismo tramo del periodo anterior (no el periodo entero), sin carreras en lesión.
+  const comparison = comparePeriodToDate(runs.filter((r) => !r.inInjury), unit);
   const injuries = await listInjuries(db());
   const today = new Date(localDay(new Date()) * 86_400_000).toISOString().slice(0, 10);
   const injuryRanges = periodInjuryRanges(

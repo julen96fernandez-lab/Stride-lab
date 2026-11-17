@@ -16,6 +16,14 @@
 export const PAUSE_GAP_S = 15;
 /** Por debajo de esta velocidad media en el hueco, la muestra no lo cubre: es una pausa. */
 const PAUSE_SPEED_MPS = 1;
+/**
+ * Muestra inválida: de cada muestra solo se guarda el final de su intervalo, así que si la
+ * anterior terminó mucho antes, el hueco no es su duración real y la velocidad implícita sale
+ * imposible (p. ej. 886 m en 105 s = 2:00 /km). Solo se juzga con huecos de MIN_GAP_CHECK_S o
+ * más: las muestras de 2–3 s con 14–17 m son redondeo de segundos y no son anomalías.
+ */
+export const MAX_SPEED_MPS = 7; // ≈ 2:23 /km
+export const MIN_GAP_CHECK_S = 10;
 export const MIN_PACE_S_PER_KM = 150; // 2:30 /km
 
 export const EFFORT_DISTANCES = [
@@ -45,19 +53,32 @@ export function continuousSegments(t: readonly number[], v: readonly number[]): 
   const segs: { t: number[]; d: number[] }[] = [];
   let cur: { t: number[]; d: number[] } | null = null;
   let prevT = 0;
+  let first = true;
+  let afterInvalid = false;
   for (const i of order) {
     const gap = t[i] - prevT;
     const isPause = gap > PAUSE_GAP_S && v[i] / gap < PAUSE_SPEED_MPS;
+    // Muestra inválida: se descarta y el tramo se parte antes y después (ningún esfuerzo la cruza).
+    if (gap >= MIN_GAP_CHECK_S && v[i] / gap > MAX_SPEED_MPS) {
+      cur = null;
+      prevT = t[i];
+      first = false;
+      afterInvalid = true;
+      continue;
+    }
     if (!cur || isPause) {
       // Nuevo tramo: empieza en la muestra anterior (si la hay) con distancia 0 para que el
       // primer intervalo tenga duración; tras una pausa se toma el hueco típico (3 s) como inicio.
-      const startT: number = !cur ? 0 : Math.max(prevT, t[i] - Math.min(gap, 3));
+      // Tras una muestra inválida, el tramo empieza donde ella termina (el hueco entero es de esta muestra).
+      const startT: number = first ? 0 : afterInvalid ? prevT : Math.max(prevT, t[i] - Math.min(gap, 3));
       cur = { t: [startT], d: [0] };
       segs.push(cur);
     }
     cur.t.push(t[i]);
     cur.d.push(cur.d[cur.d.length - 1] + v[i]);
     prevT = t[i];
+    first = false;
+    afterInvalid = false;
   }
   return segs;
 }
@@ -105,11 +126,11 @@ export function bestEfforts(t: readonly number[], v: readonly number[]): Effort[
     let best: { timeS: number; startS: number } | null = null;
     for (const s of segs) {
       const b = bestInSegment(s, dist.m);
-      if (b && (!best || b.timeS < best.timeS)) best = b;
+      // Red de seguridad: un tramo con esfuerzo más rápido de 2:30 /km está mal; se ignora ese tramo.
+      if (!b || b.timeS / (dist.m / 1000) < MIN_PACE_S_PER_KM) continue;
+      if (!best || b.timeS < best.timeS) best = b;
     }
-    if (best && best.timeS / (dist.m / 1000) >= MIN_PACE_S_PER_KM) {
-      out.push({ key: dist.key, distanceM: dist.m, timeS: best.timeS, startS: best.startS });
-    }
+    if (best) out.push({ key: dist.key, distanceM: dist.m, timeS: best.timeS, startS: best.startS });
   }
   return out;
 }

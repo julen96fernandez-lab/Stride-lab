@@ -8,6 +8,7 @@ import { TYPE_META, isSessionType } from "@/lib/analysis/session-type";
 import { SessionIcon } from "@/components/ui/SessionType";
 import { C, EChart, axisLabel, tooltipBase } from "./EChart";
 import { timeTicks } from "@/lib/analysis/time-ticks";
+import { regularAxis } from "@/lib/analysis/axis";
 import { injuryMarkArea } from "./injury";
 import { bandsToMs, isInjuryDay, type InjuryBand } from "@/lib/analysis/injuries";
 
@@ -49,6 +50,7 @@ export function PaceTrend({
     const pad = Math.max(3 * 86_400_000, (tLast - tFirst) * 0.03);
     const [x0, x1] = [tFirst - pad, tLast + pad];
     const ticks = timeTicks(x0, x1);
+    const yAx = regularAxis(paces, 4);
     return {
       grid: { left: 36, right: 10, top: 12, bottom: 24 },
       tooltip: {
@@ -72,9 +74,9 @@ export function PaceTrend({
       yAxis: {
         type: "value",
         inverse: true, // más arriba = más rápido
-        min: Math.floor((Math.min(...paces) - 10) / 15) * 15,
-        max: Math.ceil((Math.max(...paces) + 10) / 15) * 15,
-        splitNumber: 3,
+        min: yAx.min,
+        max: yAx.max,
+        interval: yAx.interval, // marcas regulares cada 15/30 s
         axisLabel: { ...axisLabel, formatter: (v: number) => paceStr(v) },
         splitLine: { lineStyle: { color: C.grid } },
       },

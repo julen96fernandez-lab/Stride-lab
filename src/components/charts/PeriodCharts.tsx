@@ -7,6 +7,7 @@ import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { SessionIcon } from "@/components/ui/SessionType";
 import { C, EChart, axisLabel, tooltipBase } from "./EChart";
 import { injuryAreaItems } from "./injury";
+import { regularAxis } from "@/lib/analysis/axis";
 
 /** Orden fijo de las capas apiladas (la paleta de tipos), más «sin tipo» al final. */
 const STACK = [...SESSION_TYPES, "sin_tipo"] as const;
@@ -178,6 +179,7 @@ export function PeriodCharts({
 
   const paceVals = periods.map((x) => x.paceSPerKm);
   const known = paceVals.filter((v): v is number => v !== null);
+  const paceAxis = useMemo(() => regularAxis(known, 3), [known]);
   const pace = useMemo(
     () => ({
       grid: { left: 30, right: 6, top: 8, bottom: 6 },
@@ -194,9 +196,9 @@ export function PeriodCharts({
       yAxis: {
         type: "value",
         inverse: true, // más arriba = más rápido
-        min: known.length ? Math.floor(Math.min(...known) / 15) * 15 - 15 : 240,
-        max: known.length ? Math.ceil(Math.max(...known) / 15) * 15 + 15 : 420,
-        splitNumber: 2,
+        min: paceAxis.min,
+        max: paceAxis.max,
+        interval: paceAxis.interval, // marcas regulares cada 15/30 s
         axisLabel: { ...axisLabel, formatter: (v: number) => paceStr(v) },
         splitLine: { lineStyle: { color: C.grid } },
       },
@@ -206,13 +208,13 @@ export function PeriodCharts({
           data: paceVals,
           connectNulls: false,
           symbol: "circle",
-          symbolSize: (_: unknown, ps: { dataIndex: number }) => (ps.dataIndex === sel ? 9 : 5),
+          symbolSize: (_: unknown, ps: { dataIndex: number }) => (ps.dataIndex === sel ? 10 : 7),
           lineStyle: { width: 2, color: C.lime },
           itemStyle: { color: C.lime, borderColor: C.surface, borderWidth: 1.5 },
         },
       ],
     }),
-    [periods, paceVals, known, sel],
+    [periods, paceVals, sel, paceAxis],
   );
 
   return (
@@ -276,7 +278,7 @@ export function PeriodCharts({
         <span className="text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">Ritmo medio</span>
         <span className="text-[11px] text-fg-2">más arriba = más rápido · sin especiales</span>
       </div>
-      <EChart option={pace} height={78} label="Ritmo medio por periodo" onSelect={setSel} />
+      <EChart option={pace} height={92} label="Ritmo medio por periodo" onSelect={setSel} />
 
       {/* Detalle del periodo tocado */}
       <section aria-live="polite" className="mt-4 rounded-2xl border border-line bg-inset p-4">
