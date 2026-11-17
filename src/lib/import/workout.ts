@@ -1,5 +1,6 @@
 import type { RunSource } from "@/lib/db/schema";
 import { attr, childTags, parseAttrs, parseHealthDate } from "./xml";
+import { allDistanceStats, chooseDistance } from "./distance";
 import {
   bool01,
   elevationM,
@@ -107,10 +108,11 @@ export function parseRunningWorkout(xml: string): ParsedRun | null {
   const durationS =
     toSeconds(a.duration, a.durationUnit) ?? Math.max(0, (endAt.getTime() - startAt.getTime()) / 1000);
 
-  // Distancia: estadística DistanceWalkingRunning (sum). Respaldo: atributo antiguo totalDistance.
-  const dist = st("DistanceWalkingRunning", "sum");
-  let distanceM = toMeters(dist.value, dist.unit);
-  let distanceFrom: string | null = distanceM !== null ? "WorkoutStatistics" : null;
+  // Distancia sin duplicar (ver distance.ts). Respaldo: atributo antiguo totalDistance.
+  const distanceStats = allDistanceStats(xml);
+  const chosen = chooseDistance(distanceStats, startAt.getTime(), endAt.getTime());
+  let distanceM = chosen.meters;
+  let distanceFrom: string | null = chosen.source;
   if (distanceM === null && a.totalDistance) {
     distanceM = toMeters(a.totalDistance, a.totalDistanceUnit);
     if (distanceM !== null) distanceFrom = "totalDistance";
@@ -146,6 +148,7 @@ export function parseRunningWorkout(xml: string): ParsedRun | null {
     metadata: Object.fromEntries(meta),
     intervalSteps,
     distanceFrom,
+    distanceStats: distanceStats.map((d) => ({ ...d, km: d.meters / 1000 })),
   };
 
   return {

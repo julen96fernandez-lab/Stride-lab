@@ -319,6 +319,23 @@ en lima. El color nunca va solo: siempre icono + nombre.
 - Cambiar contraseña desde Perfil.
 - Zona horaria: se guarda en UTC; se muestra en Europe/Madrid.
 
+## Distancia sin duplicar y sesiones partidas
+
+- **Problema (2026‑11‑17):** en sesiones con bloques (series), la «primera aparición» de
+  `DistanceWalkingRunning` era solo el calentamiento (1,0–3,2 km de sesiones de 6–13 km).
+- **Ahora** (`src/lib/import/distance.ts`) se guardan **todas** las apariciones con su
+  nivel (bloque `<WorkoutActivity>` o entrenamiento) en `raw.distanceStats`, y se elige:
+  1. la de nivel entrenamiento que cubre ≥ 95 % de la sesión, sola;
+  2. si no, la suma de las de bloque, solo si no se solapan y cubren ≥ 90 %;
+  3. si no, la suma de las muestras de distancia del reloj (`raw.distanceFrom = "samples"`).
+  Nunca se suman a la vez el total del entrenamiento y los bloques. Las carreras de un solo
+  bloque (17‑oct) no cambian.
+- **Sesiones partidas:** entrenamientos de la misma fuente separados por < 2 min se unen en
+  una sola sesión (`src/lib/import/consolidate.ts`): duración y distancia sumadas, medias
+  ponderadas por tiempo, series de FC/potencia/distancia unidas (zonas y carga de las dos
+  partes), parciales recalculados; `raw.mergedFrom` guarda las claves originales. Al
+  reimportar se vuelve a unir sin duplicar.
+
 ## Incidencias
 
 - **2026‑11‑17 · Subida parada al 99 %, sin fila en `imports`.** Diagnóstico: el almacén
@@ -354,6 +371,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
   lecturas de VO₂ máx.; comprobación del 17‑oct correcta.
 - 2026‑11‑17 — Paso 5: Inicio, Actividad, Detalle de carrera y Análisis con datos reales;
   ECharts (SVG) y MapLibre. 29 pruebas (5 nuevas de durabilidad y ritmo a igual FC).
+- 2026‑11‑17 — Distancia sin duplicar (todas las apariciones de DistanceWalkingRunning;
+  respaldo con muestras del reloj) y unión de entrenamientos seguidos (< 2 min). 104 pruebas.
 - 2026‑11‑17 — Tema día/noche (Sistema, Día, Noche) con contraste comprobado; 91 pruebas.
 - 2026‑11‑17 — Series por rutas de paso con repetición; tirada larga desde 13 km;
   «Reprocesar» zip. Zonas de FC editables, tiempo en zona, carga y tipos por zona;

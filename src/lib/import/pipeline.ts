@@ -18,6 +18,7 @@ import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import type { ImportPhase, SeriesMetric } from "@/lib/db/schema";
 import { classifyRuns } from "./classify";
+import { mergeConsecutive, resolvePendingDistances } from "./consolidate";
 import { reclassifyAll } from "@/lib/analysis/session-type-db";
 import { bbox, cumulativeDistance, elevationGainLoss, encodePolyline, parseGpx, simplify, type GpxPoint } from "./gpx";
 import { XmlScanner, type ScanTarget } from "./scanner";
@@ -45,6 +46,7 @@ interface State {
   routeSkipped?: string[];
   unrefIdx?: number;
   splitsTried?: string[];
+  consolidated?: boolean;
 }
 
 const CHECKPOINT_MS = 30_000;
@@ -289,6 +291,8 @@ async function phaseWorkouts(row: ImportRow, deps: ImportDeps, deadline: number)
 
 async function upsertRuns(db: Db, runs: ParsedRun[], importId: string) {
   const metricCols = [
+    "startAt",
+    "endAt",
     "source",
     "sourceName",
     "sourceVersion",
@@ -473,7 +477,7 @@ async function loadSeries(db: Db, runId: string): Promise<Partial<Record<SeriesM
   return Object.fromEntries(rows.map((r) => [r.metric, { t: r.t, v: r.v }]));
 }
 
-async function writeSplits(db: Db, run: { id: string; startAt: Date }, gpx: GpxPoint[] | null): Promise<number> {
+export async function writeSplits(db: Db, run: { id: string; startAt: Date }, gpx: GpxPoint[] | null): Promise<number> {
   const series = await loadSeries(db, run.id);
   const start = run.startAt.getTime();
   let dist: Series | null = null;
@@ -625,6 +629,18 @@ async function phaseFinalize(row: ImportRow, deps: ImportDeps, deadline: number)
   const { db } = deps;
   const now = deps.now ?? Date.now;
   const tried = new Set((row.state as State).splitsTried ?? []);
+
+  // Distancia de las sesiones que ninguna estadística cubría: muestras del reloj.
+  // Entrenamientos seguidos (< 2 min, misma fuente): una sola sesión con sus parciales.
+  if (!(row.state as State).consolidated) {
+    await resolvePendingDistances(db);
+    const merged = await mergeConsecutive(db);
+    for (const id of merged) {
+      const r = (await db.select({ id: s.runs.id, startAt: s.runs.startAt }).from(s.runs).where(eq(s.runs.id, id)))[0];
+      if (r) await writeSplits(db, r, null);
+    }
+    await saveState(db, row, { consolidated: true }, {}, { runsMerged: merged.length });
+  }
 
   // Parciales de las carreras sin GPX (cinta) a partir de la distancia del reloj.
   const noSplits = await db

@@ -107,7 +107,8 @@ export function buildFixture(opts: { filler?: number } = {}): { zip: Buffer; xml
     stat("ActiveEnergyBurned", REF_START, w1End, 'sum="1420"', "Cal"),
     `</WorkoutActivity>`,
     // Repeticiones a nivel de Workout con otros valores: se usa la PRIMERA aparición.
-    stat("DistanceWalkingRunning", REF_START, w1End, 'sum="99"', "km"),
+    // Apple repite el total a nivel de entrenamiento: no se debe sumar ni duplicar.
+    stat("DistanceWalkingRunning", REF_START, w1End, 'sum="21.34"', "km"),
     stat("HeartRate", REF_START, w1End, 'average="99"', "count/min"),
     `<WorkoutRoute sourceName="${WATCH}" sourceVersion="11.0" creationDate="${fmt(w1End)}" startDate="${fmt(REF_START)}" endDate="${fmt(w1End)}">`,
     `<MetadataEntry key="HKMetadataKeySyncVersion" value="2"/>`,
@@ -196,6 +197,53 @@ export function buildFixture(opts: { filler?: number } = {}): { zip: Buffer; xml
 
   // Un GPX huérfano que no corresponde a ninguna carrera.
   files.push({ name: "apple_health_export/workout-routes/route_2020-01-01_1.00pm.gpx", data: gpx(straightRoute(Date.parse("2020-01-01T12:00:00Z"), 600, 1000)) });
+
+  // ── W8: series con bloques. Solo el calentamiento trae distancia (1,92 km en 10 min);
+  //        la distancia buena es la del reloj (9,34 km en 50 min). ──
+  const w8Start = Date.parse("2026-04-03T15:29:27Z");
+  const w8Dur = 3016;
+  for (let s = 0; s < w8Dur; s += 30) {
+    const e = Math.min(s + 30, w8Dur);
+    recs.push(rec("DistanceWalkingRunning", WATCH, "m", w8Start + s * 1000, w8Start + e * 1000, ((9337 * (e - s)) / w8Dur).toFixed(4)));
+    recs.push(rec("HeartRate", WATCH, "count/min", w8Start + s * 1000, w8Start + s * 1000, 158));
+  }
+  const ev = (k: string) => `<WorkoutEvent type="HKWorkoutEventTypeSegment" date="${fmt(w8Start)}"><MetadataEntry key="WOIntervalStepKeyPath" value="${k}"/></WorkoutEvent>`;
+  workouts.push(
+    workout({
+      source: WATCH,
+      device: WATCH_DEVICE,
+      start: w8Start,
+      durationMin: w8Dur / 60,
+      inner: [
+        `<WorkoutActivity uuid="A1" startDate="${fmt(w8Start)}" endDate="${fmt(w8Start + 604_000)}" duration="10.07" durationUnit="min">`,
+        stat("DistanceWalkingRunning", w8Start, w8Start + 604_000, 'sum="1.9205"', "km"),
+        `</WorkoutActivity>`,
+        `<WorkoutActivity uuid="A2" startDate="${fmt(w8Start + 604_000)}" endDate="${fmt(w8Start + w8Dur * 1000)}" duration="40.2" durationUnit="min">`,
+        `</WorkoutActivity>`,
+        ...["0.0.0", "1.0.0", "1.0.1", "1.1.0", "1.1.1", "2.0.0"].map(ev),
+      ].join("\n"),
+    }),
+  );
+
+  // ── W9: el mismo entrenamiento partido en dos (separados por 42 s) → una sesión. ──
+  const w9aStart = Date.parse("2026-04-30T08:28:32Z");
+  const w9aDur = 608;
+  const w9bStart = w9aStart + (w9aDur + 42) * 1000;
+  const w9bDur = 2224;
+  for (const [st, dur, meters, hr] of [
+    [w9aStart, w9aDur, 990, 140],
+    [w9bStart, w9bDur, 7043, 160],
+  ] as const) {
+    for (let s = 0; s < dur; s += 30) {
+      const e = Math.min(s + 30, dur);
+      recs.push(rec("DistanceWalkingRunning", WATCH, "m", st + s * 1000, st + e * 1000, ((meters * (e - s)) / dur).toFixed(4)));
+      recs.push(rec("HeartRate", WATCH, "count/min", st + s * 1000, st + s * 1000, hr));
+    }
+  }
+  workouts.push(
+    workout({ source: WATCH, device: WATCH_DEVICE, start: w9aStart, durationMin: w9aDur / 60, inner: stat("DistanceWalkingRunning", w9aStart, w9aStart + w9aDur * 1000, 'sum="0.99"', "km") }),
+    workout({ source: WATCH, device: WATCH_DEVICE, start: w9bStart, durationMin: w9bDur / 60, inner: stat("DistanceWalkingRunning", w9bStart, w9bStart + 5000, 'sum="0.00537"', "km") }),
+  );
 
   // VO₂ máx.
   recs.push(rec("VO2Max", WATCH, "mL/min·kg", Date.parse("2025-07-01T10:00:00Z"), Date.parse("2025-07-01T10:00:00Z"), 60.1));

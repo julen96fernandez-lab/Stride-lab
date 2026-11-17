@@ -51,10 +51,11 @@ d("pipeline de importación", () => {
     expect(imp.error).toBeNull();
     expect(imp.status).toBe("done");
     expect(imp.stats).toMatchObject({
-      workoutsSeen: 7,
-      runsFound: 6,
-      runsTotal: 6,
-      runsValid: 4,
+      workoutsSeen: 10,
+      runsFound: 9,
+      runsMerged: 1,
+      runsTotal: 8,
+      runsValid: 6,
       runsInvalid: 1,
       runsDuplicate: 1,
       runsSpecial: 1,
@@ -114,6 +115,22 @@ d("pipeline de importación", () => {
     expect(vo2.map((v) => v.value)).toEqual([60.1, 50.8]);
 
     expect(await db.select().from(s.importSamples)).toHaveLength(0);
+
+    // Series con bloques: distancia del reloj (no el calentamiento), sin duplicar.
+    const intervalRun = runs.find((r) => r.startAt.toISOString() === "2026-04-03T15:29:27.000Z")!;
+    expect(intervalRun.distanceM! / 1000).toBeCloseTo(9.34, 1);
+    expect((intervalRun.raw as Record<string, unknown>).distanceFrom).toBe("samples");
+    expect(((intervalRun.raw as Record<string, unknown>).distanceStats as unknown[]).length).toBe(1);
+    // Entrenamiento partido en dos (42 s): una sola sesión con las dos partes.
+    const joined = runs.find((r) => r.startAt.toISOString() === "2026-04-30T08:28:32.000Z")!;
+    expect(runs.filter((r) => r.startAt.toISOString().startsWith("2026-04-30"))).toHaveLength(1);
+    expect(joined.distanceM! / 1000).toBeCloseTo(8.03, 1);
+    expect(joined.durationS).toBe(608 + 2224);
+    expect(joined.status).toBe("valid");
+    expect(joined.avgHr).toBeNull(); // sin FC media en las estadísticas: no se inventa
+    const jz = (await db.select().from(s.runs).where(eq(s.runs.id, joined.id)))[0];
+    expect(jz.hrZoneSeconds!.reduce((a, b) => a + b, 0)).toBeGreaterThan(2700); // zonas de las dos partes
+    expect(jz.trainingLoad).toBeGreaterThan(0);
 
     // Tipos de sesión automáticos: cinta para la indoor; las no válidas sin tipo.
     expect(indoor.sessionTypeAuto ?? (await db.select().from(s.runs).where(eq(s.runs.id, indoor.id)))[0].sessionTypeAuto).toBe("cinta");
@@ -197,7 +214,11 @@ d("pipeline de importación", () => {
     const b = await newImport();
     await runImportStep(b, deps(), Date.now() + 60_000);
     const [{ n }] = (await db.execute(sql`SELECT count(*)::int AS n FROM runs`)).rows as { n: number }[];
-    expect(n).toBe(6);
+    expect(n).toBe(8); // 9 entrenamientos, 2 de ellos unidos en una sesión
+    const joined = (await db.execute(sql`SELECT distance_m, duration_s FROM runs WHERE start_at = '2026-04-30T08:28:32Z'`)).rows as { distance_m: number; duration_s: number }[];
+    expect(joined).toHaveLength(1);
+    expect(joined[0].duration_s).toBe(608 + 2224); // no se suma dos veces al reimportar
+    expect(joined[0].distance_m / 1000).toBeCloseTo(8.03, 1);
     const [{ v }] = (await db.execute(sql`SELECT count(*)::int AS v FROM vo2max_readings`)).rows as { v: number }[];
     expect(v).toBe(2);
     const [{ r }] = (await db.execute(sql`SELECT count(*)::int AS r FROM run_routes`)).rows as { r: number }[];

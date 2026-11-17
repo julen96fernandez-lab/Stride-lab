@@ -92,7 +92,7 @@ describe("escáner en streaming", () => {
       sc.flush((m) => got.push(m.text));
       expect(got).toEqual(whole);
     }
-    expect(whole.filter((t) => t.startsWith("<Workout")).length).toBe(7);
+    expect(whole.filter((t) => t.startsWith("<Workout")).length).toBe(10);
     expect(whole.filter((t) => t.includes("VO2Max")).length).toBe(2);
   });
 
@@ -110,7 +110,7 @@ describe("escáner en streaming", () => {
     const sc2 = new XmlScanner(targets, resume, 1);
     sc2.push(buf.subarray(resume), (m) => second.push(m.text));
     sc2.flush((m) => second.push(m.text));
-    expect(first.length + second.length).toBe(7);
+    expect(first.length + second.length).toBe(10);
   });
 });
 
