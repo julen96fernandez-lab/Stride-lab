@@ -1,7 +1,7 @@
 /**
  * Tipos de sesión y clasificación automática por reglas simples.
  * Orden de las reglas (la primera que se cumple gana):
- *   1. Series        → el reloj marcó intervalos (WOIntervalStepKeyPath)
+ *   1. Series        → el reloj marcó intervalos de verdad (ver isIntervalWorkout)
  *   2. Cinta         → entrenamiento indoor
  *   3. Tirada larga  → distancia ≥ longRunKm (15 km por defecto)
  *   4. Trail         → desnivel positivo ≥ trailMPerKm metros por km
@@ -45,7 +45,23 @@ export interface TypeSettings {
   longRunKm: number;
   trailMPerKm: number;
 }
-export const DEFAULT_TYPE_SETTINGS: TypeSettings = { longRunKm: 15, trailMPerKm: 25 };
+export const DEFAULT_TYPE_SETTINGS: TypeSettings = { longRunKm: 13, trailMPerKm: 25 };
+
+/**
+ * Series de verdad: 5 o más rutas de paso distintas y alguna con repetición
+ * (2.º o 3.º componente distinto de 0, p. ej. "1.0.1" o "1.1.0"). Un rodaje
+ * normal del Apple Watch solo trae "0.0.0".
+ */
+export const MIN_INTERVAL_STEPS = 5;
+export function isIntervalWorkout(steps: readonly string[] | null | undefined): boolean {
+  if (!steps) return false;
+  const distinct = new Set(steps);
+  if (distinct.size < MIN_INTERVAL_STEPS) return false;
+  return [...distinct].some((p) => {
+    const [, b, c] = p.split(".").map(Number);
+    return (Number.isFinite(b) && b !== 0) || (Number.isFinite(c) && c !== 0);
+  });
+}
 
 /** Umbrales de ritmo/pulso frente a la media (fijos y explicados en el motivo). */
 const TEMPO_PACE = 0.04; // ≥ 4 % más rápido que tu media…
@@ -66,7 +82,8 @@ export interface RunForType {
   isIndoor: boolean | null;
   isSpecial: boolean;
   elevationGainM: number | null;
-  hasIntervals: boolean;
+  /** Rutas de paso distintas (WOIntervalStepKeyPath); null si la importación no las guardó. */
+  intervalSteps: string[] | null;
 }
 
 export interface TypeResult {
@@ -86,7 +103,7 @@ const fmtKm = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 
 
 export function classifySessionTypes(runs: RunForType[], settings: TypeSettings = DEFAULT_TYPE_SETTINGS): Map<string, TypeResult> {
   const comparable = runs
-    .filter((r) => !r.isIndoor && !r.hasIntervals && !r.isSpecial && r.avgPaceSPerKm !== null && r.distanceM !== null && r.distanceM >= 1000)
+    .filter((r) => !r.isIndoor && !isIntervalWorkout(r.intervalSteps) && !r.isSpecial && r.avgPaceSPerKm !== null && r.distanceM !== null && r.distanceM >= 1000)
     .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 
   const baselineFor = (r: RunForType) => {
@@ -109,8 +126,8 @@ export function classifySessionTypes(runs: RunForType[], settings: TypeSettings 
   const out = new Map<string, TypeResult>();
   for (const r of runs) {
     const km = r.distanceM === null ? null : r.distanceM / 1000;
-    if (r.hasIntervals) {
-      out.set(r.id, { type: "series", reason: "El reloj registró intervalos" });
+    if (isIntervalWorkout(r.intervalSteps)) {
+      out.set(r.id, { type: "series", reason: `Intervalos del reloj: ${new Set(r.intervalSteps).size} pasos con repeticiones` });
       continue;
     }
     if (r.isIndoor) {

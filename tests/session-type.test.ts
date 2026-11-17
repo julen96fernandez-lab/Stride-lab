@@ -11,7 +11,7 @@ const base = (o: Partial<RunForType>): RunForType => ({
   isIndoor: false,
   isSpecial: false,
   elevationGainM: 40,
-  hasIntervals: false,
+  intervalSteps: null,
   ...o,
 });
 
@@ -24,7 +24,7 @@ describe("clasificación de tipos de sesión", () => {
   it("aplica las reglas en orden", () => {
     const runs = [
       ...history,
-      base({ id: "int", hasIntervals: true, isIndoor: true, distanceM: 20000 }), // series gana a cinta y tirada
+      base({ id: "int", intervalSteps: ["0.0.0", "1.0.0", "1.0.1", "1.1.0", "1.1.1", "2.0.0"], isIndoor: true, distanceM: 20000 }), // series gana a cinta y tirada
       base({ id: "ind", isIndoor: true }),
       base({ id: "long", distanceM: 16_000 }),
       base({ id: "trail", distanceM: 10_000, elevationGainM: 300 }),
@@ -57,5 +57,17 @@ describe("clasificación de tipos de sesión", () => {
     expect(r.get("solo")).toEqual({ type: "rodaje", reason: "Sin media suficiente para comparar" });
     const all = classifySessionTypes([...history, base({ avgPaceSPerKm: 200, avgHr: 190 })]);
     expect([...all.values()].some((v) => v.type === "competicion")).toBe(false);
+  });
+});
+
+describe("detección de series", () => {
+  it("rodaje con solo 0.0.0 no es serie; series con 5+ pasos y repetición sí", async () => {
+    const { isIntervalWorkout } = await import("@/lib/analysis/session-type");
+    expect(isIntervalWorkout(["0.0.0"])).toBe(false);
+    expect(isIntervalWorkout(null)).toBe(false);
+    expect(isIntervalWorkout(["0.0.0", "1.0.0", "2.0.0", "3.0.0", "4.0.0"])).toBe(false); // sin repetición
+    expect(isIntervalWorkout(["0.0.0", "1.0.0", "1.0.1", "2.0.0"])).toBe(false); // < 5 distintas
+    expect(isIntervalWorkout(["0.0.0", "1.0.0", "1.0.1", "1.1.0", "2.0.0"])).toBe(true);
+    expect(isIntervalWorkout(["0.0.0", "1.0.0", "1.0.1", "1.0.1", "2.0.0"])).toBe(false); // repetidas no cuentan
   });
 });

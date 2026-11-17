@@ -278,7 +278,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
   const xmlPass = imp && (imp.phase === "workouts" || imp.phase === "samples") && imp.bytesTotal ? imp : null;
   const done = imp?.status === "done";
   const resumableImport = imp && !done && mode === "idle";
-  const unfinishedZips = (zips ?? []).filter((z) => z.importStatus !== "done");
+  const storedZips = zips ?? [];
   // Con una subida a medias pendiente, la pantalla se centra en ella.
   const showDetails = !(pending && mode === "idle");
 
@@ -445,12 +445,14 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
       {showDetails && done && mode === "idle" && <Check run={check} />}
 
       {/* ── Zips ya en Blob ── */}
-      {mode === "idle" && unfinishedZips.length > 0 && (
+      {mode === "idle" && storedZips.length > 0 && (
         <section className="card p-5">
           <div className="eyebrow">Zips ya subidos</div>
-          <p className="mt-2 text-[13px] text-fg-2">Crea la importación sin volver a subir el archivo.</p>
+          <p className="mt-2 text-[13px] text-fg-2">
+            Crea la importación sin volver a subir el archivo. «Reprocesar» vuelve a leer un zip ya importado (no duplica nada).
+          </p>
           <ul className="mt-3 divide-y divide-white/6">
-            {unfinishedZips.map((z) => (
+            {storedZips.map((z) => (
               <li key={z.pathname} className="flex items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <div className="num text-[17px]">{bytes(z.size)}</div>
@@ -461,10 +463,12 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
                 </div>
                 <button
                   type="button"
-                  onClick={() => (z.importId ? void process(z.importId) : void register(z.pathname, null, z.size))}
+                  onClick={() =>
+                    z.importId && z.importStatus !== "done" ? void process(z.importId) : void register(z.pathname, null, z.size)
+                  }
                   className="min-h-[44px] flex-none rounded-xl bg-lime px-4 text-[14px] font-semibold text-lime-ink active:scale-[0.98]"
                 >
-                  {z.importId ? "Continuar" : "Usar este zip"}
+                  {z.importStatus === "done" ? "Reprocesar" : z.importId ? "Continuar" : "Usar este zip"}
                 </button>
               </li>
             ))}

@@ -37,7 +37,7 @@ export async function reclassifyAll(db: Db): Promise<number> {
       isIndoor: s.runs.isIndoor,
       isSpecial: s.runs.isSpecial,
       elevationGainM: s.runs.elevationGainM,
-      hasIntervals: sql<boolean>`coalesce(${s.runs.raw}->'metadata' ? 'WOIntervalStepKeyPath', false)`,
+      intervalSteps: sql<string[] | null>`${s.runs.raw}->'intervalSteps'`,
     })
     .from(s.runs)
     .where(eq(s.runs.status, "valid"));

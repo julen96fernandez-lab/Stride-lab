@@ -52,6 +52,14 @@ describe("Workout de correr", () => {
     expect(r.routeFile).toBe("workout-routes/route_2026-10-17_10.41am.gpx");
   });
 
+  it("guarda todas las rutas de paso de intervalos distintas", () => {
+    const ev = (k: string) =>
+      `<WorkoutEvent type="HKWorkoutEventTypeSegment" date="2026-10-17 09:00:00 +0200"><MetadataEntry key="WOIntervalStepKeyPath" value="${k}"/></WorkoutEvent>`;
+    const xml = w1.replace("</Workout>", ["0.0.0", "1.0.0", "1.0.1", "1.0.1", "1.1.0"].map(ev).join("\n") + "\n</Workout>");
+    expect(parseRunningWorkout(xml)!.raw.intervalSteps).toEqual(["0.0.0", "1.0.0", "1.0.1", "1.1.0"]);
+    expect(parseRunningWorkout(w1)!.raw.intervalSteps).toEqual([]);
+  });
+
   it("descarta lo que no es correr", () => {
     expect(parseRunningWorkout(w1.replace("HKWorkoutActivityTypeRunning", "HKWorkoutActivityTypeWalking"))).toBeNull();
   });

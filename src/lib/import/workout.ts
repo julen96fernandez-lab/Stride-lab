@@ -130,10 +130,21 @@ export function parseRunningWorkout(xml: string): ParsedRun | null {
   const sourceName = a.sourceName ?? null;
   const device = a.device ?? null;
 
+  // Todas las rutas de paso de intervalos (no solo la primera): sirven para distinguir
+  // series reales de rodajes, donde el reloj pone solo "0.0.0".
+  const intervalSteps = [
+    ...new Set(
+      childTags(xml, "MetadataEntry")
+        .filter((m) => m.key === "WOIntervalStepKeyPath" && m.value)
+        .map((m) => m.value),
+    ),
+  ].sort();
+
   const raw: Record<string, unknown> = {
     attributes: a,
     statistics: Object.fromEntries(stats),
     metadata: Object.fromEntries(meta),
+    intervalSteps,
     distanceFrom,
   };
 
