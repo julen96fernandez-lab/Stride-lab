@@ -66,3 +66,19 @@ export async function saveGoalsAction(_prev: GoalsState, formData: FormData): Pr
   refresh();
   return { ok: "Objetivos guardados." };
 }
+
+export type ShiftState = { ok?: string; error?: string };
+
+/** Lunes de inicio de un bloque de tardes: a partir de él se calculan todas las semanas del ciclo. */
+export async function saveShiftAnchorAction(_prev: ShiftState, formData: FormData): Promise<ShiftState> {
+  const { saveShiftAnchor } = await import("@/lib/plan/shifts-db");
+  const { isMonday, shiftWeek, SHIFT_META } = await import("@/lib/plan/shifts");
+  const v = String(formData.get("shiftAnchor") ?? "").trim();
+  if (!isMonday(v)) return { error: "Elige un lunes: los bloques van de lunes a domingo." };
+  await saveShiftAnchor(db(), v);
+  dataChanged();
+  refresh();
+  const { cacheDay } = await import("@/lib/cache/tags");
+  const now = shiftWeek(v, cacheDay());
+  return { ok: `Guardado. Esta semana: ${SHIFT_META[now.kind].label.toLowerCase()}.` };
+}

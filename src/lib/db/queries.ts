@@ -13,6 +13,7 @@ import { analyzeIntervals, type IntervalAnalysis, type StepTiming } from "@/lib/
 import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { ensureTrack } from "@/lib/analysis/track-db";
 import { memoOnce } from "@/lib/cache/memo";
+import { getShiftAnchor } from "@/lib/plan/shifts-db";
 
 const TZ = "Europe/Madrid";
 const valid = eq(s.runs.status, "valid");
@@ -32,6 +33,7 @@ export function makeCtx() {
     injuries: () => once("injuries", () => listInjuries(db())),
     zones: () => once("zones", () => getZones(db())),
     typeSettings: () => once("typeSettings", () => getTypeSettings(db())),
+    shiftAnchor: () => once("shiftAnchor", () => getShiftAnchor(db())),
   };
 }
 export type Ctx = ReturnType<typeof makeCtx>;
@@ -745,4 +747,15 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
   const today = new Date(localDay(now) * 86_400_000).toISOString().slice(0, 10);
   const open = injuries.some((i) => i.startDate <= today && (i.endDate === null || i.endDate >= today));
   return buildFitnessView(fitnessRuns(runs), now, open);
+}
+
+// ─── Plan ────────────────────────────────────────────────────────────────────
+
+import { shiftWeeks, type ShiftWeek } from "@/lib/plan/shifts";
+
+/** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
+export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
+  const anchor = await ctx.shiftAnchor();
+  const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
+  return { anchor, today, weeks };
 }

@@ -59,8 +59,13 @@ export async function profileScreen(day: string) {
   cacheLife(DATA_LIFE);
   void day;
   const ctx = q.makeCtx();
-  const [settings, goals, injuries] = await Promise.all([q.getTrainingSettingsView(ctx), q.getGoalsSettings(ctx), q.getInjuriesView(ctx)]);
-  return { settings, goals, injuries };
+  const [settings, goals, injuries, shiftAnchor] = await Promise.all([
+    q.getTrainingSettingsView(ctx),
+    q.getGoalsSettings(ctx),
+    q.getInjuriesView(ctx),
+    ctx.shiftAnchor(),
+  ]);
+  return { settings, goals, injuries, shiftAnchor };
 }
 
 export async function recordsScreen(day: string) {
@@ -69,4 +74,11 @@ export async function recordsScreen(day: string) {
   cacheLife(DATA_LIFE);
   void day;
   return q.getRecords();
+}
+
+export async function planScreen(day: string) {
+  "use cache: remote";
+  cacheTag(DATA_TAG);
+  cacheLife(DATA_LIFE);
+  return q.getPlan(day);
 }

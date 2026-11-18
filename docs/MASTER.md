@@ -379,6 +379,28 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
 - `ensureClassified` comparte una sola comprobación entre consultas simultáneas (antes dos
   recálculos a la vez chocaban en `run_efforts`) y no repite la comprobación en 5 min.
 
+## Plan
+
+Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 semanas.
+
+### Paso 1 · Ciclo de turnos (hecho)
+- `src/lib/plan/shifts.ts` (con pruebas): bloques de lunes a domingo en el orden tardes → noches
+  → libre → mañanas → libre, anclados en el lunes de inicio de un bloque de tardes; se calculan
+  hacia delante y hacia atrás con días de calendario (sin horas: no afectan husos, cambio de hora
+  ni de año). `afterNights`: el lunes que sigue a la semana de noches (no calidad).
+- Ajuste `shift_anchor` en `app_settings` (migración 0009: lunes 23‑nov‑2026). Se cambia en
+  Perfil («Ciclo de turnos»; solo admite lunes y enseña qué semana sería hoy).
+- Plan: esta semana (tipo, consejo, días que quedan, posición en el ciclo) y las 9 siguientes con
+  fechas y tipo. Con caché (`planScreen`) e invalidación al guardar.
+- Disponibilidad: tardes → trabaja L‑V, corre el fin de semana (tirada larga). Mañanas → trabaja
+  toda la semana, corre tras el turno (suave o calidad corta entre semana; tirada larga solo en
+  fin de semana). Noches → suave o nada. Libre → sesión exigente; la app elige el día, nunca
+  calidad el lunes tras noches.
+
+### Pendiente
+2. Predicción de marcas (Riegel con rango y confianza; maratón oculto sin tirada ≥ 30 km).
+3. Una sesión por semana con día y motivo. 4. Previsto frente a realizado y reorganizar.
+
 ## Rendimiento
 
 - **Región**: funciones en **fra1** (`vercel.json`), junto a Neon (eu-central-1). Antes en iad1:
@@ -709,6 +731,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Plan, paso 1: ciclo de turnos de 5 semanas (Perfil y Plan), migración 0009 con
+  el inicio de tardes del 23‑nov‑2026.
 - 2026‑11‑18 — Cambio de pestaña sin fotogramas negros ni blancos ni tirones: fuera View
   Transitions, fundido de 120 ms solo de opacidad, esqueleto inmediato (loading.tsx), barra fija
   y casi opaca, más espacio inferior.

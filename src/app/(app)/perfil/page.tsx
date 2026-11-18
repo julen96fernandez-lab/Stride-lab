@@ -6,6 +6,7 @@ import { ProfileSkeleton } from "@/components/ui/Skeletons";
 import { cacheDay } from "@/lib/cache/tags";
 import { InjuriesForm } from "./InjuriesForm";
 import { GoalsForm } from "./GoalsForm";
+import { ShiftForm } from "./ShiftForm";
 import { TrainingSettingsForm } from "./TrainingSettingsForm";
 import { ThemePicker } from "@/components/ui/ThemePicker";
 import { logout } from "@/app/login/actions";
@@ -39,6 +40,9 @@ export default function ProfilePage() {
       <ThemePicker />
       <Suspense fallback={<ProfileSkeleton rows={5} />}>
         <GoalsCard />
+      </Suspense>
+      <Suspense fallback={<ProfileSkeleton rows={1} />}>
+        <ShiftCard />
       </Suspense>
       <Suspense fallback={<ProfileSkeleton rows={3} />}>
         <InjuriesCard />
@@ -78,4 +82,11 @@ async function InjuriesCard() {
   await connection();
   const { injuries, today } = (await profileScreen(cacheDay())).injuries;
   return <InjuriesForm injuries={injuries} today={today} />;
+}
+
+async function ShiftCard() {
+  await connection();
+  const day = cacheDay();
+  const { shiftAnchor } = await profileScreen(day);
+  return <ShiftForm anchor={shiftAnchor} today={day} />;
 }

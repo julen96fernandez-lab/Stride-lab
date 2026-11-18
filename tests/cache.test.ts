@@ -80,7 +80,7 @@ describe("invalidación: todo lo que escribe datos invalida la caché", () => {
       }
     };
     walk("src/app/(app)");
-    const direct = files.filter((f) => /\b(getHome|getHomeOverview|listRuns|getRun|getAnalysis|getPeriodsView|getInsights|getEfficiency|getFitness|getRecords|getTrainingSettingsView|getGoalsSettings|getInjuriesView)\(/.test(read(f)));
+    const direct = files.filter((f) => /\b(getHome|getHomeOverview|listRuns|getRun|getAnalysis|getPeriodsView|getInsights|getEfficiency|getFitness|getRecords|getTrainingSettingsView|getGoalsSettings|getInjuriesView|getPlan)\(/.test(read(f)));
     expect(direct).toEqual([]);
   });
 });
@@ -128,7 +128,7 @@ describe("cambio de pestaña sin fotogramas vacíos ni tirones", () => {
     expect(pct).toBeGreaterThanOrEqual(90);
   });
   it("cada pestaña tiene esqueleto inmediato (loading.tsx) sin fundido", () => {
-    for (const d of ["", "/actividad", "/analisis", "/perfil", "/actividad/[id]"]) {
+    for (const d of ["", "/actividad", "/analisis", "/perfil", "/plan", "/actividad/[id]"]) {
       expect(read(`src/app/(app)${d}/loading.tsx`)).toContain("no-fade");
     }
   });
