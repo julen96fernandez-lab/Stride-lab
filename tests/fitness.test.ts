@@ -155,9 +155,21 @@ describe("weeklyLoads (carga semanal y subida > 30 %)", () => {
     expect(w[1].alert).toBe(false); // justo un 30 %: sin aviso
     expect(w[2].alert).toBe(false);
   });
-  it("avisa con más del 30 %", () => {
-    const w = weeklyLoads(byWeek([[100, 0, 0, 0, 0, 0, 0], [131, 0, 0, 0, 0, 0, 0]]), mon + 13);
-    expect(w[1].alert).toBe(true);
+  it("avisa con más del 30 % solo si además supera la media de las 8 semanas previas", () => {
+    // 8 semanas de 100, una floja de 40 y luego 120: +200 % y por encima de la media (≈ 92,5) → aviso
+    const flat = (l: number) => [l, 0, 0, 0, 0, 0, 0];
+    const w = weeklyLoads(byWeek([...Array(8).fill(flat(100)), flat(40), flat(120)]), mon + 69);
+    expect(w[9].avg8).toBeCloseTo((7 * 100 + 40) / 8);
+    expect(w[9].alert).toBe(true);
+    // tras la semana floja, volver a 80: +100 % pero por debajo de la media → sin aviso
+    const w2 = weeklyLoads(byWeek([...Array(8).fill(flat(100)), flat(40), flat(80)]), mon + 69);
+    expect(w2[9].rise).toBeCloseTo(1);
+    expect(w2[9].alert).toBe(false);
+  });
+  it("sin 8 semanas previas no hay media y no se avisa", () => {
+    const w = weeklyLoads(byWeek([[100, 0, 0, 0, 0, 0, 0], [200, 0, 0, 0, 0, 0, 0]]), mon + 13);
+    expect(w[1].rise).toBeCloseTo(1);
+    expect(w[1].alert).toBe(false);
   });
   it("semana en curso: compara con los mismos días de la anterior", () => {
     // semana pasada: 50 el lunes y 200 el sábado; esta: 60 el lunes, hoy miércoles

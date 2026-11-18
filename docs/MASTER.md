@@ -370,9 +370,13 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
   28 días de historial (en calentamiento). Se muestran cuántas carreras están medidas, estimadas
   y sin dato.
 - **Carga semanal**: lunes a domingo frente a la media de las 8 anteriores; aviso si sube > 30 %
-  sobre la anterior (la semana en curso, frente a los mismos días de la anterior).
-- **Hoy**: tras las reglas de siempre, el ratio solo endurece: > 1,5 descanso, 1,3–1,5 como mucho
-  suave, calidad solo con < 1,3. Sin 28 días de historial no se usa y se dice.
+  sobre la anterior (la semana en curso, frente a los mismos días de la anterior) **y** supera la
+  media de las 8 semanas previas (con ~2 carreras/semana, el 30 % solo saltaba 15 veces al año).
+- **Hoy**: tras las reglas de siempre, el ratio solo endurece: ≥ 1,3 como mucho rodaje suave
+  (también > 1,5, porque con ~2 carreras/semana una sola semana buena lo dispara); descanso por
+  carga solo con ratio > 1,5 y dos días seguidos corriendo (la lesión abierta ya manda descanso).
+  Calidad solo con < 1,3. Sin 28 días de historial no se usa y se dice. Análisis muestra el
+  estado tal cual.
 - `ensureClassified` comparte una sola comprobación entre consultas simultáneas (antes dos
   recálculos a la vez chocaban en `run_efforts`) y no repite la comprobación en 5 min.
 

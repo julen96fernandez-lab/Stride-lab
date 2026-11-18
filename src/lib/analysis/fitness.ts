@@ -8,6 +8,7 @@
  * - Crónica (forma física): media ponderada exponencial de 28 días,
  *   c = c + α·(carga − c), α = 1 − e^(−1/28). Empieza en 0 el primer día con historial.
  * - Forma = crónica − aguda. Ratio = aguda / crónica (sin ratio si la crónica es casi 0).
+ * - Aviso semanal: sube > 30 % sobre la anterior Y supera la media de las 8 semanas previas.
  * - Estados del ratio: < 0,8 Descansado · 0,8–1,3 En forma · 1,3–1,5 Cargado · > 1,5 Sobrecargado.
  * - Los periodos de lesión no se excluyen: su carga es real.
  */
@@ -149,7 +150,7 @@ export interface WeekLoad {
   avg8: number | null;
   /** carga con la que se compara: la semana anterior entera o, en la semana en curso, sus mismos días */
   prevLoad: number | null;
-  /** subida respecto a prevLoad (0,35 = +35 %) */
+  /** subida respecto a prevLoad (0,35 = +35 %); el aviso exige además superar avg8 */
   rise: number | null;
   alert: boolean;
   /** semana en curso (sin terminar) */
@@ -183,15 +184,18 @@ export function weeklyLoads(days: readonly DayLoad[], today: number): WeekLoad[]
     const prevLoad = m - 7 < firstMon ? null : partial ? sum(m - 7, m - 7 + (today - m)).load : prevFull;
     const rise = prevLoad !== null && prevLoad > 0 ? Math.round((w.load / prevLoad - 1) * 1e6) / 1e6 : null;
     const prev8 = out.slice(-AVG_WEEKS);
+    const avg8 = prev8.length === AVG_WEEKS ? prev8.reduce((a, x) => a + x.load, 0) / AVG_WEEKS : null;
     out.push({
       start: ymd(m),
       startDay: m,
       load: w.load,
       approx: w.approx,
-      avg8: prev8.length === AVG_WEEKS ? prev8.reduce((a, x) => a + x.load, 0) / AVG_WEEKS : null,
+      avg8,
       prevLoad,
       rise,
-      alert: rise !== null && rise > WEEKLY_RISE,
+      // Con 2 carreras por semana, tras una semana floja casi cualquiera sube un 30 %: solo se
+      // avisa si además supera la media de las 8 semanas previas.
+      alert: rise !== null && rise > WEEKLY_RISE && avg8 !== null && w.load > avg8,
       partial,
     });
   }

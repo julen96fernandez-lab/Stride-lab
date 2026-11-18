@@ -85,10 +85,19 @@ describe("recomendación de hoy con el ratio de carga", () => {
   const libre = { runs: [run(3, "rodaje"), run(4, "tempo"), ...base], openInjury: false, now: NOW };
   const fit = (ratio: number | null, enough = true, form = 0) => ({ ratio, form, chronic: 20, enough });
 
-  it("ratio > 1,5 → descanso con el motivo", () => {
+  it("ratio > 1,5 por sí solo → como mucho rodaje suave, con el motivo", () => {
     const r = recommendToday({ ...calidad, fitness: fit(1.62) });
+    expect(r.kind).toBe("suave");
+    expect(r.reason).toMatch(/Carga muy alta esta semana: ratio 1,62/);
+    expect(recommendToday({ ...libre, fitness: fit(2.1) }).kind).toBe("suave");
+  });
+  it("ratio > 1,5 y dos días seguidos corriendo → descanso", () => {
+    const seguidos = { runs: [run(1, "rodaje", 60), run(2, "rodaje", 60), ...base.slice(1)], openInjury: false, now: NOW };
+    const r = recommendToday({ ...seguidos, fitness: fit(1.7) });
     expect(r.kind).toBe("descanso");
-    expect(r.reason).toMatch(/riesgo de sobrecarga: ratio 1,62/i);
+    expect(r.reason).toMatch(/dos días seguidos/);
+    // con ratio normal, los mismos dos días no fuerzan descanso
+    expect(recommendToday({ ...seguidos, fitness: fit(1.0) }).kind).not.toBe("descanso");
   });
   it("ratio 1,3–1,5 → como mucho suave", () => {
     const r = recommendToday({ ...calidad, fitness: fit(1.4) });

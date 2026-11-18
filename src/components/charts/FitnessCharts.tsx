@@ -290,7 +290,7 @@ function WeeklyLoad({ view, days }: { view: FitnessView; days: number }) {
       )}
       <p className="mt-2 text-[12px] text-fg-2">
         Barras: carga de lunes a domingo. Discontinua: media de las 8 semanas anteriores. En rojo, las semanas que suben más de un 30 % sobre la anterior
-        (la semana en curso se compara con los mismos días de la anterior).
+        y además superan la media de las 8 previas (la semana en curso se compara con los mismos días de la anterior).
       </p>
       {alerts.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1 text-[12px]">
