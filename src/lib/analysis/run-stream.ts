@@ -296,7 +296,8 @@ export function buildStream(input: {
   }
 
   const coarsePace = isCoarse(distance);
-  const pace = !coarsePace && distance ? smoothSpeed(distance, t).map(paceFromSpeed) : t.map(() => null);
+  // Ritmo: media de ~30 s por tramos válidos y, encima, mediana + media cortas para quitar picos.
+  const pace = !coarsePace && distance ? cleanPace(smoothSpeed(distance, t).map(paceFromSpeed)) : t.map(() => null);
 
   const series = (s: Series | null | undefined) => {
     if (!s || s.t.length < 2) return null;
@@ -316,7 +317,10 @@ export function buildStream(input: {
         t: track.t.filter((_, i) => track.ele[i] !== null),
         v: track.ele.filter((e): e is number => e !== null),
       };
-      ele = series(eleSeries);
+      // La altitud cambia despacio: se interpola sobre huecos de la pista (hasta 10 min) para no
+      // dejar cortes, y se suaviza un poco (el GPS tiene ruido de ±1–2 m).
+      const raw = t.map((x) => sampleAt(eleSeries, x, ELE_MAX_GAP_S));
+      ele = raw.some((v) => v !== null) ? rollingMean(raw, 5) : null;
     }
   }
 
@@ -378,4 +382,107 @@ export function reduceTrack(
 export function niceXStep(span: number, kind: "dist" | "time", max = 5): number {
   const steps = kind === "dist" ? [0.5, 1, 2, 5, 10, 20] : [300, 600, 900, 1200, 1800, 3600, 7200];
   return steps.find((st) => span / st <= max) ?? steps[steps.length - 1];
+}
+
+// ─── Limpieza de series para dibujar ─────────────────────────────────────────
+
+/** Ritmo más rápido que esto (2:30 /km) es imposible: no se dibuja. */
+export const MIN_DRAW_PACE = 150;
+/** Hueco máximo de la pista que se rellena en la altitud. */
+export const ELE_MAX_GAP_S = 600;
+/** Pulso: se une con una línea solo entre muestras a menos de 2 min. */
+export const HR_JOIN_GAP_S = 120;
+
+/** Mediana móvil centrada de `w` valores (los null no cuentan; un null sigue siendo null). */
+export function rollingMedian(vals: readonly (number | null)[], w: number): (number | null)[] {
+  const h = Math.floor(w / 2);
+  return vals.map((v, i) => {
+    if (v === null) return null;
+    const win: number[] = [];
+    for (let k = i - h; k <= i + h; k++) {
+      const x = vals[k];
+      if (x !== null && x !== undefined) win.push(x);
+    }
+    win.sort((a, b) => a - b);
+    return win[Math.floor(win.length / 2)];
+  });
+}
+
+/** Media móvil centrada de `w` valores (los null no cuentan; un null sigue siendo null). */
+export function rollingMean(vals: readonly (number | null)[], w: number): (number | null)[] {
+  const h = Math.floor(w / 2);
+  return vals.map((v, i) => {
+    if (v === null) return null;
+    let n = 0,
+      sum = 0;
+    for (let k = i - h; k <= i + h; k++) {
+      const x = vals[k];
+      if (x !== null && x !== undefined) {
+        sum += x;
+        n++;
+      }
+    }
+    return sum / n;
+  });
+}
+
+/** Ritmo listo para dibujar: mediana (quita picos sueltos), media corta y fuera lo imposible. */
+export function cleanPace(pace: readonly (number | null)[]): (number | null)[] {
+  return rollingMean(rollingMedian(pace, 7), 5).map((p) => (p === null || p < MIN_DRAW_PACE ? null : p));
+}
+
+/**
+ * Pulso para dibujar: las muestras tal cual, con un corte (null) donde hay más de `maxGap` s
+ * entre dos muestras, para no unir puntos lejanos con rayas ni bajar a cero.
+ */
+export function hrSegments(hr: Series, maxGap = HR_JOIN_GAP_S): { t: number[]; v: (number | null)[] } {
+  const t: number[] = [];
+  const v: (number | null)[] = [];
+  for (let i = 0; i < hr.t.length; i++) {
+    if (i > 0 && hr.t[i] - hr.t[i - 1] > maxGap) {
+      t.push((hr.t[i] + hr.t[i - 1]) / 2);
+      v.push(null);
+    }
+    t.push(hr.t[i]);
+    v.push(hr.v[i]);
+  }
+  return { t, v };
+}
+
+/** Fracción de la carrera cubierta por muestras de pulso unidas (huecos ≤ `maxGap`). */
+export function hrCoverage(hr: Series | null | undefined, durationS: number, maxGap = HR_JOIN_GAP_S): number {
+  if (!hr || hr.t.length < 2 || !(durationS > 0)) return 0;
+  let covered = 0;
+  for (let i = 1; i < hr.t.length; i++) {
+    const d = hr.t[i] - hr.t[i - 1];
+    if (d <= maxGap) covered += d;
+  }
+  return Math.min(1, covered / durationS);
+}
+
+/** ¿Tan pocas muestras de pulso que es mejor dibujarlo por parciales? */
+export function isHrSparse(hr: Series | null | undefined, durationS: number): boolean {
+  return !hr || hr.t.length < 30 || hrCoverage(hr, durationS) < 0.5;
+}
+
+/** Muestra más cercana a `x` si está a ≤ `maxDt` s (con su distancia en s), o null. */
+export function nearestWithin(s: Series | null | undefined, x: number, maxDt = 60): { v: number; dt: number } | null {
+  if (!s || !s.t.length) return null;
+  const i = nearestIndex(s.t, x);
+  const dt = Math.abs(s.t[i] - x);
+  return dt <= maxDt ? { v: s.v[i], dt } : null;
+}
+
+/** Rango del eje de ritmo: percentiles 5 y 95 de la carrera, con marcas cada 30 s o 1 min. */
+export function paceAxisRange(paces: readonly (number | null)[], extra: readonly number[] = []): { min: number; max: number; interval: number } | null {
+  const v = paces.filter((p): p is number => p !== null).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const q = (f: number) => v[Math.min(v.length - 1, Math.max(0, Math.round(f * (v.length - 1))))];
+  const lo = Math.min(q(0.05), ...extra);
+  const hi = Math.max(q(0.95), ...extra);
+  const interval = hi - lo > 150 ? 60 : 30;
+  const min = Math.floor((lo - 5) / interval) * interval;
+  let max = Math.ceil((hi + 5) / interval) * interval;
+  if (max - min < interval) max = min + interval;
+  return { min, max, interval };
 }

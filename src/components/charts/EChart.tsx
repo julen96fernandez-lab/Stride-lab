@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts/core";
 import { BarChart, LineChart, ScatterChart, EffectScatterChart } from "echarts/charts";
-import { DataZoomComponent, GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
+import { DataZoomComponent, GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent, VisualMapPiecewiseComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import type { EChartsCoreOption } from "echarts/core";
 
@@ -17,12 +17,16 @@ echarts.use([
   DataZoomComponent,
   MarkLineComponent,
   MarkAreaComponent,
+  VisualMapPiecewiseComponent,
   SVGRenderer,
 ]);
 
 /** Sustituye recursivamente los valores "var(--x)" por su valor actual en el tema. */
 function resolveVars<T>(v: T, css: CSSStyleDeclaration): T {
   if (typeof v === "string") {
+    // alpha(var(--x), 0.3): el color del tema con transparencia (para degradados).
+    const a = /^alpha\(var\((--[\w-]+)\),\s*([\d.]+)\)$/.exec(v);
+    if (a) return withAlpha(css.getPropertyValue(a[1]).trim(), Number(a[2])) as T;
     return (v.startsWith("var(--") ? css.getPropertyValue(v.slice(4, -1)).trim() || v : v) as T;
   }
   if (Array.isArray(v)) return v.map((x) => resolveVars(x, css)) as T;
@@ -32,6 +36,21 @@ function resolveVars<T>(v: T, css: CSSStyleDeclaration): T {
     return out as T;
   }
   return v;
+}
+
+/** "#rrggbb" o "rgb(...)" con transparencia → "rgba(...)". */
+export function withAlpha(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color);
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+  }
+  const rgb = /^rgba?\(([^)]+)\)$/.exec(color);
+  if (rgb) {
+    const [r, g, b] = rgb[1].split(",").map((x) => x.trim());
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  return color;
 }
 
 /** Avisa cuando cambia el tema (selector de Perfil o el del sistema). */
@@ -55,8 +74,11 @@ export function EChart({
   label,
   onSelect,
   onItem,
+  merge = false,
 }: {
   option: EChartsCoreOption;
+  /** Actualizar sin reiniciar el gráfico (sin repetir la animación de entrada). */
+  merge?: boolean;
   height: number;
   /** Descripción accesible del gráfico. */
   label: string;
@@ -70,6 +92,7 @@ export function EChart({
   const optionRef = useRef(option);
   const selectRef = useRef(onSelect);
   const itemRef = useRef(onItem);
+  const mergeRef = useRef(merge);
   useEffect(() => {
     selectRef.current = onSelect;
     itemRef.current = onItem;
@@ -78,7 +101,11 @@ export function EChart({
   const apply = () => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const css = getComputedStyle(document.documentElement);
-    chart.current?.setOption({ animation: !reduce, ...resolveVars(optionRef.current, css) }, true);
+    const opt = { ...resolveVars(optionRef.current, css) } as Record<string, unknown>;
+    if (reduce) opt.animation = false;
+    else if (opt.animation === undefined) opt.animation = true;
+    if (mergeRef.current && chart.current?.getOption()) chart.current.setOption(opt, { replaceMerge: ["series", "visualMap"] });
+    else chart.current?.setOption(opt, true);
   };
 
   useEffect(() => {

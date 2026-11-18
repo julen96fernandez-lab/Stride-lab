@@ -5,6 +5,13 @@ import {
   gradeAlong,
   gridStep,
   isCoarse,
+  cleanPace,
+  hrCoverage,
+  hrSegments,
+  isHrSparse,
+  nearestWithin,
+  paceAxisRange,
+  rollingMedian,
   niceXStep,
   minettiCost,
   nearestIndex,
@@ -231,7 +238,7 @@ describe("línea de tiempo común", () => {
     const s = buildStream({ durationS: 600, distance: steady(600, 3), track });
     expect(s.trackIdx!.length).toBe(s.t.length);
     expect(track.t[s.trackIdx![10]]).toBeCloseTo(s.t[10], 0);
-    expect(s.ele![0]).toBeCloseTo(10, 6);
+    expect(s.ele![0]).toBeCloseTo(10, 0); // suavizada
     expect(s.gap).not.toBeNull();
   });
 
@@ -240,5 +247,64 @@ describe("línea de tiempo común", () => {
     const tr = reduceTrack(pts, 0, 2)!;
     expect(tr.t).toEqual([0, 2, 4, 6, 8, 10]);
     expect(reduceTrack([{ lat: 1, lon: 1, ele: null, time: null }], 0)).toBeNull();
+  });
+});
+
+describe("limpieza para dibujar", () => {
+  it("la mediana quita un pico suelto que la media sola arrastraría", () => {
+    const p = [300, 301, 299, 300, 120, 300, 302, 300, 299, 301];
+    expect(rollingMedian(p, 5)[4]).toBe(300);
+    const c = cleanPace(p);
+    expect(Math.min(...c.filter((x): x is number => x !== null))).toBeGreaterThan(295); // sin el 2:00
+  });
+
+  it("nada más rápido de 2:30 /km se dibuja; los huecos siguen siendo huecos", () => {
+    const c = cleanPace([140, 140, 140, 140, 140, 140, 140, null, 300]);
+    expect(c.slice(0, 7).every((x) => x === null)).toBe(true);
+    expect(c[7]).toBeNull();
+  });
+
+  it("pulso: corte donde hay más de 2 min entre muestras (sin rayas ni ceros)", () => {
+    const s = hrSegments({ t: [0, 5, 10, 400, 405], v: [140, 141, 142, 150, 151] });
+    expect(s.v).toEqual([140, 141, 142, null, 150, 151]);
+    expect(s.t[3]).toBe(205);
+    expect(s.v.includes(0)).toBe(false);
+  });
+
+  it("pulso escaso → por parciales; denso → curva", () => {
+    const dense = { t: Array.from({ length: 600 }, (_, i) => i * 5), v: Array(600).fill(150) };
+    expect(hrCoverage(dense, 3000)).toBeCloseTo(1, 2);
+    expect(isHrSparse(dense, 3000)).toBe(false);
+    // 4-jul: muestras cada 5 s, pero solo en una parte; el resto, huecos de 10–20 min
+    const sparse = { t: [...Array.from({ length: 40 }, (_, i) => i * 5), 1400, 2600, 3800, 5000], v: Array(44).fill(140) };
+    expect(isHrSparse(sparse, 9000)).toBe(true);
+    expect(isHrSparse(null, 1000)).toBe(true);
+  });
+
+  it("valor de la muestra más cercana a ≤ 60 s (con su distancia), si no, nada", () => {
+    const s = { t: [0, 100, 300], v: [130, 140, 150] };
+    expect(nearestWithin(s, 130)).toEqual({ v: 140, dt: 30 });
+    expect(nearestWithin(s, 200)).toBeNull(); // a 100 s de las dos
+    expect(nearestWithin(null, 1)).toBeNull();
+  });
+
+  it("eje de ritmo: percentiles 5–95, marcas cada 30 s o 1 min, sin estirarse por minutos de caminar", () => {
+    const paces = [...Array(95).fill(0).map((_, i) => 300 + (i % 20)), 840, 840, 900, 900, 850]; // 5 % a 14:00
+    const a = paceAxisRange(paces)!;
+    expect(a.interval).toBe(30);
+    expect(a.min).toBeLessThanOrEqual(300);
+    expect(a.max).toBeLessThan(840); // no llega a 14:00
+    expect(a.min % 30).toBe(0);
+    const wide = paceAxisRange([270, 300, 360, 420, 480])!;
+    expect(wide.interval).toBe(60);
+    expect(paceAxisRange([null, null])).toBeNull();
+  });
+
+  it("altitud sin cortes: rellena huecos de la pista de hasta 10 min", () => {
+    const t = [...Array.from({ length: 100 }, (_, i) => i * 3), ...Array.from({ length: 100 }, (_, i) => 700 + i * 3)]; // hueco de 400 s
+    const track = { t, lat: t.map(() => 43), lon: t.map(() => -3), ele: t.map((x) => 10 + x / 100) };
+    const st = buildStream({ durationS: 1000, track });
+    const mid = st.ele!.filter((_, i) => st.t[i] > 300 && st.t[i] < 700);
+    expect(mid.every((e) => e !== null)).toBe(true);
   });
 });

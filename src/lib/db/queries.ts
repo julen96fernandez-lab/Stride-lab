@@ -8,7 +8,7 @@ import { durabilityFromSeries, durabilityFromSplits, type Durability } from "@/l
 import type { SeriesMetric } from "./schema";
 import { effectiveType, ensureClassified, getTypeSettings, getZones } from "@/lib/analysis/session-type-db";
 import { SESSION_TYPES, isSessionType, type SessionType } from "@/lib/analysis/session-type";
-import { buildStream, splitViews, type SplitView } from "@/lib/analysis/run-stream";
+import { buildStream, gradeAlong, isHrSparse, splitViews, type SplitView } from "@/lib/analysis/run-stream";
 import { analyzeIntervals, type IntervalAnalysis, type StepTiming } from "@/lib/analysis/intervals";
 import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { ensureTrack } from "@/lib/analysis/track-db";
@@ -255,6 +255,12 @@ export interface Explorer {
   avgPace: number | null;
   splits: SplitView[];
   zoneLimits: number[];
+  /** Muestras de pulso tal cual (para dibujar con cortes y buscar la más cercana) */
+  hrRaw: { t: number[]; v: number[] } | null;
+  /** Pocas muestras de pulso: se dibuja por parciales */
+  hrSparse: boolean;
+  /** Pendiente (tanto por uno) en cada instante, para colorear la altitud */
+  grade: (number | null)[] | null;
   /** Análisis de series (solo carreras de tipo Series); null en el resto */
   intervals?: IntervalAnalysis | null;
 }
@@ -296,6 +302,15 @@ function buildExplorer(a: {
     avgPace: st.avgPace,
     splits: splitViews(splits, startS),
     zoneLimits: [...zones.limits],
+    hrRaw: series.hr && series.hr.t.length ? { t: series.hr.t.map((x) => Math.round(x)), v: series.hr.v.map((x) => Math.round(x)) } : null,
+    hrSparse: isHrSparse(series.hr, run.durationS),
+    grade: st.ele
+      ? gradeAlong(
+          st.km.map((k) => (k === null ? null : k * 1000)),
+          st.ele,
+          60,
+        ).map((g) => (g === null ? null : Math.round(g * 1000) / 1000))
+      : null,
   };
 }
 

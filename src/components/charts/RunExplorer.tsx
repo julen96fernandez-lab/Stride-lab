@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Explorer } from "@/lib/db/queries";
 import type { RouteShape } from "@/lib/db/queries";
-import { nearestIndex, niceXStep } from "@/lib/analysis/run-stream";
+import { hrSegments, nearestIndex, nearestWithin, niceXStep, paceAxisRange } from "@/lib/analysis/run-stream";
+import { zoneOf, type HrZones } from "@/lib/analysis/hr-zones";
 import { regularAxis } from "@/lib/analysis/axis";
 import { RouteMap, type MapApi } from "@/components/map/RouteMap";
 import type { EChartsCoreOption } from "echarts/core";
@@ -11,9 +12,11 @@ import { C, EChart, axisLabel } from "./EChart";
 import { IntervalsCard } from "./IntervalsCard";
 
 /** Márgenes del área de dibujo, iguales en todos los gráficos: así el cursor es una sola línea. */
-const L = 44;
-const R = 14;
-const ZONE_COLORS = ["var(--z1)", "var(--z2)", "var(--z3)", "var(--z4)", "var(--z5)"];
+const L = 40;
+const R = 12;
+const TOP = 8;
+const BOTTOM = 6;
+const BOTTOM_LAST = 22;
 
 const clock = (s: number) => {
   const t = Math.max(0, Math.round(s));
@@ -71,16 +74,19 @@ export function RunExplorer({
   const selArea = useMemo(
     () =>
       selRange
-        ? { silent: true, data: [[{ xAxis: xAt(selRange.t0), itemStyle: { color: "var(--ov-2)" } }, { xAxis: xAt(selRange.t1) }]] }
+        ? { silent: true, data: [[{ xAxis: xAt(selRange.t0), itemStyle: { color: "alpha(var(--chart-line),0.14)" } }, { xAxis: xAt(selRange.t1) }]] }
         : undefined,
     [selRange, xAt],
   );
 
-  // ─── Opciones de cada gráfico ──────────────────────────────────────────────
+  // ─── Opciones de cada gráfico (mismo estilo en día y noche) ─────────────────
   const base = useCallback(
     (last: boolean) => ({
-      animation: false,
-      grid: { left: L, right: R, top: 8, bottom: last ? 24 : 6 },
+      animation: true,
+      animationDuration: 650,
+      animationEasing: "cubicOut",
+      animationDurationUpdate: 220,
+      grid: { left: L, right: R, top: TOP, bottom: last ? BOTTOM_LAST : BOTTOM },
       tooltip: { show: false },
       xAxis: {
         type: "value",
@@ -93,6 +99,7 @@ export function RunExplorer({
         axisLabel: last
           ? {
               ...axisLabel,
+              fontSize: 10,
               hideOverlap: true,
               showMaxLabel: false,
               formatter: (v: number) =>
@@ -107,6 +114,8 @@ export function RunExplorer({
     }),
     [xMin, xMax, axis],
   );
+  const yLabel = { ...axisLabel, fontSize: 10, margin: 6 };
+  const faint = { lineStyle: { color: "alpha(var(--fg),0.07)", width: 1 } };
   const pts = useCallback(
     (vals: (number | null)[]) => {
       const out: (number | string)[][] = [];
@@ -115,31 +124,69 @@ export function RunExplorer({
     },
     [xs],
   );
+  /** x de un instante cualquiera (s), interpolando el eje de la rejilla (para las muestras de pulso). */
+  const xOfT = useCallback(
+    (t: number) => {
+      const j = nearestIndex(data.t, t);
+      if (j < 0) return xMin;
+      const k = data.t[j] <= t ? Math.min(j + 1, data.t.length - 1) : Math.max(j - 1, 0);
+      const [a, b] = j <= k ? [j, k] : [k, j];
+      if (data.t[b] === data.t[a]) return xs[a];
+      return xs[a] + ((t - data.t[a]) / (data.t[b] - data.t[a])) * (xs[b] - xs[a]);
+    },
+    [data.t, xs, xMin],
+  );
+  const grad = (color: string, top: number, bottom = 0) => ({
+    type: "linear",
+    x: 0,
+    y: 0,
+    x2: 0,
+    y2: 1,
+    colorStops: [
+      { offset: 0, color: `alpha(${color},${top})` },
+      { offset: 1, color: `alpha(${color},${bottom})` },
+    ],
+  });
+  const zonePieces = useMemo(() => {
+    const l = data.zoneLimits;
+    return [
+      { lt: l[1], color: "var(--z1)" },
+      { gte: l[1], lt: l[2], color: "var(--z2)" },
+      { gte: l[2], lt: l[3], color: "var(--z3)" },
+      { gte: l[3], lt: l[4], color: "var(--z4)" },
+      { gte: l[4], color: "var(--z5)" },
+    ];
+  }, [data.zoneLimits]);
 
-  const charts: { key: string; title: string; unit: string; height: number; option: EChartsCoreOption }[] = [];
   const paceVals = useMemo(() => (data.coarsePace ? data.t.map((t) => splitPaceAt(t)) : data.pace), [data, splitPaceAt]);
   const hasPace = paceVals.some((p) => p !== null);
-  const order = [hasPace && "pace", data.hr && "hr", data.ele && "ele", data.power && "power"].filter(Boolean) as string[];
+  // Pulso por parciales si las muestras son muy pocas (y los parciales tienen pulso).
+  const hrBySplits = data.hrSparse && data.splits.some((s) => s.avgHr !== null);
+  const hrStep = useMemo(
+    () => (hrBySplits ? data.t.map((t) => data.splits.find((s) => t >= s.t0 && t <= s.t1)?.avgHr ?? null) : null),
+    [hrBySplits, data],
+  );
+  const hasHr = !!data.hrRaw || !!hrStep;
+  const order = [hasPace && "pace", hasHr && "hr", data.ele && "ele", data.power && "power"].filter(Boolean) as string[];
   const lastKey = order[order.length - 1] ?? "";
 
+  const paceAx = useMemo(
+    // Solo el ritmo real fija el eje: el ajustado por pendiente se recorta si se sale.
+    () => paceAxisRange(paceVals, data.avgPace ? [data.avgPace] : []),
+    [paceVals, data.avgPace],
+  );
   const paceOpt = useMemo(() => {
-    if (!hasPace) return null;
-    const vals = [...paceVals, ...(showGap && data.gap ? data.gap : [])].filter((v): v is number => v !== null);
-    // Rango robusto: sin dejar que unos pocos segundos lentos aplasten la curva.
-    const sorted = [...vals].sort((a, b) => a - b);
-    const lo = sorted[Math.floor(sorted.length * 0.01)];
-    const hi = sorted[Math.floor(sorted.length * 0.98)];
-    const ax = regularAxis([lo, hi, ...(data.avgPace ? [data.avgPace] : [])], 4);
+    if (!hasPace || !paceAx) return null;
     return {
       ...base(lastKey === "pace"),
       yAxis: {
         type: "value",
         inverse: true,
-        min: ax.min,
-        max: ax.max,
-        interval: ax.interval,
-        axisLabel: { ...axisLabel, formatter: (v: number) => paceStr(v) },
-        splitLine: { lineStyle: { color: C.grid } },
+        min: paceAx.min,
+        max: paceAx.max,
+        interval: paceAx.interval,
+        axisLabel: { ...yLabel, formatter: (v: number) => paceStr(v) },
+        splitLine: faint,
       },
       series: [
         {
@@ -147,107 +194,191 @@ export function RunExplorer({
           data: pts(paceVals),
           showSymbol: false,
           connectNulls: false,
+          smooth: data.coarsePace ? false : 0.35,
           step: data.coarsePace ? "end" : undefined,
-          lineStyle: { width: 2, color: C.lime },
+          lineStyle: { width: 2, color: C.lime, cap: "round", join: "round" },
+          areaStyle: { origin: "end", color: grad("var(--chart-line)", 0.3, 0) },
           markArea: selArea,
+          // Ritmo medio: referencia fina, sin etiqueta dentro (va en la cabecera, no la tapa el cursor).
           markLine: data.avgPace
-            ? {
-                silent: true,
-                symbol: "none",
-                lineStyle: { color: C.text, type: [4, 4], width: 1, opacity: 0.7 },
-                label: { formatter: `Medio ${paceStr(data.avgPace)}`, color: C.axis, fontFamily: C.font, fontSize: 10, position: "insideEndTop" },
-                data: [{ yAxis: data.avgPace }],
-              }
+            ? { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: "alpha(var(--fg),0.45)", type: [3, 4], width: 1 }, data: [{ yAxis: data.avgPace }] }
             : undefined,
           clip: true,
+          z: 3,
         },
         ...(showGap && data.gap
-          ? [{ type: "line", data: pts(data.gap), showSymbol: false, connectNulls: false, lineStyle: { width: 1.6, color: C.text, type: [5, 3] }, clip: true }]
+          ? [{ type: "line", data: pts(data.gap), showSymbol: false, connectNulls: false, smooth: 0.5, lineStyle: { width: 1.2, color: "alpha(var(--fg),0.6)", cap: "round" }, clip: true, z: 2 }]
           : []),
       ],
     };
-  }, [paceVals, showGap, data, base, pts, selArea, hasPace, lastKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paceVals, paceAx, showGap, data, base, pts, selArea, hasPace, lastKey]);
 
+  const hrAx = useMemo(() => {
+    const vals = (hrStep ?? data.hrRaw?.v ?? []).filter((v): v is number => v !== null);
+    return vals.length ? regularAxis([Math.min(...vals), Math.max(...vals)], 3, [10, 20, 25, 50]) : null;
+  }, [hrStep, data.hrRaw]);
   const hrOpt = useMemo(() => {
-    if (!data.hr) return null;
-    const vals = data.hr.filter((v): v is number => v !== null);
-    const ax = regularAxis([Math.min(...vals), Math.max(...vals)], 3, [10, 20, 25, 50]);
-    const lim = data.zoneLimits;
-    const bounds = [0, lim[1], lim[2], lim[3], lim[4], 260];
+    if (!hasHr || !hrAx) return null;
+    let series: object;
+    if (hrStep) {
+      // Barras por parcial (pulso medio de cada km), cada una del color de su zona.
+      const l = data.zoneLimits;
+      const zc = (h: number) => `alpha(var(--z${h < l[1] ? 1 : h < l[2] ? 2 : h < l[3] ? 3 : h < l[4] ? 4 : 5}),0.75)`;
+      const bars = data.splits
+        .filter((sp) => sp.avgHr !== null)
+        .map((sp) => {
+          const x0 = xAt(sp.t0);
+          const x1 = xAt(sp.t1);
+          const pad = (x1 - x0) * 0.08;
+          return [
+            { xAxis: x0 + pad, yAxis: hrAx.min, itemStyle: { color: zc(sp.avgHr!), borderRadius: 3 } },
+            { xAxis: x1 - pad, yAxis: sp.avgHr },
+          ];
+        });
+      series = {
+        type: "line",
+        data: pts(hrStep),
+        showSymbol: false,
+        lineStyle: { opacity: 0 },
+        markArea: { silent: true, data: [...bars, ...(selArea ? selArea.data : [])] },
+        clip: true,
+      };
+    } else {
+      const sg = hrSegments(data.hrRaw!);
+      const few = data.hrRaw!.t.length <= 600;
+      series = {
+        type: "line",
+        data: sg.t.map((t, i) => [xOfT(t), sg.v[i] ?? "-"]),
+        connectNulls: false,
+        smooth: 0.3,
+        showSymbol: few,
+        symbol: "circle",
+        symbolSize: 3,
+        lineStyle: { width: 2, cap: "round", join: "round" },
+        markArea: selArea,
+        clip: true,
+      };
+    }
     return {
       ...base(lastKey === "hr"),
-      yAxis: { type: "value", min: ax.min, max: ax.max, interval: ax.interval, axisLabel, splitLine: { show: false } },
-      series: [
-        {
-          type: "line",
-          data: pts(data.hr),
-          showSymbol: false,
-          connectNulls: false,
-          lineStyle: { width: 1.8, color: C.text },
-          clip: true,
-          // Zonas de fondo (Z1…Z5) y, encima, el parcial tocado.
-          markArea: {
-            silent: true,
-            data: [
-              ...ZONE_COLORS.map((c, i) => [
-                { yAxis: bounds[i], itemStyle: { color: c, opacity: 0.16 } },
-                { yAxis: bounds[i + 1] },
-              ]),
-              ...(selArea ? selArea.data : []),
-            ],
-          },
-        },
-      ],
+      yAxis: { type: "value", min: hrAx.min, max: hrAx.max, interval: hrAx.interval, axisLabel: yLabel, splitLine: faint },
+      // La línea toma el color de la zona de cada tramo (sin fondos).
+      visualMap: hrStep ? undefined : { type: "piecewise", show: false, dimension: 1, seriesIndex: 0, pieces: zonePieces },
+      series: [series],
     };
-  }, [data, base, pts, selArea, lastKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasHr, hrAx, hrStep, data.hrRaw, data.splits, data.zoneLimits, base, pts, xOfT, xAt, selArea, lastKey, zonePieces]);
 
+  const eleAx = useMemo(() => {
+    const vals = (data.ele ?? []).filter((v): v is number => v !== null);
+    return vals.length ? regularAxis([Math.min(...vals), Math.max(...vals)], 3, [5, 10, 20, 25, 50, 100, 200]) : null;
+  }, [data.ele]);
   const eleOpt = useMemo(() => {
-    if (!data.ele) return null;
-    const vals = data.ele.filter((v): v is number => v !== null);
-    const ax = regularAxis([Math.min(...vals), Math.max(...vals)], 3, [5, 10, 20, 25, 50, 100, 200]);
+    if (!data.ele || !eleAx) return null;
+    const g = data.grade;
     return {
       ...base(lastKey === "ele"),
-      yAxis: { type: "value", min: ax.min, max: ax.max, interval: ax.interval, axisLabel, splitLine: { lineStyle: { color: C.grid } } },
+      yAxis: { type: "value", min: eleAx.min, max: eleAx.max, interval: eleAx.interval, axisLabel: yLabel, splitLine: faint },
       series: [
         {
           type: "line",
           data: pts(data.ele),
           showSymbol: false,
           connectNulls: false,
-          lineStyle: { width: 1.5, color: C.fg3 },
-          areaStyle: { color: C.fg3, opacity: 0.18 },
+          smooth: 0.4,
+          // Perfil coloreado por pendiente (bajada azul, llano neutro, subida ámbar/roja) con un
+          // degradado horizontal: una parada de color por tramo.
+          lineStyle: { width: 2, cap: "round", join: "round", color: g ? slopeGradient(xs, data.ele!, g) : C.fg3 },
+          areaStyle: { color: grad("var(--fg-3)", 0.3, 0.02) },
           markArea: selArea,
           clip: true,
         },
       ],
     };
-  }, [data, base, pts, selArea, lastKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, eleAx, base, xs, pts, selArea, lastKey]);
 
+  const powerAx = useMemo(() => {
+    const vals = (data.power ?? []).filter((v): v is number => v !== null).sort((a, b) => a - b);
+    return vals.length ? regularAxis([vals[Math.floor(vals.length * 0.02)], vals[Math.floor(vals.length * 0.98)]], 3, [25, 50, 100]) : null;
+  }, [data.power]);
   const powerOpt = useMemo(() => {
-    if (!data.power) return null;
-    const vals = data.power.filter((v): v is number => v !== null);
-    const sorted = [...vals].sort((a, b) => a - b);
-    const ax = regularAxis([sorted[Math.floor(sorted.length * 0.01)], sorted[Math.floor(sorted.length * 0.99)]], 3, [25, 50, 100]);
+    if (!data.power || !powerAx) return null;
     return {
       ...base(lastKey === "power"),
-      yAxis: { type: "value", min: ax.min, max: ax.max, interval: ax.interval, axisLabel, splitLine: { lineStyle: { color: C.grid } } },
-      series: [{ type: "line", data: pts(data.power), showSymbol: false, connectNulls: false, lineStyle: { width: 1.4, color: "var(--z4)" }, markArea: selArea, clip: true }],
+      yAxis: { type: "value", min: powerAx.min, max: powerAx.max, interval: powerAx.interval, axisLabel: yLabel, splitLine: faint },
+      series: [
+        {
+          type: "line",
+          data: pts(data.power),
+          showSymbol: false,
+          connectNulls: false,
+          smooth: 0.35,
+          lineStyle: { width: 2, color: "var(--z4)", cap: "round", join: "round" },
+          areaStyle: { color: grad("var(--z4)", 0.25, 0) },
+          markArea: selArea,
+          clip: true,
+        },
+      ],
     };
-  }, [data, base, pts, selArea, lastKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.power, powerAx, base, pts, selArea, lastKey]);
 
-  if (paceOpt) charts.push({ key: "pace", title: data.coarsePace ? "Ritmo por parciales" : "Ritmo", unit: "/km", height: 150, option: paceOpt });
-  if (hrOpt) charts.push({ key: "hr", title: "Pulso", unit: "ppm · zonas de fondo", height: 120, option: hrOpt });
-  if (eleOpt) charts.push({ key: "ele", title: "Altitud", unit: "m", height: 96, option: eleOpt });
-  if (powerOpt) charts.push({ key: "power", title: "Potencia", unit: "W", height: 100, option: powerOpt });
+  // Metadatos para colocar el punto con brillo sobre cada gráfico sin pedirle nada a ECharts.
+  type ChartDef = {
+    key: string;
+    title: string;
+    note: string;
+    height: number;
+    option: EChartsCoreOption;
+    axis: { min: number; max: number; inverse: boolean };
+    values: (number | null)[];
+    color: string;
+    lastKey: string;
+  };
+  const charts: ChartDef[] = [];
+  const H = { pace: 150, hr: 118, ele: 104, power: 100 } as const;
+  if (paceOpt && paceAx)
+    charts.push({
+      key: "pace",
+      title: data.coarsePace ? "Ritmo por parciales" : "Ritmo",
+      note: data.avgPace ? `/km · medio ${paceStr(data.avgPace)}` : "/km",
+      height: H.pace,
+      option: paceOpt as EChartsCoreOption,
+      lastKey,
+      axis: { min: paceAx.min, max: paceAx.max, inverse: true },
+      values: paceVals,
+      color: "var(--chart-line)",
+    });
+  if (hrOpt && hrAx)
+    charts.push({
+      key: "hr",
+      title: hrStep ? "Pulso por parciales" : "Pulso",
+      note: "ppm · color por zona",
+      height: H.hr,
+      option: hrOpt as EChartsCoreOption,
+      lastKey,
+      axis: { min: hrAx.min, max: hrAx.max, inverse: false },
+      values: hrStep ?? data.hr ?? [],
+      color: "var(--fg)",
+    });
+  if (eleOpt && eleAx)
+    charts.push({ key: "ele", title: "Altitud", note: "m · color por pendiente", height: H.ele, option: eleOpt as EChartsCoreOption, lastKey, axis: { min: eleAx.min, max: eleAx.max, inverse: false }, values: data.ele ?? [], color: "var(--fg-2)" });
+  if (powerOpt && powerAx)
+    charts.push({ key: "power", title: "Potencia", note: "W", height: H.power, option: powerOpt as EChartsCoreOption, lastKey, axis: { min: powerAx.min, max: powerAx.max, inverse: false }, values: data.power ?? [], color: "var(--z4)" });
 
   // ─── Cursor sincronizado (sin re-renderizar React) ─────────────────────────
   const wrap = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const dots = useRef<Record<string, HTMLDivElement | null>>({});
   const rKm = useRef<HTMLSpanElement>(null);
   const rTime = useRef<HTMLSpanElement>(null);
   const rPace = useRef<HTMLSpanElement>(null);
   const rGap = useRef<HTMLSpanElement>(null);
   const rHr = useRef<HTMLSpanElement>(null);
+  const rHrNote = useRef<HTMLSpanElement>(null);
   const rEle = useRef<HTMLSpanElement>(null);
   const rPower = useRef<HTMLSpanElement>(null);
   const rZone = useRef<HTMLSpanElement>(null);
@@ -256,17 +387,38 @@ export function RunExplorer({
   const frame = useRef(0);
   const pendingX = useRef<number | null>(null);
   const lastIdx = useRef<number | null>(null);
+  const chartsRef = useRef(charts);
+  useEffect(() => {
+    chartsRef.current = charts;
+  });
 
   const show = useCallback(
     (i: number) => {
       const w = wrap.current;
       if (!w || i < 0) return;
       lastIdx.current = i;
-      const plotW = w.clientWidth - L - R;
+      const width = w.clientWidth;
+      const plotW = width - L - R;
       const px = L + ((xs[i] - xMin) / (xMax - xMin)) * plotW;
       if (line.current) {
         line.current.style.transform = `translateX(${px}px)`;
         line.current.style.opacity = "1";
+      }
+      // Punto con brillo sobre cada gráfico.
+      for (const c of chartsRef.current) {
+        const el = dots.current[c.key];
+        if (!el) continue;
+        const v = c.values[i];
+        if (v === null || v === undefined) {
+          el.style.opacity = "0";
+          continue;
+        }
+        const plotH = c.height - TOP - (c.key === c.lastKey ? BOTTOM_LAST : BOTTOM);
+        let f = (v - c.axis.min) / (c.axis.max - c.axis.min);
+        f = Math.min(1, Math.max(0, f));
+        const y = TOP + (c.axis.inverse ? f : 1 - f) * plotH;
+        el.style.transform = `translate(${px - 5}px, ${y - 5}px)`;
+        el.style.opacity = "1";
       }
       const set = (el: HTMLElement | null, v: string) => {
         if (el && el.textContent !== v) el.textContent = v;
@@ -275,18 +427,40 @@ export function RunExplorer({
       set(rTime.current, clock(data.t[i]));
       set(rPace.current, paceStr(data.coarsePace ? splitPaceAt(data.t[i]) : data.pace[i]));
       if (data.gap) set(rGap.current, paceStr(data.gap[i]));
-      set(rHr.current, intStr(data.hr?.[i]));
+      // Pulso y zona: si en este instante no hay dato, la muestra más cercana (≤ 60 s) con aviso.
+      let hr = data.hr?.[i] ?? null;
+      let note = "";
+      if (hr === null && data.hrRaw) {
+        const n = nearestWithin(data.hrRaw, data.t[i], 60);
+        if (n) {
+          hr = n.v;
+          note = `muestra a ${Math.round(n.dt)} s`;
+        }
+      }
+      if (hr === null && hrStep && hrStep[i] !== null) {
+        hr = hrStep[i];
+        note = "media del parcial";
+      }
+      set(rHr.current, intStr(hr));
+      set(rHrNote.current, note);
       set(rEle.current, intStr(data.ele?.[i]));
       set(rPower.current, intStr(data.power?.[i]));
-      const z = data.zone?.[i] ?? null;
+      const z = hr === null ? null : zoneOf(hr, data.zoneLimits as HrZones["limits"]);
       set(rZone.current, z === null ? "—" : `Z${z}`);
       if (rZoneDot.current) rZoneDot.current.style.background = z === null ? "transparent" : `var(--z${z})`;
-      if (rHint.current) rHint.current.style.display = "none";
+      // Tarjeta flotante junto al dedo (al otro lado si no cabe).
+      const c = card.current;
+      if (c) {
+        const cw = c.offsetWidth || 160;
+        const left = px + 14 + cw > width ? px - 14 - cw : px + 14;
+        c.style.transform = `translateX(${Math.max(0, left)}px)`;
+        c.style.opacity = "1";
+      }
+      if (rHint.current) rHint.current.style.opacity = "0";
       mapApi.current?.setCursor(data.lat?.[i] ?? null, data.lon?.[i] ?? null);
     },
-    [xs, xMin, xMax, data, splitPaceAt],
+    [xs, xMin, xMax, data, splitPaceAt, hrStep],
   );
-
   const onPointer = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       pendingX.current = e.clientX;
@@ -328,24 +502,7 @@ export function RunExplorer({
 
       {charts.length > 0 && (
         <section className="card p-4" aria-label="Gráficos de la carrera">
-          {/* Lectura del instante señalado: fija arriba mientras se desliza. */}
-          <div className="sticky top-2 z-10 -mx-1 rounded-2xl border border-line bg-[var(--card)] px-3 py-2.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)]" aria-live="off">
-            <dl className="grid grid-cols-3 gap-x-3 gap-y-1.5">
-              <Read label="Distancia" unit="km" refEl={rKm} />
-              <Read label="Tiempo" refEl={rTime} />
-              <Read label="Ritmo" unit="/km" refEl={rPace} lime />
-              <Read label="Pulso" unit="ppm" refEl={rHr} />
-              <Read label="Altitud" unit="m" refEl={rEle} />
-              <Read label="Zona" refEl={rZone} dotEl={rZoneDot} />
-              {data.gap && showGap && <Read label="Ajustado" unit="/km" refEl={rGap} />}
-              {data.power && <Read label="Potencia" unit="W" refEl={rPower} />}
-            </dl>
-            <p ref={rHint} className="mt-1 text-[11px] text-fg-2">
-              Desliza el dedo por los gráficos.
-            </p>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             {hasKm ? (
               <div className="flex rounded-full border border-line-strong p-0.5 text-[12px] font-semibold" role="group" aria-label="Eje horizontal">
                 {(
@@ -359,7 +516,7 @@ export function RunExplorer({
                     type="button"
                     aria-pressed={axis === k}
                     onClick={() => setAxis(k)}
-                    className={`min-h-[34px] rounded-full px-3 ${axis === k ? "bg-lime text-lime-ink" : "text-fg-2"}`}
+                    className={`min-h-[34px] rounded-full px-3 transition-colors ${axis === k ? "bg-lime text-lime-ink" : "text-fg-2"}`}
                   >
                     {label}
                   </button>
@@ -377,27 +534,44 @@ export function RunExplorer({
                 className="flex min-h-[34px] items-center gap-2 text-[12px] font-semibold text-fg-2"
               >
                 <span className={`relative h-5 w-9 rounded-full transition ${showGap ? "bg-lime" : "bg-ov-2"}`}>
-                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--fg)] transition ${showGap ? "left-[18px]" : "left-0.5"}`} />
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--fg)] transition-all ${showGap ? "left-[18px]" : "left-0.5"}`} />
                 </span>
                 Ajustado por pendiente
               </button>
             )}
           </div>
+          <p ref={rHint} className="mt-2 text-[11px] text-fg-2 transition-opacity">
+            Desliza el dedo por los gráficos.
+          </p>
 
-          <div ref={wrap} className="relative mt-3 select-none">
+          <div ref={wrap} className="relative mt-1 select-none">
             {charts.map((c) => (
-              <div key={c.key} className="mb-1">
+              <div key={c.key} className="relative mb-1.5">
                 <div className="flex items-baseline justify-between px-1">
-                  <span className="text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">{c.title}</span>
-                  <span className="text-[11px] text-fg-2">{c.unit}</span>
+                  <span className="text-[10px] font-semibold tracking-[0.08em] text-fg-2 uppercase">{c.title}</span>
+                  <span className="text-[10px] text-fg-2">{c.note}</span>
                 </div>
-                <EChart option={c.option} height={c.height} label={`${c.title} a lo largo de la carrera`} />
+                <div className="relative">
+                  <EChart option={c.option} height={c.height} label={`${c.title} a lo largo de la carrera`} merge />
+                  <div
+                    ref={(el) => {
+                      dots.current[c.key] = el;
+                    }}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-0 left-0 z-[2] h-[10px] w-[10px] rounded-full opacity-0 transition-opacity duration-150"
+                    style={{
+                      background: c.color,
+                      boxShadow: `0 0 0 2px var(--card), 0 0 12px 3px color-mix(in srgb, ${c.color} 55%, transparent)`,
+                      willChange: "transform",
+                    }}
+                  />
+                </div>
               </div>
             ))}
             {/* Capa que recoge el dedo encima de los gráficos: ECharts no procesa cada movimiento.
                 pan-y deja hacer scroll vertical; el arrastre horizontal mueve el cursor. */}
             <div
-              className="absolute inset-0 z-[1]"
+              className="absolute inset-0 z-[3]"
               style={{ touchAction: "pan-y" }}
               onPointerDown={onPointer}
               onPointerMove={onPointer}
@@ -406,11 +580,70 @@ export function RunExplorer({
             <div
               ref={line}
               aria-hidden="true"
-              className="pointer-events-none absolute top-0 bottom-6 left-0 z-[2] w-[1.5px] bg-[var(--fg)] opacity-0"
-              style={{ willChange: "transform" }}
+              className="pointer-events-none absolute top-3 bottom-6 left-0 z-[1] w-px opacity-0 transition-opacity"
+              style={{ willChange: "transform", background: "linear-gradient(to bottom, transparent, var(--chart-line) 8%, var(--chart-line) 92%, transparent)" }}
             />
+            {/* Tarjeta flotante del instante, junto al dedo. */}
+            <div
+              ref={card}
+              aria-live="off"
+              className="pointer-events-none absolute top-[18px] left-0 z-[4] w-[158px] rounded-2xl border border-line px-3 py-2.5 opacity-0 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-opacity duration-150"
+              style={{ willChange: "transform", background: "color-mix(in srgb, var(--card) 78%, transparent)" }}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="num text-[13px]">
+                  <span ref={rKm}>—</span> <span className="text-[10px] text-fg-2">km</span>
+                </span>
+                <span ref={rTime} className="num text-[12px] text-fg-2">
+                  —
+                </span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span ref={rPace} className="num text-[22px] leading-none text-lime-text">
+                  —
+                </span>
+                <span className="text-[10px] text-fg-2">/km</span>
+              </div>
+              {data.gap && showGap && (
+                <div className="mt-0.5 text-[11px] text-fg-2">
+                  ajustado <span ref={rGap} className="num text-fg">—</span>
+                </div>
+              )}
+              <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+                {hasHr && (
+                  <>
+                    <dt className="text-fg-2">Pulso</dt>
+                    <dd className="num text-right">
+                      <span ref={rHr}>—</span>
+                    </dd>
+                    <dt className="text-fg-2">Zona</dt>
+                    <dd className="num flex items-center justify-end gap-1">
+                      <span ref={rZoneDot} className="h-2 w-2 rounded-full" />
+                      <span ref={rZone}>—</span>
+                    </dd>
+                  </>
+                )}
+                {data.ele && (
+                  <>
+                    <dt className="text-fg-2">Altitud</dt>
+                    <dd className="num text-right">
+                      <span ref={rEle}>—</span> m
+                    </dd>
+                  </>
+                )}
+                {data.power && (
+                  <>
+                    <dt className="text-fg-2">Potencia</dt>
+                    <dd className="num text-right">
+                      <span ref={rPower}>—</span> W
+                    </dd>
+                  </>
+                )}
+              </dl>
+              <span ref={rHrNote} className="mt-1 block text-[10px] leading-tight text-fg-2" />
+            </div>
           </div>
-          <Legend coarse={data.coarsePace} gap={!!data.gap && showGap} avg={data.avgPace !== null} />
+          <Legend coarse={data.coarsePace} gap={!!data.gap && showGap} avg={data.avgPace !== null} hrBySplits={!!hrStep} ele={!!data.ele} />
         </section>
       )}
 
@@ -425,53 +658,71 @@ export function RunExplorer({
   );
 }
 
-function Read({
-  label,
-  unit,
-  refEl,
-  dotEl,
-  lime,
-}: {
-  label: string;
-  unit?: string;
-  refEl: React.RefObject<HTMLSpanElement | null>;
-  dotEl?: React.RefObject<HTMLSpanElement | null>;
-  lime?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[10px] font-semibold tracking-[0.06em] text-fg-2 uppercase">{label}</dt>
-      <dd className="flex items-baseline gap-1">
-        {dotEl && <span ref={dotEl} className="h-2.5 w-2.5 flex-none self-center rounded-full" aria-hidden="true" />}
-        <span ref={refEl} className={`num text-[17px] ${lime ? "text-lime-text" : ""}`}>
-          —
-        </span>
-        {unit && <span className="text-[10px] text-fg-2">{unit}</span>}
-      </dd>
-    </div>
-  );
+/** Color de un tramo según su pendiente. */
+function slopeColor(g: number): string {
+  if (g < -0.06) return "var(--z2)";
+  if (g < -0.02) return "alpha(var(--z2),0.6)";
+  if (g < 0.02) return "var(--fg-3)";
+  if (g < 0.06) return "var(--z4)";
+  return "var(--z5)";
 }
 
-function Legend({ coarse, gap, avg }: { coarse: boolean; gap: boolean; avg: boolean }) {
+/** Degradado horizontal con el color de la pendiente a lo largo del perfil (≤ ~240 paradas). */
+function slopeGradient(xs: number[], ele: (number | null)[], grade: (number | null)[]) {
+  const idx = xs.map((_, i) => i).filter((i) => ele[i] !== null);
+  if (idx.length < 2) return "var(--fg-3)";
+  const x0 = xs[idx[0]];
+  const x1 = xs[idx[idx.length - 1]];
+  const span = x1 - x0 || 1;
+  const step = Math.max(1, Math.floor(idx.length / 240));
+  const stops: { offset: number; color: string }[] = [];
+  let prev = "";
+  for (let k = 0; k < idx.length; k += step) {
+    const i = idx[k];
+    const c = slopeColor(grade[i] ?? 0);
+    const off = Math.min(1, Math.max(0, (xs[i] - x0) / span));
+    // Bordes nítidos entre tramos: la parada anterior se repite justo antes del cambio.
+    if (prev && c !== prev) stops.push({ offset: off, color: prev });
+    stops.push({ offset: off, color: c });
+    prev = c;
+  }
+  return { type: "linear", x: 0, y: 0, x2: 1, y2: 0, colorStops: stops };
+}
+
+function Legend({ coarse, gap, avg, hrBySplits, ele }: { coarse: boolean; gap: boolean; avg: boolean; hrBySplits: boolean; ele: boolean }) {
   return (
-    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 px-1 text-[11px] text-fg-2" aria-label="Leyenda">
+    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 px-1 text-[10px] text-fg-2" aria-label="Leyenda">
       <li className="flex items-center gap-1.5">
-        <span className="h-[3px] w-4 rounded" style={{ background: "var(--chart-line)" }} />
-        {coarse ? "Ritmo por parciales (muestras cada ~5 min)" : "Ritmo suavizado (~30 s)"}
+        <span className="h-[2px] w-4 rounded-full" style={{ background: "var(--chart-line)" }} />
+        {coarse ? "Ritmo por parciales (muestras cada ~5 min)" : "Ritmo suavizado (mediana + media de ~30 s)"}
       </li>
       {avg && (
         <li className="flex items-center gap-1.5">
-          <span className="h-0 w-4 border-t border-dashed" style={{ borderColor: "var(--fg)" }} />
-          Ritmo medio
+          <span className="h-0 w-4 border-t border-dashed" style={{ borderColor: "var(--fg-2)" }} />
+          Medio
         </li>
       )}
       {gap && (
         <li className="flex items-center gap-1.5">
-          <span className="h-0 w-4 border-t-2 border-dashed" style={{ borderColor: "var(--fg)" }} />
+          <span className="h-px w-4 rounded-full" style={{ background: "var(--fg-2)" }} />
           Ajustado por pendiente
         </li>
       )}
-      {!coarse && <li>Sin ritmo en pausas y muestras inválidas.</li>}
+      <li className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((z) => (
+          <span key={z} className="h-2 w-2 rounded-full" style={{ background: `var(--z${z})` }} />
+        ))}
+        <span className="ml-0.5">pulso por zona{hrBySplits ? " (por parciales: pocas muestras)" : ""}</span>
+      </li>
+      {ele && (
+        <li className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full" style={{ background: "var(--z2)" }} />
+          <span className="h-2 w-2 rounded-full" style={{ background: "var(--fg-3)" }} />
+          <span className="h-2 w-2 rounded-full" style={{ background: "var(--z5)" }} />
+          <span className="ml-0.5">bajada · llano · subida</span>
+        </li>
+      )}
+      {!coarse && <li>Sin ritmo en pausas ni muestras imposibles.</li>}
     </ul>
   );
 }

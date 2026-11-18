@@ -191,6 +191,20 @@ media en 92 carreras); para dibujarla habría que reimportar con los pasos por i
 - Parciales por km: km, tiempo, ritmo con barra relativa, FC y desnivel; más rápido y más
   lento marcados (ninguno si todos van al mismo segundo; el último incompleto no compite).
   Tocar uno lo resalta en todos los gráficos y en el mapa.
+- Dibujo (versión del 18‑nov): líneas de 2 px redondeadas y suaves, rellenos con degradado
+  transparente (`alpha(var(--x),0.3)` en EChart.tsx), rejilla muy tenue, sin fondos grises,
+  animación de entrada (las actualizaciones no la repiten: `merge`). Cursor: línea fina color
+  acento, punto con brillo sobre cada gráfico y tarjeta flotante con desenfoque junto al dedo.
+  - Ritmo: mediana (7) + media (5) sobre la media de ~30 s; nada más rápido de 2:30 /km; eje
+    entre los percentiles 5 y 95 de la carrera, marcas cada 30 s o 1 min; el medio va en la
+    cabecera (no lo tapa el cursor). Ajustado por pendiente: línea fina y suave.
+  - Pulso: las muestras tal cual, unidas solo si están a < 2 min (con puntos pequeños si hay
+    ≤ 600), color por zona. Si cubren menos de la mitad de la carrera (o hay < 30), barras por
+    parcial con el pulso medio de cada km, del color de su zona.
+  - Altitud: hueco de la pista rellenado hasta 10 min (sin cortes), suavizada, con degradado
+    vertical y color por pendiente (bajada azul, llano neutro, subida ámbar/roja).
+  - Tarjeta: si en ese instante no hay pulso, la muestra más cercana a ≤ 60 s con «muestra a
+    N s»; en modo por parciales, la media del parcial.
 - Pista con tiempo: tabla `run_tracks` (≤ 1 punto cada 2 s, con altitud) sacada del GPX
   completo de Blob; el build rellena las que falten y, si no, se hace al abrir la carrera.
 
@@ -544,6 +558,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Gráficos del detalle: pulso por zonas (barras por parcial si hay pocas
+  muestras), ritmo sin picos y con eje de percentiles, altitud sin cortes y por pendiente,
+  cursor con punto brillante y tarjeta flotante. 60 fps con la CPU 4× más lenta.
 - 2026‑11‑18 — Carreras añadidas a mano (con .gpx/.tcx/.fit opcional), edición y borrado,
   sustitución por el zip conservando tipo, nota y calzado. Migración 0008.
 - 2026‑11‑18 — Series (repeticiones y recuperaciones desde los pasos del reloj; hace falta
