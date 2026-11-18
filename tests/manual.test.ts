@@ -157,6 +157,27 @@ d("carreras manuales (base de datos)", () => {
     expect((await get(id)).trainingLoad).toBeCloseTo(r.trainingLoad!, 3);
   });
 
+  it("Reprocesar aplica la regla de carga: medida (pulso ≥ 80 %), estimada (≈) o sin dato", async () => {
+    const start = Date.parse("2026-11-12T17:00:00Z");
+    const id = await saveManualRun({ db, putRoute }, input({ startAt: new Date(start), distanceM: 5000, durationS: 1497, avgHr: 150 }), {
+      file: { name: "strava.gpx", bytes: gpx(start) },
+    });
+    expect(await get(id)).toMatchObject({ loadEstimated: false });
+    const { reclassifyAll } = await import("@/lib/analysis/session-type-db");
+    // El reloj guardó pulso solo en el primer tramo (como antes de julio de 2026).
+    await db.execute(sql`UPDATE run_series SET t = t[1:10], v = v[1:10] WHERE run_id = ${id} AND metric = 'hr'`);
+    await reclassifyAll(db);
+    let r = await get(id);
+    expect(r.loadEstimated).toBe(true);
+    expect(r.trainingLoad).toBe(Math.round((1497 / 60) * 3)); // 150 ppm → Z3, toda la duración
+    // Sin muestras ni pulso medio: sin dato.
+    await db.execute(sql`DELETE FROM run_series WHERE run_id = ${id} AND metric = 'hr'`);
+    await db.update(s.runs).set({ avgHr: null }).where(eq(s.runs.id, id));
+    await reclassifyAll(db);
+    r = await get(id);
+    expect(r).toMatchObject({ trainingLoad: null, loadEstimated: false });
+  });
+
   it("con archivo GPX: series, ruta, pista, parciales, zonas, carga real y récords", async () => {
     const start = Date.parse("2026-11-12T17:00:00Z");
     const id = await saveManualRun({ db, putRoute }, input({ startAt: new Date(start), distanceM: 5000, durationS: 1497 }), { file: { name: "strava.gpx", bytes: gpx(start) } });

@@ -80,3 +80,34 @@ export function estimatedLoad(avgHr: number | null, durationS: number, limits: H
   secs[zoneOf(avgHr, limits) - 1] = durationS;
   return trainingLoad(secs);
 }
+
+/** Con al menos esta parte de la carrera cubierta por muestras de pulso, la carga es medida. */
+export const MIN_HR_COVERAGE = 0.8;
+
+export type LoadQuality = "measured" | "estimated";
+
+/**
+ * Carga de una carrera según lo que haya de pulso:
+ * - medida: las muestras cubren al menos el 80 % de la duración → minutos por zona;
+ * - estimada (≈): cubren menos (o no hay) pero hay pulso medio → toda la duración en su zona;
+ * - sin dato: sin pulso. No se inventa.
+ * El pulso medio es el del entrenamiento; si falta, la media de las muestras (si hay ≥ 5).
+ */
+export function runLoad(o: {
+  zoneSeconds: readonly number[] | null;
+  durationS: number;
+  avgHr: number | null;
+  hrSamples?: readonly number[] | null;
+  limits: HrZones["limits"];
+}): { load: number | null; quality: LoadQuality | null; coverage: number } {
+  const covered = o.zoneSeconds ? o.zoneSeconds.reduce((a, b) => a + b, 0) : 0;
+  const coverage = o.durationS > 0 ? Math.min(1, covered / o.durationS) : 0;
+  if (coverage >= MIN_HR_COVERAGE) {
+    const load = trainingLoad(o.zoneSeconds);
+    if (load !== null) return { load, quality: "measured", coverage };
+  }
+  const samples = o.hrSamples?.filter((x) => x > 0) ?? [];
+  const avg = o.avgHr ?? (samples.length >= 5 ? samples.reduce((a, b) => a + b, 0) / samples.length : null);
+  const est = estimatedLoad(avg, o.durationS, o.limits);
+  return est === null ? { load: null, quality: null, coverage } : { load: est, quality: "estimated", coverage };
+}

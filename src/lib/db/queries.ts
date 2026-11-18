@@ -66,6 +66,7 @@ export interface RunListItem {
   type: SessionType | null;
   typeManual: boolean;
   trainingLoad: number | null;
+  loadEstimated: boolean;
 }
 
 function listColumns() {
@@ -83,6 +84,7 @@ function listColumns() {
     type: effectiveType,
     typeManual: sql<boolean>`${s.runs.sessionTypeManual} IS NOT NULL`,
     trainingLoad: s.runs.trainingLoad,
+    loadEstimated: s.runs.loadEstimated,
   };
 }
 
@@ -428,6 +430,7 @@ async function runsForPeriods() {
       isSpecial: s.runs.isSpecial,
       elevationGainM: s.runs.elevationGainM,
       trainingLoad: s.runs.trainingLoad,
+      loadEstimated: s.runs.loadEstimated,
       hrZoneSeconds: s.runs.hrZoneSeconds,
     })
     .from(s.runs)
@@ -650,7 +653,14 @@ export async function getHomeOverview() {
   const today = new Date(localDay(now) * 86_400_000).toISOString().slice(0, 10);
   const openInjury = injuries.find((i) => i.startDate <= today && (i.endDate === null || i.endDate >= today)) ?? null;
   const recent = runs.filter((r) => r.startAt.getTime() >= now.getTime() - 60 * 86_400_000);
-  const advice = recommendToday({ runs: recent, openInjury: !!openInjury, now });
+  const fitness = buildFitnessView(fitnessRuns(runs), now, !!openInjury);
+  const cur = fitness.current;
+  const advice = recommendToday({
+    runs: recent,
+    openInjury: !!openInjury,
+    now,
+    fitness: cur ? { ratio: cur.ratio, form: cur.form, chronic: cur.chronic, enough: !cur.warmup } : null,
+  });
 
   const week = buildPeriods(runs, "week", 1, now)[0];
   const month = buildPeriods(runs, "month", 1, now)[0];
@@ -670,6 +680,13 @@ export async function getHomeOverview() {
       cmp: monthCmp,
     },
     recentRecords: records.filter((r) => r.best && r.recent).map((r) => ({ key: r.key, label: r.label, m: r.m, timeS: r.best!.timeS, startAt: r.best!.startAt, runId: r.best!.runId })),
+    fitness: cur
+      ? {
+          ...cur,
+          openInjury: !!openInjury,
+          last28: fitness.points.slice(-28).map((p) => ({ date: p.date, acute: p.acute, chronic: p.chronic })),
+        }
+      : null,
     efficiency: {
       points: efficiency.points.map((p) => ({ t: p.t, pace: p.pace })),
       last: efficiency.points.at(-1) ?? null,
@@ -677,4 +694,21 @@ export async function getHomeOverview() {
       band: efficiency.band,
     },
   };
+}
+
+// ─── Carga y forma ───────────────────────────────────────────────────────────
+
+import { buildFitnessView, type FitnessRunIn } from "@/lib/analysis/fitness";
+
+function fitnessRuns(runs: Awaited<ReturnType<typeof runsForPeriods>>): FitnessRunIn[] {
+  return runs.map((r) => ({ id: r.id, startAt: r.startAt, load: r.trainingLoad, estimated: r.loadEstimated, distanceM: r.distanceM, type: r.type }));
+}
+
+/** Carga y forma de los últimos 12 meses (el selector 3/6/12 recorta en el cliente). */
+export async function getFitness() {
+  const now = new Date();
+  const [runs, injuries] = await Promise.all([runsForPeriods(), listInjuries(db())]);
+  const today = new Date(localDay(now) * 86_400_000).toISOString().slice(0, 10);
+  const open = injuries.some((i) => i.startDate <= today && (i.endDate === null || i.endDate >= today));
+  return buildFitnessView(fitnessRuns(runs), now, open);
 }

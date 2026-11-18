@@ -352,6 +352,30 @@ Inicio (km por mes, VO₂), Análisis (Volumen semana/mes/año/por tipo, ritmo p
 evolución del ritmo, eficiencia, año frente a año, km por año y tipo, VO₂), Récords, barras de
 series y el detalle de carrera.
 
+## Carga y forma
+
+Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis (`#forma`) e Inicio.
+- **Carga de cada carrera** (`runLoad`, `hr-zones.ts`): *medida* si las muestras de pulso cubren
+  ≥ 80 % de la duración (minutos por zona × 1…5); *estimada (≈)* con el pulso medio si cubren
+  menos (toda la duración en su zona; sin pulso medio, la media de ≥ 5 muestras); *sin dato* si
+  no hay pulso (no cuenta y se dice). Antes de jul‑2026 el reloj guardaba muy pocas muestras
+  (cargas de 1–10), por eso la regla. Se aplica en `reclassifyAll` (Reprocesar, guardar zonas y
+  al desplegar: reglas versión 10) y al guardar una carrera manual. Columna `load_estimated`.
+- **Carga diaria**: suma por día (Madrid); sin correr = 0. **Aguda**: media de 7 días.
+  **Crónica**: media exponencial de 28 días (α = 1 − e^(−1/28)), desde el primer día con
+  historial. **Forma** = crónica − aguda. **Ratio** = aguda/crónica (sin ratio con crónica < 5).
+  Estados: < 0,8 Descansado · 0,8–1,3 En forma · 1,3–1,5 Cargado · > 1,5 Sobrecargado.
+  Las lesiones cuentan como carga; con lesión abierta se avisa.
+- **≈**: una cifra lleva ≈ si en sus 28 días hay cargas estimadas o sin dato, o si hay menos de
+  28 días de historial (en calentamiento). Se muestran cuántas carreras están medidas, estimadas
+  y sin dato.
+- **Carga semanal**: lunes a domingo frente a la media de las 8 anteriores; aviso si sube > 30 %
+  sobre la anterior (la semana en curso, frente a los mismos días de la anterior).
+- **Hoy**: tras las reglas de siempre, el ratio solo endurece: > 1,5 descanso, 1,3–1,5 como mucho
+  suave, calidad solo con < 1,3. Sin 28 días de historial no se usa y se dice.
+- `ensureClassified` comparte una sola comprobación entre consultas simultáneas (antes dos
+  recálculos a la vez chocaban en `run_efforts`) y no repite la comprobación en 5 min.
+
 ## Botones y toques (una sola definición)
 
 Todo el comportamiento táctil vive en `globals.css` (bloque «Interacción») y en cuatro piezas
@@ -637,6 +661,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Carga y forma: carga por carrera medida/estimada (≈)/sin dato, aguda, crónica,
+  forma y ratio con estados, carga semanal con aviso de subida, tarjeta en Inicio y «Hoy» con
+  el ratio. Reglas versión 10.
 - 2026‑11‑18 — Botones y toques en toda la app: pulsado inmediato y foco visible definidos una
   vez, selectores con indicador deslizante, interruptor animado, botones con spinner y ✓/✕,
   avisos breves (también tras redirigir), objetivos de 44 px y transición suave entre pantallas.

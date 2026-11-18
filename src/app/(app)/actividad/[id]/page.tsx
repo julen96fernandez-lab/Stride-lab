@@ -111,7 +111,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
       <DurabilityCard d={durability} check={decoupling} />
 
       {/* Tiempo en zonas y carga */}
-      <ZonesCard seconds={run.hrZoneSeconds} load={run.trainingLoad} zones={zones} estimated={run.loadEstimated} />
+      <ZonesCard seconds={run.hrZoneSeconds} load={run.trainingLoad} zones={zones} estimated={run.loadEstimated} durationS={run.durationS} />
 
       {/* Métricas */}
       <Metrics run={run} />

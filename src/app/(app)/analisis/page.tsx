@@ -8,7 +8,8 @@ import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { Segmented } from "@/components/ui/Segmented";
 import { DEFAULT_HR_BAND, MIN_DISTANCE_M, parseBand } from "@/lib/analysis/pace-at-hr";
-import { getAnalysis, getEfficiency, getInsights, getPeriodsView } from "@/lib/db/queries";
+import { getAnalysis, getEfficiency, getFitness, getInsights, getPeriodsView } from "@/lib/db/queries";
+import { FitnessCard } from "@/components/charts/FitnessCharts";
 import { ConsistencyCalendar, PaceTrend, YearCumulative } from "@/components/charts/InsightCharts";
 import type { PaceRange } from "@/lib/analysis/insights";
 import { isSessionType, type SessionType } from "@/lib/analysis/session-type";
@@ -107,6 +108,9 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
 
       {/* Volumen por semana / mes / año */}
       <PeriodsCard unit={unit} weeks={weeks} keep={keepFc} />
+
+      {/* Carga y forma */}
+      <FitnessSection />
 
       {/* Evolución del ritmo, calendario y comparación de años */}
       <InsightsCards sp={sp} />
@@ -556,4 +560,9 @@ async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | u
       </p>
     </section>
   );
+}
+
+async function FitnessSection() {
+  const view = await getFitness();
+  return <FitnessCard view={view} />;
 }

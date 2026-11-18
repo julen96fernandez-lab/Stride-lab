@@ -7,7 +7,7 @@ import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import { bestEfforts } from "@/lib/analysis/best-efforts";
 import { paceInHrBand, z2Band } from "@/lib/analysis/efficiency";
-import { estimatedLoad, timeInZones, trainingLoad } from "@/lib/analysis/hr-zones";
+import { runLoad, timeInZones } from "@/lib/analysis/hr-zones";
 import { buildStream, reduceTrack } from "@/lib/analysis/run-stream";
 import { classifyCandidate, getZones } from "@/lib/analysis/session-type-db";
 import { applyInjuryFlags } from "@/lib/analysis/injuries-db";
@@ -64,7 +64,13 @@ export async function previewManual(db: Db, input: ManualInput, file?: { name: s
   const zones = await getZones(db);
   const series = parsed ? fileSeries(parsed.points, input.startAt.getTime()) : null;
   const auto = await classifyCandidate(db, candidateFor(editId ?? "preview", input, d));
-  const hrLoad = series?.hr ? trainingLoad(timeInZones(series.hr.t, series.hr.v, zones.limits)) : null;
+  const rl = runLoad({
+    zoneSeconds: series?.hr ? timeInZones(series.hr.t, series.hr.v, zones.limits) : null,
+    durationS: input.durationS,
+    avgHr: input.avgHr,
+    hrSamples: series?.hr?.v,
+    limits: zones.limits,
+  });
   return {
     paceSPerKm: d.paceSPerKm,
     isSpecial: d.isSpecial,
@@ -72,8 +78,8 @@ export async function previewManual(db: Db, input: ManualInput, file?: { name: s
     type: input.sessionType ?? auto.type,
     typeReason: input.sessionType ? "Elegido a mano" : auto.reason,
     typeIsManual: !!input.sessionType,
-    load: hrLoad ?? estimatedLoad(input.avgHr, input.durationS, zones.limits),
-    loadEstimated: !hrLoad && input.avgHr !== null,
+    load: rl.load,
+    loadEstimated: rl.quality === "estimated",
     duplicates: await findDuplicates(db, input.startAt, editId),
     file: parsed
       ? { kind: parsed.kind, points: parsed.points.length, hasGps: parsed.summary.hasGps, hasHr: !!series?.hr, hasPower: !!series?.power }
@@ -222,7 +228,7 @@ async function recomputeOne(db: Db, id: string, input: ManualInput, d: ReturnTyp
 
   const auto = d.status === "valid" ? await classifyCandidate(db, candidateFor(id, input, d)) : null;
   const zoneSecs = by.hr ? timeInZones(by.hr.t, by.hr.v, zones.limits) : null;
-  const load = zoneSecs ? trainingLoad(zoneSecs) : estimatedLoad(input.avgHr, input.durationS, zones.limits);
+  const rl = runLoad({ zoneSeconds: zoneSecs, durationS: input.durationS, avgHr: input.avgHr, hrSamples: by.hr?.v, limits: zones.limits });
 
   let ef: { paceSPerKm: number; seconds: number } | null = null;
   if (by.distance && by.hr) {
@@ -235,8 +241,8 @@ async function recomputeOne(db: Db, id: string, input: ManualInput, d: ReturnTyp
       sessionTypeAuto: auto?.type ?? null,
       sessionTypeReason: auto?.reason ?? null,
       hrZoneSeconds: zoneSecs,
-      trainingLoad: load,
-      loadEstimated: !zoneSecs && load !== null,
+      trainingLoad: rl.load,
+      loadEstimated: rl.quality === "estimated",
       efZ2PaceSPerKm: ef?.paceSPerKm ?? null,
       efZ2Seconds: ef?.seconds ?? null,
     })

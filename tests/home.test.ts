@@ -80,6 +80,47 @@ describe("recomendación de hoy", () => {
   });
 });
 
+describe("recomendación de hoy con el ratio de carga", () => {
+  const calidad = { runs: [run(2, "rodaje", 90), ...base], openInjury: false, now: NOW };
+  const libre = { runs: [run(3, "rodaje"), run(4, "tempo"), ...base], openInjury: false, now: NOW };
+  const fit = (ratio: number | null, enough = true, form = 0) => ({ ratio, form, chronic: 20, enough });
+
+  it("ratio > 1,5 → descanso con el motivo", () => {
+    const r = recommendToday({ ...calidad, fitness: fit(1.62) });
+    expect(r.kind).toBe("descanso");
+    expect(r.reason).toMatch(/riesgo de sobrecarga: ratio 1,62/i);
+  });
+  it("ratio 1,3–1,5 → como mucho suave", () => {
+    const r = recommendToday({ ...calidad, fitness: fit(1.4) });
+    expect(r).toMatchObject({ kind: "suave" });
+    expect(r.reason).toMatch(/Carga alta esta semana: ratio 1,40/);
+    expect(recommendToday({ ...libre, fitness: fit(1.3) }).kind).toBe("suave");
+  });
+  it("el ratio nunca hace la recomendación menos prudente", () => {
+    const comp = { runs: [run(1, "competicion", 120), ...base], openInjury: false, now: NOW };
+    expect(recommendToday({ ...comp, fitness: fit(0.5) }).kind).toBe("descanso");
+    const r = recommendToday({ ...comp, fitness: fit(1.7) });
+    expect(r.kind).toBe("descanso");
+    expect(r.reason).toMatch(/ratio 1,70/);
+  });
+  it("calidad solo con ratio < 1,3, y lo dice", () => {
+    const r = recommendToday({ ...calidad, fitness: fit(1.1) });
+    expect(r.kind).toBe("calidad");
+    expect(r.reason).toMatch(/ratio 1,10/);
+  });
+  it("libre y descansado: lo menciona", () => {
+    expect(recommendToday({ ...libre, fitness: fit(0.6, true, 8) }).reason).toMatch(/Vienes descansado: ratio 0,60/);
+  });
+  it("sin 28 días de historial no usa el ratio y lo dice", () => {
+    const r = recommendToday({ ...calidad, fitness: fit(1.8, false) });
+    expect(r.kind).toBe("calidad");
+    expect(r.reason).toMatch(/sin historial suficiente/);
+  });
+  it("con lesión abierta manda la lesión", () => {
+    expect(recommendToday({ ...calidad, openInjury: true, fitness: fit(0.5) }).reason).toMatch(/lesión/);
+  });
+});
+
 describe("tira de la semana", () => {
   it("lunes a domingo en hora de Madrid, con km, descanso, hoy y futuro", () => {
     const w = weekDays(

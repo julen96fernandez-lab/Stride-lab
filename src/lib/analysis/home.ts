@@ -6,6 +6,7 @@
  * duda, se recomienda lo más suave. Siempre se presenta como estimación.
  */
 import { localDay } from "./periods";
+import { RATIO_BANDS, fmtRatio } from "./fitness";
 
 export type TodayKind = "descanso" | "suave" | "calidad" | "libre";
 
@@ -52,7 +53,42 @@ export const LONG_BREAK_DAYS = 10;
 const km = (m: number | null) => (m === null ? "" : `${(m / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 })} km`);
 const daysTxt = (d: number) => (d === 1 ? "ayer" : `hace ${d} días`);
 
-export function recommendToday(input: { runs: readonly RunForToday[]; openInjury: boolean; now?: Date }): TodayAdvice {
+/** Estado de carga para «Hoy» (solo con 28 días de historial; si no, no se usa). */
+export interface FitnessForToday {
+  ratio: number | null;
+  form: number;
+  chronic: number;
+  /** hay al menos 28 días de historial */
+  enough: boolean;
+}
+
+/**
+ * Recomendación: primero las reglas de siempre; después el ratio aguda/crónica las hace más
+ * prudentes (nunca menos): > 1,5 → descanso; 1,3–1,5 → como mucho suave; «calidad» solo con
+ * ratio < 1,3. Sin 28 días de historial no se usa el ratio y se dice.
+ */
+export function recommendToday(input: { runs: readonly RunForToday[]; openInjury: boolean; now?: Date; fitness?: FitnessForToday | null }): TodayAdvice {
+  const base = baseAdvice(input);
+  const f = input.fitness;
+  if (!f || input.openInjury) return base;
+  const mk = (kind: TodayKind, reason: string): TodayAdvice => ({ kind, label: TODAY_LABEL[kind], reason });
+  if (!f.enough || f.ratio === null) {
+    return base.kind === "descanso" ? base : { ...base, reason: `${base.reason} (Aún sin historial suficiente para el ratio de carga.)` };
+  }
+  const r = fmtRatio(f.ratio);
+  if (f.ratio > RATIO_BANDS.risk) {
+    return base.kind === "descanso" ? { ...base, reason: `${base.reason} Además, riesgo de sobrecarga: ratio ${r}.` } : mk("descanso", `Riesgo de sobrecarga: ratio ${r} (esta semana muy por encima de tu media).`);
+  }
+  if (f.ratio >= RATIO_BANDS.high) {
+    if (base.kind === "libre" || base.kind === "calidad") return mk("suave", `Carga alta esta semana: ratio ${r}. Mejor un rodaje suave.`);
+    return { ...base, reason: `${base.reason} Carga alta esta semana: ratio ${r}.` };
+  }
+  if (base.kind === "calidad") return { ...base, reason: `${base.reason} Carga controlada: ratio ${r}.` };
+  if (base.kind === "libre" && f.ratio < RATIO_BANDS.rested && f.form > 0) return { ...base, reason: `${base.reason} Vienes descansado: ratio ${r}.` };
+  return base;
+}
+
+function baseAdvice(input: { runs: readonly RunForToday[]; openInjury: boolean; now?: Date }): TodayAdvice {
   const now = input.now ?? new Date();
   const today = localDay(now);
   const mk = (kind: TodayKind, reason: string): TodayAdvice => ({ kind, label: TODAY_LABEL[kind], reason });

@@ -4,7 +4,7 @@ import * as s from "@/lib/db/schema";
 import { applyInjuryFlags } from "./injuries-db";
 import { recomputeEfficiency } from "./efficiency-db";
 import { recomputeEfforts } from "./efforts-db";
-import { DEFAULT_ZONES, estimatedLoad, timeInZones, trainingLoad, validZones, type HrZones } from "./hr-zones";
+import { DEFAULT_ZONES, runLoad, timeInZones, validZones, type HrZones } from "./hr-zones";
 import { DEFAULT_TYPE_SETTINGS, classifySessionTypes, type RunForType, type SessionType, type TypeSettings } from "./session-type";
 
 const SETTINGS_KEY = "session_type_settings";
@@ -70,7 +70,6 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
       intervalSteps: sql<string[] | null>`${s.runs.raw}->'intervalSteps'`,
       inInjury: s.runs.inInjury,
       durationS: s.runs.durationS,
-      loadEstimated: s.runs.loadEstimated,
     })
     .from(s.runs)
     .where(eq(s.runs.status, "valid"));
@@ -82,6 +81,7 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
     .innerJoin(s.runs, and(eq(s.runs.id, s.runSeries.runId), eq(s.runs.status, "valid")))
     .where(eq(s.runSeries.metric, "hr"));
   const zoneSecs = new Map(hrSeries.map((h) => [h.runId, timeInZones(h.t, h.v, zones.limits)]));
+  const hrValues = new Map(hrSeries.map((h) => [h.runId, h.v]));
 
   const res = classifySessionTypes(rows, settings, zones);
   const ids = rows.map((r) => r.id);
@@ -91,27 +91,28 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
       const z = zoneSecs.get(i);
       return z ? `{${z.map((x) => Math.round(x)).join(",")}}` : null;
     });
-    // Sin muestras de pulso, una carrera manual conserva su carga estimada (con las zonas actuales).
+    // Carga medida (pulso en ≥ 80 % de la carrera), estimada con el pulso medio (≈) o sin dato.
     const byId = new Map(rows.map((r) => [r.id, r]));
-    const loads = ids.map((i) => {
-      const z = zoneSecs.get(i);
-      if (z) return trainingLoad(z);
+    const loadsQ = ids.map((i) => {
       const r = byId.get(i)!;
-      return r.loadEstimated ? estimatedLoad(r.avgHr, r.durationS, zones.limits) : null;
+      return runLoad({ zoneSeconds: zoneSecs.get(i) ?? null, durationS: r.durationS, avgHr: r.avgHr, hrSamples: hrValues.get(i), limits: zones.limits });
     });
+    const loads = loadsQ.map((x) => x.load);
     await db.execute(sql`
       UPDATE runs SET
         session_type_auto = x.t,
         session_type_reason = x.r,
         hr_zone_seconds = x.z::real[],
-        training_load = x.l
+        training_load = x.l,
+        load_estimated = x.e
       FROM (SELECT * FROM unnest(
         ${sql.param(ids)}::uuid[],
         ${sql.param(ids.map((i) => res.get(i)!.type))}::text[],
         ${sql.param(ids.map((i) => res.get(i)!.reason))}::text[],
         ${sql.param(zs)}::text[],
-        ${sql.param(loads)}::real[]
-      ) AS t(id, t, r, z, l)) x
+        ${sql.param(loads)}::real[],
+        ${sql.param(loadsQ.map((x) => x.quality === "estimated"))}::boolean[]
+      ) AS t(id, t, r, z, l, e)) x
       WHERE runs.id = x.id`);
   }
   // Las no válidas no llevan tipo automático.
@@ -149,11 +150,31 @@ export async function classifyCandidate(db: Db, candidate: RunForType): Promise<
  * que se abra una pantalla, todo se recalcula una vez.
  * 3 = Series por rutas de paso con repetición + tipos por zona de FC + carga.
  */
-const CLASSIFIER_VERSION = "9"; // 9 = ritmo en Z2 por carrera (eficiencia aeróbica)
+const CLASSIFIER_VERSION = "10"; // 10 = carga medida (pulso ≥ 80 %) o estimada con el pulso medio
 const VERSION_KEY = "classifier_version";
 
 /** Recalcula si las reglas cambiaron o si hay carreras válidas sin tipo automático. */
 export async function ensureClassified(db: Db): Promise<void> {
+  // Una vez comprobado, no se vuelve a mirar en un rato (son 2 consultas en cada pantalla), y si
+  // varias consultas lo piden a la vez comparten la misma comprobación: dos recálculos
+  // simultáneos chocaban al reescribir los récords.
+  if (classifiedUntil > Date.now()) return;
+  inFlight ??= checkAndClassify(db).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+/** Tras importar, reprocesar o cambiar ajustes, que la próxima pantalla vuelva a comprobar. */
+export function forgetClassified() {
+  classifiedUntil = 0;
+}
+
+const CLASSIFIED_TTL_MS = 5 * 60_000;
+let classifiedUntil = 0;
+let inFlight: Promise<void> | null = null;
+
+async function checkAndClassify(db: Db): Promise<void> {
   const [ver, pending] = await Promise.all([
     db.select().from(s.appSettings).where(eq(s.appSettings.key, VERSION_KEY)).limit(1),
     db
@@ -162,12 +183,14 @@ export async function ensureClassified(db: Db): Promise<void> {
       .where(and(eq(s.runs.status, "valid"), isNull(s.runs.sessionTypeAuto)))
       .limit(1),
   ]);
-  if (ver[0]?.value === CLASSIFIER_VERSION && pending.length === 0) return;
-  await reclassifyAll(db);
-  await db
-    .insert(s.appSettings)
-    .values({ key: VERSION_KEY, value: CLASSIFIER_VERSION })
-    .onConflictDoUpdate({ target: s.appSettings.key, set: { value: CLASSIFIER_VERSION, updatedAt: sql`now()` } });
+  if (ver[0]?.value !== CLASSIFIER_VERSION || pending.length > 0) {
+    await reclassifyAll(db);
+    await db
+      .insert(s.appSettings)
+      .values({ key: VERSION_KEY, value: CLASSIFIER_VERSION })
+      .onConflictDoUpdate({ target: s.appSettings.key, set: { value: CLASSIFIER_VERSION, updatedAt: sql`now()` } });
+  }
+  classifiedUntil = Date.now() + CLASSIFIED_TTL_MS;
 }
 
 export async function setManualType(db: Db, runId: string, type: SessionType | null): Promise<void> {

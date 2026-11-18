@@ -23,7 +23,7 @@ export function RunRow({ run }: { run: RunListItem }) {
         {(run.type || run.trainingLoad !== null) && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {run.type && <TypeTag type={run.type} manual={run.typeManual} />}
-            <LoadBadge load={run.trainingLoad} />
+            <LoadBadge load={run.trainingLoad} estimated={run.loadEstimated} />
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ import { ButtonLink, Card, SectionTitle, Stat } from "@/components/ui/primitives
 import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { Ring } from "@/components/ui/GoalCard";
 import { getHome, getHomeOverview } from "@/lib/db/queries";
+import { FitnessMini } from "@/components/charts/FitnessCharts";
 import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
@@ -137,6 +138,9 @@ async function HomeData() {
         </div>
         <p className="relative mt-2 text-[14px] leading-snug text-fg-2">{o.advice.reason}</p>
       </section>
+
+      {/* Carga y forma */}
+      {o.fitness && <FitnessMini f={o.fitness} />}
 
       {/* 2) Semana */}
       <section className="card p-5" aria-label="Esta semana">
