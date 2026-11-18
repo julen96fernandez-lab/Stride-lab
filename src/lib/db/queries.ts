@@ -619,3 +619,48 @@ export async function getManualForEdit(id: string) {
     },
   };
 }
+
+// ─── Inicio (rediseño) ───────────────────────────────────────────────────────
+
+/** Todo lo de Inicio en una llamada: hoy, semana, mes, lesión abierta, récords y eficiencia. */
+export async function getHomeOverview() {
+  const now = new Date();
+  const [runs, goals, injuries, records, efficiency] = await Promise.all([
+    runsForPeriods(),
+    getGoals(db()),
+    listInjuries(db()),
+    getRecords(),
+    getEfficiency("rodaje"),
+  ]);
+  const { recommendToday, weekDays } = await import("@/lib/analysis/home");
+  const today = new Date(localDay(now) * 86_400_000).toISOString().slice(0, 10);
+  const openInjury = injuries.find((i) => i.startDate <= today && (i.endDate === null || i.endDate >= today)) ?? null;
+  const recent = runs.filter((r) => r.startAt.getTime() >= now.getTime() - 60 * 86_400_000);
+  const advice = recommendToday({ runs: recent, openInjury: !!openInjury, now });
+
+  const week = buildPeriods(runs, "week", 1, now)[0];
+  const month = buildPeriods(runs, "month", 1, now)[0];
+  const monthCmp = comparePeriodToDate(runs.filter((r) => !r.inInjury), "month", now);
+  return {
+    openInjury: openInjury ? { startDate: openInjury.startDate, note: openInjury.note } : null,
+    advice,
+    week: {
+      days: weekDays(runs, now),
+      km: week.km,
+      goal: goals.week.km && !goals.week.paused ? goalProgress(goals.week.km, week.km, "week", now) : null,
+    },
+    month: {
+      km: month.km,
+      runs: month.runs,
+      goal: goals.month.km && !goals.month.paused ? goalProgress(goals.month.km, month.km, "month", now) : null,
+      cmp: monthCmp,
+    },
+    recentRecords: records.filter((r) => r.best && r.recent).map((r) => ({ key: r.key, label: r.label, m: r.m, timeS: r.best!.timeS, startAt: r.best!.startAt, runId: r.best!.runId })),
+    efficiency: {
+      points: efficiency.points.map((p) => ({ t: p.t, pace: p.pace })),
+      last: efficiency.points.at(-1) ?? null,
+      changeS: efficiency.changeS,
+      band: efficiency.band,
+    },
+  };
+}

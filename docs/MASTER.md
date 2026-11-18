@@ -116,6 +116,25 @@ Cálculos en `src/lib/analysis/insights.ts` (y `kmByType` en `periods.ts`), con 
   completo, discontinuo) y tabla del 1 de enero hasta hoy frente al mismo tramo del año
   pasado: km, horas, desnivel, carreras y ritmo medio (sin especiales).
 
+## Inicio (rediseño del 18‑nov)
+
+Orden: banda «Modo lesión» (si hay un periodo abierto) → **Hoy** → **Esta semana** → **Este
+mes** → **Última carrera** → Últimos 28 días (distancia y ritmo) → Km por tipo → Récords de los
+últimos 12 meses → Eficiencia aeróbica (rodajes, Z2) → VO₂ máx. Botón «+» fijo para añadir
+carrera. Los km por mes de 12 meses salen de Inicio (están en Análisis → Volumen).
+- **Hoy** (`src/lib/analysis/home.ts`, con pruebas): recomendación provisional por reglas
+  prudentes, siempre «estimación, no un plan». Lesión abierta → Descanso; ya corrido hoy →
+  Descanso; tres días seguidos → Descanso; ayer competición → Descanso; ayer series o tirada
+  larga → Rodaje suave (Descanso si la carga fue ≥ 1,5× la media de las carreras de los 28
+  días anteriores, con al menos 3 de referencia); ayer carga alta → Rodaje suave; hace 2 días
+  sesión exigente o carga alta → Rodaje suave; ≥ 10 días sin correr → Rodaje suave;
+  descansado y sin calidad (series, tempo, competición) en 4 días → Calidad; si no, Libre.
+  Sin pulso no se compara la carga.
+- **Semana**: lunes a domingo (Madrid), un círculo por día (km, descanso, hoy, por llegar),
+  anillo del objetivo semanal y km que faltan.
+- **Mes**: anillo del objetivo y comparación con el mismo tramo del mes pasado (sin lesión;
+  si hay carreras en lesión, el texto lo dice).
+
 ## Carreras añadidas a mano
 
 Botón «Añadir carrera» en Actividad y en Perfil → Importar (`/actividad/nueva`; edición en
@@ -584,6 +603,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Inicio rediseñado: Hoy (recomendación provisional), semana día a día, mes con
+  el mismo tramo, última carrera, y abajo 28 días, tipos, récords, eficiencia y VO₂; botón «+»
+  y banda de modo lesión.
 - 2026‑11‑18 — Estilo premium común en todos los gráficos (`theme.ts`), sin repetir la
   animación al filtrar. Detalle del 4‑jul: franja fija, pulso por parcial desde 60 ppm,
   banda «sin datos» y eje de km con el GPS cuando las muestras se quedan cortas.

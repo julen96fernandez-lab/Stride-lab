@@ -153,3 +153,27 @@ export function StackedTypeYears({
   }, [years, types]);
   return <EChart option={option} height={height} label={label} />;
 }
+
+/** Línea pequeña (tendencia) con el estilo común; `inverse` = más arriba es menor (ritmo). */
+export function Sparkline({ points, height = 64, inverse = false, label, unit = "number" }: { points: { t: number; v: number }[]; height?: number; inverse?: boolean; label: string; unit?: "pace" | "number" }) {
+  const option = useMemo(() => {
+    const format = (v: number) =>
+      unit === "pace" ? `${Math.floor(Math.round(v) / 60)}:${String(Math.round(v) % 60).padStart(2, "0")} /km` : v.toLocaleString("es-ES", { maximumFractionDigits: 1 });
+    const vs = points.map((p) => p.v);
+    const lo = Math.min(...vs);
+    const hi = Math.max(...vs);
+    const pad = Math.max(1, (hi - lo) * 0.15);
+    return {
+      ...baseOption({ left: 2, right: 2, top: 6, bottom: 4 }),
+      tooltip: tooltip({
+        formatter: (ps: { value: [number, number] }[]) =>
+          tipHead(new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short" }).format(new Date(ps[0].value[0]))) + tipRow(format(ps[0].value[1])),
+      }),
+      xAxis: { type: "time", show: false },
+      yAxis: valueAxis({ show: false, min: lo - pad, max: hi + pad, inverse }),
+      series: [lineSeries({ data: points.map((p) => [p.t, p.v]), area: true, areaOrigin: inverse ? "end" : "start", smooth: 0.4 })],
+    };
+  }, [points, inverse, unit]);
+  if (points.length < 2) return <ChartEmpty message="Aún no hay datos suficientes." height={height} />;
+  return <EChart option={option} height={height} label={label} />;
+}

@@ -4,7 +4,7 @@ import type { GoalProgress } from "@/lib/analysis/periods";
 const km1 = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 1 });
 
 /** Anillo de progreso (SVG): pista neutra y arco en lima; el número va dentro. */
-function Ring({ pct, size = 84 }: { pct: number; size?: number }) {
+export function Ring({ pct, size = 84 }: { pct: number; size?: number }) {
   const r = 34;
   const c = 2 * Math.PI * r;
   return (
