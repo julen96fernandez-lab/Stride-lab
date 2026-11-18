@@ -11,9 +11,14 @@ import { reduceTrack, type Track } from "./run-stream";
  * reducida (≤ 1 punto cada 2 s). Si el GPX no trae horas se guarda vacía para no volver a
  * leerlo. Si Blob falla, devuelve null sin guardar nada (se reintenta la próxima vez).
  */
-export async function ensureTrack(db: Db, run: { id: string; startAt: Date }, blobUrl: string | null): Promise<Track | null> {
-  const rows = await db.select().from(s.runTracks).where(eq(s.runTracks.runId, run.id)).limit(1);
-  const row = rows[0];
+export async function ensureTrack(
+  db: Db,
+  run: { id: string; startAt: Date },
+  blobUrl: string | null,
+  /** fila de run_tracks ya leída en paralelo con lo demás (undefined = leerla aquí) */
+  preloaded?: { t: number[]; lat: number[]; lon: number[]; ele: number[] | null } | null,
+): Promise<Track | null> {
+  const row = preloaded !== undefined ? preloaded : (await db.select().from(s.runTracks).where(eq(s.runTracks.runId, run.id)).limit(1))[0];
   if (row) return row.t.length > 1 ? { t: row.t, lat: row.lat, lon: row.lon, ele: row.ele ?? row.t.map(() => null) } : null;
   if (!blobUrl) return null;
 

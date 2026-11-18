@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { db } from "@/lib/db/client";
+import { dataChanged } from "@/lib/cache/invalidate";
 import { putPrivate } from "@/lib/import/blob";
 import { ActivityFileError } from "@/lib/import/activity-file";
 import { parseManualForm, type ManualErrors } from "@/lib/manual/manual";
@@ -63,6 +64,7 @@ export async function manualRunAction(_prev: ManualState, fd: FormData): Promise
     if (e instanceof ActivityFileError) return { errors: { file: e.message } };
     return { error: e instanceof Error ? e.message : "No se pudo guardar la carrera." };
   }
+  dataChanged();
   refresh();
   redirect(`/actividad/${saved}?aviso=${id ? "carrera-actualizada" : "carrera-guardada"}`);
 }
@@ -71,6 +73,7 @@ export async function deleteManualAction(id: string): Promise<{ ok: boolean }> {
   if (!UUID.test(id)) return { ok: false };
   const ok = await deleteManualRun(db(), id);
   if (ok) {
+    dataChanged();
     refresh();
     redirect("/actividad?aviso=carrera-borrada");
   }

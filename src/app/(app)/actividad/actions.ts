@@ -1,6 +1,8 @@
 "use server";
 
+import { refresh } from "next/cache";
 import { db } from "@/lib/db/client";
+import { dataChanged } from "@/lib/cache/invalidate";
 import { isSessionType } from "@/lib/analysis/session-type";
 import { validZones, type HrZones } from "@/lib/analysis/hr-zones";
 import { ensureClassified, reclassifyAll, saveTypeSettings, saveZones, setManualType } from "@/lib/analysis/session-type-db";
@@ -10,6 +12,7 @@ export async function setRunType(runId: string, type: string): Promise<{ ok: boo
   if (!/^[0-9a-f-]{36}$/i.test(runId)) return { ok: false };
   if (type !== "auto" && !isSessionType(type)) return { ok: false };
   await setManualType(db(), runId, type === "auto" ? null : type);
+  dataChanged();
   return { ok: true };
 }
 
@@ -37,6 +40,8 @@ export async function saveTrainingSettings(_prev: SettingsState, formData: FormD
   await saveTypeSettings(d, { longRunKm, trailMPerKm });
   const count = await reclassifyAll(d);
   await ensureClassified(d); // deja apuntada la versión de las reglas
+  dataChanged();
+  refresh();
   return { ok: `${count} carreras recalculadas.` };
 }
 
@@ -57,5 +62,7 @@ export async function saveGoalsAction(_prev: GoalsState, formData: FormData): Pr
     const which = { week: "semanal", month: "mensual", year: "anual" }[(e as Error).message] ?? "";
     return { error: `Revisa el objetivo ${which}: debe ser un número de km mayor que 0.` };
   }
+  dataChanged();
+  refresh();
   return { ok: "Objetivos guardados." };
 }

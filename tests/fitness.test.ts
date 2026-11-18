@@ -201,3 +201,29 @@ describe("loadCounts", () => {
     });
   });
 });
+
+describe("vista en columnas (lo que viaja al móvil)", () => {
+  it("ida y vuelta: mismos valores (redondeados a 2 decimales), forma y estado recalculados", async () => {
+    const { buildFitnessView, viewPoints } = await import("@/lib/analysis/fitness");
+    const runs = Array.from({ length: 60 }, (_, i) => ({
+      id: `r${i}`,
+      startAt: new Date(Date.UTC(2026, 8, 1 + i * 2, 8)),
+      load: i % 5 === 0 ? null : 40 + (i % 7) * 10,
+      estimated: i % 3 === 0,
+      distanceM: 10000,
+      type: "rodaje",
+    }));
+    const v = buildFitnessView(runs, new Date("2026-11-18T12:00:00Z"), false);
+    const pts = viewPoints(v.cols);
+    expect(pts).toHaveLength(v.cols.date.length);
+    const full = fitnessSeries(dailyLoads(runs, localDay(new Date("2026-11-18T12:00:00Z"))));
+    const last = full.at(-1)!;
+    const lp = pts.at(-1)!;
+    expect(lp.chronic).toBeCloseTo(last.chronic, 2);
+    expect(lp.acute).toBeCloseTo(last.acute, 2);
+    expect(lp.form).toBeCloseTo(last.form, 1);
+    expect(lp.state).toBe(last.state);
+    const withMissing = pts.find((p) => p.missing > 0)!;
+    expect(withMissing.dayApprox).toBe(true);
+  });
+});

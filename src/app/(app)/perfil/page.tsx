@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { getGoalsSettings, getInjuriesView, getTrainingSettingsView } from "@/lib/db/queries";
+import { profileScreen } from "@/lib/db/screens";
+import { ProfileSkeleton } from "@/components/ui/Skeletons";
+import { cacheDay } from "@/lib/cache/tags";
 import { InjuriesForm } from "./InjuriesForm";
 import { GoalsForm } from "./GoalsForm";
 import { TrainingSettingsForm } from "./TrainingSettingsForm";
@@ -35,13 +37,13 @@ export default function ProfilePage() {
         <Row href="/perfil/importar" title="Importar datos" detail="Export de Apple Health (.zip)" />
       </Card>
       <ThemePicker />
-      <Suspense fallback={<div className="card h-[380px]" aria-hidden="true" />}>
+      <Suspense fallback={<ProfileSkeleton rows={5} />}>
         <GoalsCard />
       </Suspense>
-      <Suspense fallback={<div className="card h-[200px]" aria-hidden="true" />}>
+      <Suspense fallback={<ProfileSkeleton rows={3} />}>
         <InjuriesCard />
       </Suspense>
-      <Suspense fallback={<div className="card h-[620px]" aria-hidden="true" />}>
+      <Suspense fallback={<ProfileSkeleton rows={2} />}>
         <TypeSettingsCard />
       </Suspense>
       <Card>
@@ -62,18 +64,18 @@ export default function ProfilePage() {
 
 async function TypeSettingsCard() {
   await connection();
-  const { types, zones } = await getTrainingSettingsView();
+  const { types, zones } = (await profileScreen(cacheDay())).settings;
   return <TrainingSettingsForm zones={zones} types={types} />;
 }
 
 async function GoalsCard() {
   await connection();
-  const { goals, suggested } = await getGoalsSettings();
+  const { goals, suggested } = (await profileScreen(cacheDay())).goals;
   return <GoalsForm goals={goals} suggested={suggested} />;
 }
 
 async function InjuriesCard() {
   await connection();
-  const { injuries, today } = await getInjuriesView();
+  const { injuries, today } = (await profileScreen(cacheDay())).injuries;
   return <InjuriesForm injuries={injuries} today={today} />;
 }

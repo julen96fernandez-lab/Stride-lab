@@ -112,28 +112,54 @@ export function EChart({
   };
 
   useEffect(() => {
-    if (!ref.current) return;
-    const c = echarts.init(ref.current, undefined, { renderer: "svg" });
-    chart.current = c;
-    const ro = new ResizeObserver(() => c.resize());
-    ro.observe(ref.current);
-    const off = onThemeChange(() => requestAnimationFrame(apply));
-    c.on("click", (e: { seriesIndex?: number; dataIndex?: number }) => {
-      if (itemRef.current && e.seriesIndex !== undefined && e.dataIndex !== undefined) itemRef.current(e.seriesIndex, e.dataIndex);
-    });
-    // Toque en cualquier punto de la columna de una categoría (no solo sobre la barra).
-    c.getZr().on("click", (e) => {
-      if (!selectRef.current) return;
-      const pt = [e.offsetX, e.offsetY];
-      if (!c.containPixel("grid", pt)) return;
-      const [idx] = c.convertFromPixel({ seriesIndex: 0 }, pt) as number[];
-      if (Number.isFinite(idx)) selectRef.current(Math.round(idx));
-    });
+    const el = ref.current;
+    if (!el) return;
+    let cleanup: (() => void) | null = null;
+    // Se inicializa al acercarse a la pantalla: abrir Análisis no monta de golpe los diez
+    // gráficos (solo los visibles); el resto, al hacer scroll.
+    const start = () => {
+      if (cleanup) return;
+      const c = echarts.init(el, undefined, { renderer: "svg" });
+      chart.current = c;
+      const ro = new ResizeObserver(() => c.resize());
+      ro.observe(el);
+      const off = onThemeChange(() => requestAnimationFrame(apply));
+      c.on("click", (e: { seriesIndex?: number; dataIndex?: number }) => {
+        if (itemRef.current && e.seriesIndex !== undefined && e.dataIndex !== undefined) itemRef.current(e.seriesIndex, e.dataIndex);
+      });
+      // Toque en cualquier punto de la columna de una categoría (no solo sobre la barra).
+      c.getZr().on("click", (e) => {
+        if (!selectRef.current) return;
+        const pt = [e.offsetX, e.offsetY];
+        if (!c.containPixel("grid", pt)) return;
+        const [idx] = c.convertFromPixel({ seriesIndex: 0 }, pt) as number[];
+        if (Number.isFinite(idx)) selectRef.current(Math.round(idx));
+      });
+      apply();
+      cleanup = () => {
+        off();
+        ro.disconnect();
+        c.dispose();
+        chart.current = null;
+      };
+    };
+    if (typeof IntersectionObserver === "undefined") {
+      start();
+      return () => cleanup?.();
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          start();
+        }
+      },
+      { rootMargin: "300px 0px" },
+    );
+    io.observe(el);
     return () => {
-      off();
-      ro.disconnect();
-      c.dispose();
-      chart.current = null;
+      io.disconnect();
+      cleanup?.();
     };
   }, []);
 

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { shouldRefresh, tabNavigation } from "@/lib/ui/tabs";
 
 type Tab = { href: string; label: string; icon: ReactNode; match: (p: string) => boolean };
 
@@ -59,6 +60,25 @@ const TABS: Tab[] = [
 
 export function TabBar() {
   const pathname = usePathname();
+  const router = useRouter();
+  // Pestaña pulsada: se marca al instante, aunque el contenido aún esté llegando.
+  const [pressed, setPressed] = useState<{ href: string; from: string } | null>(null);
+  const shownPath = pressed && pressed.from === pathname ? pressed.href : pathname;
+  const fromTab = useRef(false);
+  const seenAt = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    const now = Date.now();
+    const last = seenAt.current.get(pathname);
+    seenAt.current.set(pathname, now);
+    if (!fromTab.current) return; // volver atrás o entrar por un enlace: el navegador recupera el scroll
+    fromTab.current = false;
+    // Entrar en una pestaña: siempre arriba.
+    window.scrollTo({ top: 0 });
+    // Ya visitada: se ve al instante lo guardado y, si tiene más de un minuto, se refresca por detrás.
+    if (shouldRefresh(last, now)) router.refresh();
+  }, [pathname, router]);
+
   return (
     <nav
       aria-label="Navegación principal"
@@ -67,16 +87,27 @@ export function TabBar() {
     >
       <ul className="flex w-full max-w-[420px] items-stretch rounded-[30px] border border-line-strong bg-glass p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-150">
         {TABS.map((tab) => {
-          const active = tab.match(pathname);
+          const active = tab.match(shownPath);
           return (
             <li key={tab.href} className="flex-1">
               <Link
                 href={tab.href}
+                prefetch
+                onClick={(e) => {
+                  const nav = tabNavigation(pathname, tab.href);
+                  if (nav === "top") {
+                    e.preventDefault();
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    return;
+                  }
+                  fromTab.current = true;
+                  setPressed({ href: tab.href, from: pathname });
+                }}
                 aria-current={active ? "page" : undefined}
                 className="flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-[24px] transition-colors"
               >
                 <span
-                  className={`flex h-[30px] w-[52px] items-center justify-center rounded-full transition-all duration-300 ${
+                  className={`flex h-[30px] w-[52px] items-center justify-center rounded-full transition-all duration-150 ${
                     active ? "bg-lime text-lime-ink shadow-[0_0_18px_rgba(200,242,58,0.45)]" : "text-fg-3"
                   }`}
                 >

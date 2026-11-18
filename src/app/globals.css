@@ -413,7 +413,32 @@ body {
   view-transition-name: tabbar;
 }
 
+/* Tarjetas fuera de pantalla: el navegador no las maqueta ni pinta hasta acercarse (abrir
+   Análisis o Actividad cuesta lo que se ve, no la página entera). */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 520px;
+}
+
+/* Esqueletos: brillo suave que recorre la pieza (GPU: solo background-position). */
+.skel {
+  background: linear-gradient(90deg, var(--ov-1, rgba(127, 127, 127, 0.08)) 0%, color-mix(in srgb, var(--fg) 9%, transparent) 50%, var(--ov-1, rgba(127, 127, 127, 0.08)) 100%);
+  background-size: 200% 100%;
+  animation: skel 1.3s ease-in-out infinite;
+}
+@keyframes skel {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+  }
   :where(button, a[href], [role="button"], [role="switch"], [role="radio"], [role="tab"], summary):active {
     transform: none;
   }

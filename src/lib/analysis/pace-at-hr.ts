@@ -53,3 +53,12 @@ export function paceAtHrByYear(runs: RunForPaceAtHr[], band: [number, number], f
   }
   return out;
 }
+
+/** Franjas del selector «Ritmo con el mismo pulso». */
+export const HR_BANDS: [number, number][] = [
+  [130, 140],
+  [135, 145],
+  [140, 150],
+  [145, 155],
+  [150, 160],
+];

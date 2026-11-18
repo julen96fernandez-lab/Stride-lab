@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Spinner } from "@/components/ui/SubmitButton";
 import { toast } from "@/components/ui/Toaster";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -81,6 +82,7 @@ const subscribeClock = (cb: () => void) => {
 const useNow = () => useSyncExternalStore(subscribeClock, () => Math.floor(Date.now() / 1000) * 1000, () => 0);
 
 export function ImportFlow({ initial, initialCheck }: { initial: ImportView | null; initialCheck: CheckRun | null }) {
+  const router = useRouter();
   const [imp, setImp] = useState<ImportView | null>(initial);
   const [check, setCheck] = useState<CheckRun | null>(initialCheck);
   const [up, setUp] = useState<UploadProgress | null>(null);
@@ -152,6 +154,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
           apply(data);
           if (data.import.status === "done") {
             toast.success("Importación terminada.");
+            router.refresh(); // las pantallas ya visitadas no se quedan con datos viejos
             break;
           }
           if (data.import.status === "failed") throw new Error(data.import.error ?? "La importación ha fallado");
@@ -171,7 +174,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
         }
       }
     },
-    [refreshZips, touch],
+    [refreshZips, touch, router],
   );
 
   // ── Crear la importación a partir de un zip que ya está en Blob ──

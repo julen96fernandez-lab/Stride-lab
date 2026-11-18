@@ -13,7 +13,9 @@ import { LoadBadge } from "@/components/ui/Load";
 import { isSessionType } from "@/lib/analysis/session-type";
 import type { Durability } from "@/lib/analysis/durability";
 import { decouplingLabel, type DecouplingCheck } from "@/lib/analysis/efficiency";
-import { getRun } from "@/lib/db/queries";
+import { runScreen } from "@/lib/db/screens";
+import { DetailSkeleton } from "@/components/ui/Skeletons";
+import { cacheDay } from "@/lib/cache/tags";
 import { DASH, cap, date, dec, duration, int, pace } from "@/lib/format";
 
 export const metadata = { title: "Carrera · Stride Lab" };
@@ -27,19 +29,19 @@ export default function RunPage({ params }: PageProps<"/actividad/[id]">) {
         </svg>
         Actividad
       </Link>
-      <Suspense fallback={<div className="card h-[520px] animate-pulse" aria-hidden="true" />}>
+      <Suspense fallback={<DetailSkeleton />}>
         <RunDetail params={params} />
       </Suspense>
     </div>
   );
 }
 
-type Run = NonNullable<Awaited<ReturnType<typeof getRun>>>;
+type Run = NonNullable<Awaited<ReturnType<typeof runScreen>>>;
 
 async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await params;
-  const data = await getRun(id);
+  const data = /^[0-9a-f-]{36}$/i.test(id) ? await runScreen(id, cacheDay()) : null;
   if (!data) notFound();
   const { run, route, durability, decoupling, zones, explorer, prevId, nextId } = data;
 

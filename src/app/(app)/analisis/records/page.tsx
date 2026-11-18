@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { AnalysisSkeleton } from "@/components/ui/Skeletons";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { RecordChart } from "@/components/charts/RecordChart";
 import { PageHeader } from "@/components/ui/primitives";
 import { EFFORT_DISTANCES, type EffortKey } from "@/lib/analysis/best-efforts";
-import { getRecordHistory, getRecords } from "@/lib/db/queries";
+import { getRecordHistory } from "@/lib/db/queries";
+import { recordsScreen } from "@/lib/db/screens";
+import { cacheDay } from "@/lib/cache/tags";
 import { cap, date, dec } from "@/lib/format";
 
 export const metadata = { title: "Récords · Stride Lab" };
@@ -26,7 +29,7 @@ export default function RecordsPage({ searchParams }: PageProps<"/analisis/recor
         Análisis
       </Link>
       <PageHeader title="Récords" subtitle="Tus mejores marcas, dentro de cualquier carrera." />
-      <Suspense fallback={<div className="card h-[480px] animate-pulse" aria-hidden="true" />}>
+      <Suspense fallback={<AnalysisSkeleton />}>
         <Records searchParams={searchParams} />
       </Suspense>
     </div>
@@ -36,7 +39,7 @@ export default function RecordsPage({ searchParams }: PageProps<"/analisis/recor
 async function Records({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await connection();
   const sp = await searchParams;
-  const records = await getRecords();
+  const records = await recordsScreen(cacheDay());
   const selKey = (EFFORT_DISTANCES.find((d) => d.key === sp.d)?.key ?? null) as EffortKey | null;
 
   return (

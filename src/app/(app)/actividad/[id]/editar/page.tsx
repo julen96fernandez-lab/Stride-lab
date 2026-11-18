@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProfileSkeleton } from "@/components/ui/Skeletons";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
@@ -12,7 +13,7 @@ export default function EditRunPage({ params }: PageProps<"/actividad/[id]/edita
   return (
     <div className="flex flex-col gap-4 pb-6">
       <PageHeader title="Editar carrera" subtitle="Solo se pueden editar las carreras añadidas a mano." />
-      <Suspense fallback={<div className="card h-[520px] animate-pulse" aria-hidden="true" />}>
+      <Suspense fallback={<ProfileSkeleton rows={6} />}>
         <EditForm params={params} />
       </Suspense>
     </div>

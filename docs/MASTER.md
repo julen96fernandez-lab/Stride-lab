@@ -380,6 +380,34 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
 - `ensureClassified` comparte una sola comprobación entre consultas simultáneas (antes dos
   recálculos a la vez chocaban en `run_efforts`) y no repite la comprobación en 5 min.
 
+## Rendimiento
+
+- **Región**: funciones en **fra1** (`vercel.json`), junto a Neon (eu-central-1). Antes en iad1:
+  ~95 ms por ida y vuelta a la base de datos.
+- **Una carga por pantalla** (`src/lib/db/screens.ts`): `homeScreen`, `activityScreen`,
+  `analysisScreen`, `runScreen`, `profileScreen`, `recordsScreen`. Dentro, lo independiente en
+  paralelo y lo común (comprobación de reglas, carreras, objetivos, lesiones, zonas) una sola
+  vez por carga (`makeCtx` + `memoOnce`). Análisis pasó de 25 consultas en 3 rondas a 11 en 1;
+  Detalle, de 9 en 2 a 7 en 1 (la vecina anterior/siguiente y la pista, en la misma ronda).
+- **Caché**: `'use cache: remote'` con la etiqueta `datos` (`cache/tags.ts`), el día de Madrid en
+  la clave y vida de 5 min (cliente) / 15 min (revalida) / 1 día (caduca). Se invalida en cada
+  escritura: acciones (`dataChanged` → `updateTag`) y cada tramo de importación/Reprocesar
+  (`dataChangedInRoute` → `revalidateTag(…, { expire: 0 })`). Una prueba vigila que toda acción
+  invalide y que ninguna página lea la base de datos sin pasar por la caché.
+- **Selectores al instante** (`ChoiceProvider`/`ChoiceSelector`/`ChoicePanel`): la pantalla trae
+  todas las opciones y el selector solo elige qué se ve (y escribe la URL con `replaceState`).
+  Análisis (volumen, semanas, km por tipo, ritmo por rango y tipo —filtrado en el cliente—,
+  calendario Km/Carga, eficiencia, franja de pulso) y el filtro de Actividad. Cero peticiones.
+- **Pestañas**: precarga (`prefetch`), la pulsada se marca al instante, al entrar siempre arriba
+  (volver atrás recupera el scroll), y la caché del cliente (`staleTimes` 5 min) enseña al
+  instante una pestaña ya visitada; si tiene más de 1 min, se refresca por detrás.
+- **Esqueletos** con la forma real de cada pantalla (`Skeletons.tsx`) en vez de tarjetas en blanco.
+- **Pintado**: los gráficos se inicializan al acercarse a la pantalla (IntersectionObserver en
+  `EChart`); tarjetas lejanas con `content-visibility: auto`; Carga y forma viaja en columnas.
+- **Scroll de Análisis**: los chips ya no usan `scrollIntoView` (movía la página abajo del todo).
+- **Diagnóstico**: `/api/diag/perf` (con sesión) mide en la región de Vercel ms, consultas y
+  rondas por pantalla: `?modo=antes` (cada pieza por su cuenta) y sin modo (sin caché y con caché).
+
 ## Botones y toques (una sola definición)
 
 Todo el comportamiento táctil vive en `globals.css` (bloque «Interacción») y en cuatro piezas
@@ -665,6 +693,10 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Rendimiento: funciones en fra1, consultas en paralelo y sin repetir, caché por
+  pantalla con invalidación, selectores en el cliente (cero peticiones), precarga y caché de
+  pestañas, esqueletos, scroll arriba al entrar en una pestaña. Carga: aviso semanal solo si
+  además supera la media de 8 semanas; en Hoy, ratio > 1,5 → como mucho suave.
 - 2026‑11‑18 — Carga y forma: carga por carrera medida/estimada (≈)/sin dato, aguda, crónica,
   forma y ratio con estados, carga semanal con aviso de subida, tarjeta en Inicio y «Hoy» con
   el ratio. Reglas versión 10.

@@ -214,7 +214,8 @@ export interface FitnessRunIn extends LoadRun {
 
 export interface FitnessView {
   /** últimos 365 días (el selector 3/6/12 meses recorta en el cliente) */
-  points: { date: string; load: number; acute: number; chronic: number; form: number; ratio: number | null; state: LoadState | null; approx: boolean; dayApprox: boolean; missing: number; runs: string[] }[];
+  /** un valor por día, en columnas (viaja mucho más ligero que 365 objetos); ver viewPoints() */
+  cols: FitnessCols;
   /** semanas de los últimos 12 meses */
   weeks: WeekLoad[];
   /** carreras de esos días, para la tarjeta del día tocado */
@@ -238,19 +239,7 @@ export function buildFitnessView(runs: readonly FitnessRunIn[], now: Date, openI
   const inView = runs.filter((r) => ids.has(r.id));
   const last = all.at(-1) ?? null;
   return {
-    points: shown.map((p) => ({
-      date: p.date,
-      load: p.load,
-      acute: p.acute,
-      chronic: p.chronic,
-      form: p.form,
-      ratio: p.ratio,
-      state: p.state,
-      approx: p.approx,
-      dayApprox: p.estimated || p.missing > 0,
-      missing: p.missing,
-      runs: p.runs,
-    })),
+    cols: toCols(shown),
     weeks: weeklyLoads(dailyLoads(runs, today), today).filter((w) => w.startDay + 6 >= from),
     runs: Object.fromEntries(
       inView.map((r) => [r.id, { id: r.id, km: r.distanceM === null ? null : r.distanceM / 1000, type: r.type, load: r.load, estimated: r.estimated }]),
@@ -262,4 +251,62 @@ export function buildFitnessView(runs: readonly FitnessRunIn[], now: Date, openI
     counts: loadCounts(inView),
     openInjury,
   };
+}
+
+export interface ViewPoint {
+  date: string;
+  load: number;
+  acute: number;
+  chronic: number;
+  form: number;
+  ratio: number | null;
+  state: LoadState | null;
+  approx: boolean;
+  dayApprox: boolean;
+  missing: number;
+  runs: string[];
+}
+
+export interface FitnessCols {
+  date: string[];
+  load: number[];
+  acute: number[];
+  chronic: number[];
+  ratio: (number | null)[];
+  /** 0 = —, 1 aprox, 2 día con estimada o sin dato (bits) */
+  flags: number[];
+  missing: number[];
+  runs: string[][];
+}
+
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+function toCols(ps: readonly FitnessPoint[]): FitnessCols {
+  return {
+    date: ps.map((p) => p.date),
+    load: ps.map((p) => Math.round(p.load)),
+    acute: ps.map((p) => r2(p.acute)),
+    chronic: ps.map((p) => r2(p.chronic)),
+    ratio: ps.map((p) => (p.ratio === null ? null : r2(p.ratio))),
+    flags: ps.map((p) => (p.approx ? 1 : 0) | (p.estimated || p.missing > 0 ? 2 : 0)),
+    missing: ps.map((p) => p.missing),
+    runs: ps.map((p) => p.runs),
+  };
+}
+
+/** Vuelve a montar los puntos (en el cliente). Forma y estado se recalculan de aguda y crónica. */
+export function viewPoints(c: FitnessCols): ViewPoint[] {
+  return c.date.map((date, i) => ({
+    date,
+    load: c.load[i],
+    acute: c.acute[i],
+    chronic: c.chronic[i],
+    form: r2(c.chronic[i] - c.acute[i]),
+    ratio: c.ratio[i],
+    state: loadState(c.ratio[i]),
+    approx: (c.flags[i] & 1) === 1,
+    dayApprox: (c.flags[i] & 2) === 2,
+    missing: c.missing[i],
+    runs: c.runs[i],
+  }));
 }

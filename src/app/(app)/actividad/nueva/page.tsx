@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProfileSkeleton } from "@/components/ui/Skeletons";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { ManualRunForm } from "@/components/manual/ManualRunForm";
@@ -17,7 +18,7 @@ export default function NewRunPage() {
         Actividad
       </Link>
       <PageHeader title="Añadir carrera" subtitle="Sin reimportar el zip de Salud. Si luego lo importas, la del zip la sustituye." />
-      <Suspense fallback={<div className="card h-[520px] animate-pulse" aria-hidden="true" />}>
+      <Suspense fallback={<ProfileSkeleton rows={6} />}>
         <NewForm />
       </Suspense>
     </div>

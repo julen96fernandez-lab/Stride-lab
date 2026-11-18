@@ -35,6 +35,7 @@ export function Segmented({
   const box = useRef<HTMLDivElement>(null);
   const refs = useRef<Record<string, HTMLElement | null>>({});
   const [ind, setInd] = useState<{ x: number; w: number; ready: boolean } | null>(null);
+  const first = useRef(true);
 
   useLayoutEffect(() => {
     const el = value ? refs.current[value] : null;
@@ -44,7 +45,14 @@ export function Segmented({
     }
     const place = () => setInd((p) => ({ x: el.offsetLeft, w: el.offsetWidth, ready: p !== null }));
     place();
-    if (variant === "chips") el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // Solo se desplaza la fila de chips en horizontal: scrollIntoView también movía la página
+    // (Análisis se abría abajo del todo).
+    const row = variant === "chips" ? box.current?.parentElement : null;
+    if (row) {
+      const left = Math.max(0, el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2);
+      if (Math.abs(row.scrollLeft - left) > 1) row.scrollTo({ left, behavior: first.current ? "auto" : "smooth" });
+    }
+    first.current = false;
     const ro = new ResizeObserver(place);
     ro.observe(el);
     return () => ro.disconnect();

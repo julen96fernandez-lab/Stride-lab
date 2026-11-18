@@ -6,26 +6,36 @@ import { SessionIcon } from "@/components/ui/SessionType";
 import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
-import { Segmented } from "@/components/ui/Segmented";
-import { DEFAULT_HR_BAND, MIN_DISTANCE_M, parseBand } from "@/lib/analysis/pace-at-hr";
-import { getAnalysis, getEfficiency, getFitness, getInsights, getPeriodsView } from "@/lib/db/queries";
+import { ChoicePanel, ChoiceProvider, ChoiceSelector } from "@/components/ui/Choice";
+import { DEFAULT_HR_BAND, HR_BANDS, MIN_DISTANCE_M, type YearPace } from "@/lib/analysis/pace-at-hr";
+import { analysisScreen } from "@/lib/db/screens";
+import { AnalysisSkeleton } from "@/components/ui/Skeletons";
+import { cacheDay } from "@/lib/cache/tags";
+import { choicesFromParams } from "@/lib/ui/choice";
 import { FitnessCard } from "@/components/charts/FitnessCharts";
-import { ConsistencyCalendar, PaceTrend, YearCumulative } from "@/components/charts/InsightCharts";
-import type { PaceRange } from "@/lib/analysis/insights";
-import { isSessionType, type SessionType } from "@/lib/analysis/session-type";
+import { PaceTrend, YearCumulative } from "@/components/charts/InsightCharts";
+import { CalendarChoice } from "@/components/charts/CalendarChoice";
+import { PaceEvolution } from "@/components/charts/PaceEvolution";
+import { PACE_RANGES, PACE_TYPES } from "@/lib/analysis/pace-options";
 import { PeriodCharts } from "@/components/charts/PeriodCharts";
 import { rangeLabel, type PeriodUnit } from "@/lib/analysis/periods";
 import { DASH, date, dec, int, km, pace } from "@/lib/format";
 
 export const metadata = { title: "Análisis · Stride Lab" };
 
-const BANDS: [number, number][] = [
-  [130, 140],
-  [135, 145],
-  [140, 150],
-  [145, 155],
-  [150, 160],
-];
+const bandKey = ([lo, hi]: [number, number]) => `${lo}-${hi}`;
+/** Selectores de la pantalla: valor por defecto y opciones (lo que llegue por la URL se valida). */
+const CHOICES = {
+  fc: { default: bandKey(DEFAULT_HR_BAND), options: HR_BANDS.map(bandKey) },
+  periodo: { default: "12m", options: ["12m", "todo"] },
+  vista: { default: "semana", options: ["semana", "mes", "año"] },
+  semanas: { default: "12", options: ["12", "26"] },
+  rango: { default: "6m", options: PACE_RANGES.map(([r]) => r) },
+  rtipo: { default: "todos", options: PACE_TYPES.map((t) => t ?? "todos") },
+  cal: { default: "km", options: ["km", "carga"] },
+  ef: { default: "rodaje", options: ["rodaje", "todos"] },
+};
+const DEFAULTS = Object.fromEntries(Object.entries(CHOICES).map(([k, v]) => [k, v.default]));
 
 export default function AnalysisPage({ searchParams }: PageProps<"/analisis">) {
   return (
@@ -47,7 +57,7 @@ export default function AnalysisPage({ searchParams }: PageProps<"/analisis">) {
           <path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </Link>
-      <Suspense fallback={<div className="card h-[520px] animate-pulse" aria-hidden="true" />}>
+      <Suspense fallback={<AnalysisSkeleton />}>
         <AnalysisData searchParams={searchParams} />
       </Suspense>
     </div>
@@ -57,22 +67,18 @@ export default function AnalysisPage({ searchParams }: PageProps<"/analisis">) {
 async function AnalysisData({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await connection();
   const sp = await searchParams;
-  const band = parseBand(typeof sp.fc === "string" ? sp.fc : undefined);
-  const allTime = sp.periodo === "todo";
-  const unit: PeriodUnit = sp.vista === "mes" ? "month" : sp.vista === "año" || sp.vista === "ano" ? "year" : "week";
-  const weeks: 12 | 26 = sp.semanas === "26" ? 26 : 12;
-  const keepFc = typeof sp.fc === "string" ? `fc=${sp.fc}&` : "";
-  const a = await getAnalysis(band);
+  // Una sola carga (con caché) con todas las opciones de todos los selectores: cambiar de
+  // opción no vuelve al servidor.
+  const { analysis: a, periods, fitness, insights, effRodaje, effAll } = await analysisScreen(cacheDay());
+  const initial = choicesFromParams({ ...sp, vista: sp.vista === "ano" ? "año" : sp.vista }, CHOICES);
 
   const latest = a.vo2.at(-1) ?? null;
   const peak = a.vo2.reduce<(typeof a.vo2)[number] | null>((m, p) => (!m || p.value > m.value ? p : m), null);
-  const withPace = a.paceAtHr.filter((y) => y.paceSPerKm !== null);
-  const fastest = withPace.length ? Math.min(...withPace.map((y) => y.paceSPerKm!)) : null;
-  const slowest = withPace.length ? Math.max(...withPace.map((y) => y.paceSPerKm!)) : null;
   const thisYear = a.kmByYear.at(-1)?.year;
   const emptyYears = a.kmByYear.filter((y) => y.runs === 0).map((y) => y.year);
 
   return (
+    <ChoiceProvider initial={initial} defaults={DEFAULTS}>
     <div className="stagger flex flex-col gap-4">
       {/* VO₂ máx. */}
       <section className="card card-hero p-5">
@@ -107,71 +113,29 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
       </section>
 
       {/* Volumen por semana / mes / año */}
-      <PeriodsCard unit={unit} weeks={weeks} keep={keepFc} />
+      <PeriodsCard all={periods} />
 
       {/* Carga y forma */}
-      <FitnessSection />
+      <FitnessCard view={fitness} />
 
       {/* Evolución del ritmo, calendario y comparación de años */}
-      <InsightsCards sp={sp} />
+      <InsightsCards data={insights} effRodaje={effRodaje} effAll={effAll} />
 
       {/* Ritmo a igual pulso */}
       <Card>
         <div className="eyebrow">Ritmo con el mismo pulso</div>
         <p className="mt-2 text-[14px] leading-relaxed text-fg-2">
-          Carreras de {MIN_DISTANCE_M / 1000} km o más, sin sesiones especiales, con FC media entre {band[0]} y {band[1]} ppm.
-          Cuanto más larga la barra, más rápido a ese pulso.
+          Carreras de {MIN_DISTANCE_M / 1000} km o más, sin sesiones especiales, con la FC media en la franja elegida. Cuanto más larga la
+          barra, más rápido a ese pulso.
         </p>
         <div className="mt-4">
-          <Segmented
-            variant="chips"
-            label="Franja de pulso"
-            value={`${band[0]}-${band[1]}`}
-            items={BANDS.map(([lo, hi]) => ({
-              key: `${lo}-${hi}`,
-              label: `${lo}–${hi}`,
-              href: lo === DEFAULT_HR_BAND[0] && hi === DEFAULT_HR_BAND[1] ? "/analisis" : `/analisis?fc=${lo}-${hi}`,
-            }))}
-          />
+          <ChoiceSelector variant="chips" label="Franja de pulso" name="fc" items={HR_BANDS.map((b) => ({ key: bandKey(b), label: `${b[0]}–${b[1]}` }))} />
         </div>
-        <ul className="mt-5 flex flex-col gap-2.5">
-          {a.paceAtHr.map((y) => {
-            const w =
-              y.paceSPerKm === null || fastest === null || slowest === null
-                ? 0
-                : slowest === fastest
-                  ? 100
-                  : 40 + (60 * (slowest - y.paceSPerKm)) / (slowest - fastest);
-            const best = y.paceSPerKm !== null && y.paceSPerKm === fastest;
-            return (
-              <li key={y.year} className="grid grid-cols-[40px_1fr_auto] items-center gap-3">
-                <span className="num text-[14px] text-fg-2">{y.year}</span>
-                <div className="relative h-[32px] rounded-xl bg-ov-1">
-                  {y.paceSPerKm !== null ? (
-                    <div
-                      className={`h-full rounded-xl ${best ? "bg-lime shadow-[0_0_16px_rgba(200,242,58,0.45)]" : "bg-bar"}`}
-                      style={{ width: `${w}%` }}
-                    />
-                  ) : (
-                    <span className="absolute inset-y-0 left-3 flex items-center text-[12px] text-fg-3">Sin carreras en la franja</span>
-                  )}
-                </div>
-                <div className="w-[92px] text-right">
-                  {y.paceSPerKm !== null ? (
-                    <>
-                      <div className="num text-[16px]">{pace(y.paceSPerKm)}</div>
-                      <div className="text-[11px] text-fg-2">
-                        {y.runs} {y.runs === 1 ? "carrera" : "carreras"} · {int(y.avgHr)} ppm
-                      </div>
-                    </>
-                  ) : (
-                    <div className="num text-[16px] text-fg-3">{DASH}</div>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        {HR_BANDS.map((b) => (
+          <ChoicePanel key={bandKey(b)} when={{ fc: bandKey(b) }}>
+            <PaceAtHrList rows={a.paceAtHrByBand[bandKey(b)] ?? []} />
+          </ChoicePanel>
+        ))}
         {a.firstHrYear !== null && a.firstHrYear > (a.paceAtHr[0]?.year ?? a.firstHrYear) && (
           <p className="mt-4 text-[12px] text-fg-2">
             Hay pulso registrado desde {a.firstHrYear}: los años anteriores salen vacíos.
@@ -206,19 +170,24 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
       </Card>
 
       {/* Km por tipo */}
-      <section id="tipos" className="card scroll-mt-6 p-5">
+      <section id="tipos" className="card cv-auto scroll-mt-6 p-5">
         <div className="flex items-baseline justify-between gap-3">
           <div className="eyebrow">Km por tipo</div>
-          <Segmented
+          <ChoiceSelector
+            name="periodo"
             label="Periodo"
-            value={allTime ? "todo" : "12m"}
             items={[
-              { key: "12m", label: "12 meses", href: `/analisis?${keepFc}#tipos`.replace("?#", "#") },
-              { key: "todo", label: "Todo", href: `/analisis?${keepFc}periodo=todo#tipos` },
+              { key: "12m", label: "12 meses" },
+              { key: "todo", label: "Todo" },
             ]}
           />
         </div>
-        <TypeBreakdown data={allTime ? a.byTypeAll : a.byType12} />
+        <ChoicePanel when={{ periodo: "12m" }}>
+          <TypeBreakdown data={a.byType12} />
+        </ChoicePanel>
+        <ChoicePanel when={{ periodo: "todo" }}>
+          <TypeBreakdown data={a.byTypeAll} />
+        </ChoicePanel>
         <div className="mt-6 eyebrow">Por año</div>
         <div className="mt-2">
           <StackedTypeYears
@@ -256,11 +225,55 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
         </Card>
       </div>
     </div>
+    </ChoiceProvider>
+  );
+}
+
+/** Barras por año del ritmo con el mismo pulso. */
+function PaceAtHrList({ rows }: { rows: YearPace[] }) {
+  const withPace = rows.filter((y) => y.paceSPerKm !== null);
+  const fastest = withPace.length ? Math.min(...withPace.map((y) => y.paceSPerKm!)) : null;
+  const slowest = withPace.length ? Math.max(...withPace.map((y) => y.paceSPerKm!)) : null;
+  return (
+    <ul className="mt-5 flex flex-col gap-2.5">
+      {rows.map((y) => {
+        const w =
+          y.paceSPerKm === null || fastest === null || slowest === null
+            ? 0
+            : slowest === fastest
+              ? 100
+              : 40 + (60 * (slowest - y.paceSPerKm)) / (slowest - fastest);
+        const best = y.paceSPerKm !== null && y.paceSPerKm === fastest;
+        return (
+          <li key={y.year} className="grid grid-cols-[40px_1fr_auto] items-center gap-3">
+            <span className="num text-[14px] text-fg-2">{y.year}</span>
+            <div className="relative h-[32px] rounded-xl bg-ov-1">
+              {y.paceSPerKm !== null ? (
+                <div className={`h-full rounded-xl ${best ? "bg-lime shadow-[0_0_16px_rgba(200,242,58,0.45)]" : "bg-bar"}`} style={{ width: `${w}%` }} />
+              ) : (
+                <span className="absolute inset-y-0 left-3 flex items-center text-[12px] text-fg-3">Sin carreras en la franja</span>
+              )}
+            </div>
+            <div className="w-[92px] text-right">
+              {y.paceSPerKm !== null ? (
+                <>
+                  <div className="num text-[16px]">{pace(y.paceSPerKm)}</div>
+                  <div className="text-[11px] text-fg-2">
+                    {y.runs} {y.runs === 1 ? "carrera" : "carreras"} · {int(y.avgHr)} ppm
+                  </div>
+                </>
+              ) : (
+                <div className="num text-[16px] text-fg-3">{DASH}</div>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 const UNIT_LABEL: Record<PeriodUnit, string> = { week: "Semana", month: "Mes", year: "Año" };
-const UNIT_PARAM: Record<PeriodUnit, string> = { week: "semana", month: "mes", year: "año" };
 const STRETCH_TEXT: Record<PeriodUnit, { now: string; prev: string; whole: string; short: string }> = {
   week: { now: "semana", prev: "de la semana pasada", whole: "la semana pasada entera", short: "la semana pasada" },
   month: { now: "mes", prev: "del mes pasado", whole: "el mes pasado entero", short: "el mes pasado" },
@@ -273,32 +286,58 @@ const PREV_LABEL: Record<PeriodUnit, [string, string, string]> = {
   year: ["Este año", "el año pasado", "el año pasado"],
 };
 
-async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 | 26; keep: string }) {
-  const { periods, comparison, goalKm, injuries, injuryRanges } = await getPeriodsView(unit, weeks);
-  const href = (u: PeriodUnit, w: number = weeks) =>
-    `/analisis?${keep}vista=${encodeURIComponent(UNIT_PARAM[u])}${u === "week" && w === 26 ? "&semanas=26" : ""}#volumen`;
-  const c = comparison;
+type PeriodsAll = Awaited<ReturnType<typeof analysisScreen>>["periods"];
+type PeriodsView = PeriodsAll["week12"];
+
+/** Volumen: las cuatro vistas llegan calculadas; el selector solo elige cuál se ve. */
+function PeriodsCard({ all }: { all: PeriodsAll }) {
+  const views: { when: Record<string, string>; unit: PeriodUnit; view: PeriodsView }[] = [
+    { when: { vista: "semana", semanas: "12" }, unit: "week", view: all.week12 },
+    { when: { vista: "semana", semanas: "26" }, unit: "week", view: all.week26 },
+    { when: { vista: "mes" }, unit: "month", view: all.month },
+    { when: { vista: "año" }, unit: "year", view: all.year },
+  ];
   return (
     <section id="volumen" className="card scroll-mt-6 p-5">
       <div className="flex items-baseline justify-between">
         <div className="eyebrow">Volumen</div>
-        {unit === "week" && (
-          <Segmented
+        <ChoicePanel when={{ vista: "semana" }}>
+          <ChoiceSelector
+            name="semanas"
             label="Semanas"
-            value={unit === "week" ? String(weeks) : null}
-            items={[12, 26].map((w) => ({ key: String(w), label: `${w} sem.`, href: href("week", w) }))}
+            items={[
+              { key: "12", label: "12 sem." },
+              { key: "26", label: "26 sem." },
+            ]}
           />
-        )}
+        </ChoicePanel>
       </div>
       <div className="mt-3">
-        <Segmented
+        <ChoiceSelector
           stretch
+          name="vista"
           label="Periodo"
-          value={unit}
-          items={(["week", "month", "year"] as const).map((u) => ({ key: u, label: UNIT_LABEL[u], href: href(u) }))}
+          items={[
+            { key: "semana", label: UNIT_LABEL.week },
+            { key: "mes", label: UNIT_LABEL.month },
+            { key: "año", label: UNIT_LABEL.year },
+          ]}
         />
       </div>
+      {views.map((v) => (
+        <ChoicePanel key={JSON.stringify(v.when)} when={v.when}>
+          <PeriodsBody unit={v.unit} view={v.view} />
+        </ChoicePanel>
+      ))}
+    </section>
+  );
+}
 
+function PeriodsBody({ unit, view }: { unit: PeriodUnit; view: PeriodsView }) {
+  const { periods, comparison, goalKm, injuries, injuryRanges } = view;
+  const c = comparison;
+  return (
+    <>
       {c && (
         <>
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -347,37 +386,16 @@ async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 
         {injuries.length > 0 &&
           " Las carreras en periodos de lesión (banda gris) suman km, pero no cuentan en el ritmo medio ni en la comparación con el periodo anterior."}
       </p>
-    </section>
+    </>
   );
 }
 
-const RANGES: [PaceRange, string][] = [
-  ["1m", "1 mes"],
-  ["3m", "3 meses"],
-  ["6m", "6 meses"],
-  ["1y", "1 año"],
-  ["all", "Todo"],
-];
-const PACE_TYPES: (SessionType | null)[] = [null, "rodaje", "series", "tempo", "tirada_larga", "recuperacion", "trail", "cinta", "competicion"];
+type Insights = Awaited<ReturnType<typeof analysisScreen>>["insights"];
+type Efficiency = Awaited<ReturnType<typeof analysisScreen>>["effRodaje"];
 
-async function InsightsCards({ sp }: { sp: Record<string, string | string[] | undefined> }) {
-  const range = (RANGES.map((r) => r[0]) as string[]).includes(String(sp.rango)) ? (sp.rango as PaceRange) : "6m";
-  const paceType = isSessionType(sp.rtipo) ? sp.rtipo : null;
-  const calMetric = sp.cal === "carga" ? "load" : "km";
-  const { points, trend, calendar, ytd, ytdNoInjury, bands, yearBands, nowMs } = await getInsights(range, paceType);
+function InsightsCards({ data, effRodaje, effAll }: { data: Insights; effRodaje: Efficiency; effAll: Efficiency }) {
+  const { points, calendar, ytd, ytdNoInjury, bands, yearBands, nowMs } = data;
   const hasInjuries = bands.length > 0;
-
-  // Enlaces que conservan el resto de parámetros.
-  const link = (patch: Record<string, string | null>, anchor: string) => {
-    const q = new URLSearchParams();
-    for (const [k, v] of Object.entries(sp)) if (typeof v === "string") q.set(k, v);
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === null) q.delete(k);
-      else q.set(k, v);
-    }
-    const qs = q.toString();
-    return `/analisis${qs ? `?${qs}` : ""}#${anchor}`;
-  };
   // La tabla compara sin las carreras en periodos de lesión.
   const c = ytdNoInjury.current;
   const p = ytdNoInjury.previous;
@@ -408,68 +426,34 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
 
   return (
     <>
-      <section id="ritmo" className="card scroll-mt-6 p-5">
+      <section id="ritmo" className="card cv-auto scroll-mt-6 p-5">
         <div className="eyebrow">Evolución del ritmo</div>
-        <div className="mt-3">
-          <Segmented
-            variant="chips"
-            label="Rango"
-            value={range}
-            items={RANGES.map(([r, label]) => ({ key: r, label, href: link({ rango: r === "6m" ? null : r }, "ritmo") }))}
-          />
-        </div>
-        <div className="mt-2">
-          <Segmented
-            variant="chips"
-            label="Tipo de sesión"
-            value={paceType ?? "todos"}
-            items={PACE_TYPES.map((t) => ({
-              key: t ?? "todos",
-              href: link({ rtipo: t }, "ritmo"),
-              label: (
-                <>
-                  {t && (
-                    <span className="flex" style={{ color: t === paceType ? undefined : TYPE_META[t].color }}>
-                      <SessionIcon type={t} size={13} />
-                    </span>
-                  )}
-                  {t ? TYPE_META[t].label : "Todos"}
-                </>
-              ),
-            }))}
-          />
-        </div>
-        <div className="mt-3">
-          <PaceTrend points={points} trend={trend} bands={bands} nowMs={nowMs} />
-        </div>
-        <p className="mt-2 text-[12px] text-fg-2">
-          {points.length} {points.length === 1 ? "carrera" : "carreras"}. Sin sesiones especiales (más de 8:00 /km).
-        </p>
+        <PaceEvolution points={points} bands={bands} nowMs={nowMs} />
       </section>
 
-      <EfficiencyCard sp={sp} />
+      <ChoicePanel when={{ ef: "rodaje" }}>
+        <EfficiencyCard data={effRodaje} all={false} />
+      </ChoicePanel>
+      <ChoicePanel when={{ ef: "todos" }}>
+        <EfficiencyCard data={effAll} all />
+      </ChoicePanel>
 
-      <section id="calendario" className="card scroll-mt-6 p-5">
+      <section id="calendario" className="card cv-auto scroll-mt-6 p-5">
         <div className="flex items-baseline justify-between">
           <div className="eyebrow">Constancia · 12 meses</div>
-          <Segmented
+          <ChoiceSelector
+            name="cal"
             label="Intensidad según"
-            value={calMetric}
             items={[
-              { key: "km", label: "Km", href: link({ cal: null }, "calendario") },
-              { key: "load", label: "Carga", href: link({ cal: "carga" }, "calendario") },
+              { key: "km", label: "Km" },
+              { key: "carga", label: "Carga" },
             ]}
           />
         </div>
-        <div className="mt-4">
-          <ConsistencyCalendar key={calMetric} days={calendar} metric={calMetric} bands={bands} />
-        </div>
-        {calMetric === "load" && (
-          <p className="mt-2 text-[12px] text-fg-2">Los días con carrera pero sin pulso no tienen carga y salen en gris.</p>
-        )}
+        <CalendarChoice days={calendar} bands={bands} />
       </section>
 
-      <section id="anios" className="card scroll-mt-6 p-5">
+      <section id="anios" className="card cv-auto scroll-mt-6 p-5">
         <div className="eyebrow">
           {ytd.year} frente a {ytd.year - 1}
         </div>
@@ -508,20 +492,11 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
 }
 
 /** Eficiencia aeróbica: ritmo en Z2 de cada carrera (últimos 6 meses) y su tendencia. */
-async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | undefined> }) {
-  const all = sp.ef === "todos";
-  const { points, trend, band, changeS, bands, nowMs } = await getEfficiency(all ? null : "rodaje");
-  const link = (v: string | null) => {
-    const q = new URLSearchParams();
-    for (const [k, x] of Object.entries(sp)) if (typeof x === "string") q.set(k, x);
-    if (v === null) q.delete("ef");
-    else q.set("ef", v);
-    const qs = q.toString();
-    return `/analisis${qs ? `?${qs}` : ""}#eficiencia`;
-  };
+function EfficiencyCard({ data, all }: { data: Efficiency; all: boolean }) {
+  const { points, trend, band, changeS, bands, nowMs } = data;
   const ch = changeS === null ? null : Math.round(changeS);
   return (
-    <section id="eficiencia" className="card scroll-mt-6 p-5">
+    <section id="eficiencia" className="card cv-auto scroll-mt-6 p-5">
       <div className="flex items-baseline justify-between gap-3">
         <div className="eyebrow">Eficiencia aeróbica · 6 meses</div>
         <span className="text-[11px] text-fg-2">
@@ -529,12 +504,12 @@ async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | u
         </span>
       </div>
       <div className="mt-3">
-        <Segmented
+        <ChoiceSelector
+          name="ef"
           label="Tipo de sesión"
-          value={all ? "todos" : "rodaje"}
           items={[
-            { key: "rodaje", label: "Rodaje", href: link(null) },
-            { key: "todos", label: "Todas", href: link("todos") },
+            { key: "rodaje", label: "Rodaje" },
+            { key: "todos", label: "Todas" },
           ]}
         />
       </div>
@@ -560,9 +535,4 @@ async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | u
       </p>
     </section>
   );
-}
-
-async function FitnessSection() {
-  const view = await getFitness();
-  return <FitnessCard view={view} />;
 }

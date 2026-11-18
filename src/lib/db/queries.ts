@@ -3,7 +3,7 @@ import { EFFORT_DISTANCES, improvementPct, recordProgression, type EffortKey } f
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db, schema as s } from "./client";
 import { decodePolyline } from "@/lib/import/gpx";
-import { paceAtHrByYear, type YearPace } from "@/lib/analysis/pace-at-hr";
+import { HR_BANDS, paceAtHrByYear, type YearPace } from "@/lib/analysis/pace-at-hr";
 import { durabilityFromSeries, durabilityFromSplits, type Durability } from "@/lib/analysis/durability";
 import type { SeriesMetric } from "./schema";
 import { effectiveType, ensureClassified, getTypeSettings, getZones } from "@/lib/analysis/session-type-db";
@@ -12,9 +12,29 @@ import { buildStream, countStretches, gradeAlong, isHrSparse, markSplitEstimates
 import { analyzeIntervals, type IntervalAnalysis, type StepTiming } from "@/lib/analysis/intervals";
 import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { ensureTrack } from "@/lib/analysis/track-db";
+import { memoOnce } from "@/lib/cache/memo";
 
 const TZ = "Europe/Madrid";
 const valid = eq(s.runs.status, "valid");
+
+/**
+ * Contexto de una carga de pantalla: lo común (comprobación de reglas, carreras, objetivos,
+ * lesiones, zonas) se pide UNA vez y lo comparten todas las piezas de la pantalla, en vez de
+ * repetir la misma consulta en cada tarjeta.
+ */
+export function makeCtx() {
+  const once = memoOnce();
+  const classified = () => once("classified", () => ensureClassified(db()));
+  return {
+    classified,
+    runs: () => once("runs", async () => (await classified(), runsForPeriods())),
+    goals: () => once("goals", () => getGoals(db())),
+    injuries: () => once("injuries", () => listInjuries(db())),
+    zones: () => once("zones", () => getZones(db())),
+    typeSettings: () => once("typeSettings", () => getTypeSettings(db())),
+  };
+}
+export type Ctx = ReturnType<typeof makeCtx>;
 
 // ─── Miniaturas de ruta (SVG en el servidor, sin enviar la polyline entera) ──
 
@@ -108,10 +128,10 @@ async function kmByType(where: ReturnType<typeof sql>): Promise<KmByType[]> {
   return SESSION_TYPES.map((t) => ({ type: t, km: Number(m.get(t)?.km ?? 0), runs: m.get(t)?.n ?? 0 }));
 }
 
-export async function getHome() {
+export async function getHome(ctx: Ctx = makeCtx()) {
   const d = db();
-  await ensureClassified(d);
-  const [last28Rows, monthsRows, vo2Rows, lastRuns, totals] = await Promise.all([
+  await ctx.classified();
+  const [last28Rows, monthsRows, vo2Rows, lastRuns, totals, byType] = await Promise.all([
     d.execute(sql`
       SELECT count(*)::int AS runs,
              sum(distance_m) AS dist,
@@ -143,6 +163,7 @@ export async function getHome() {
       .orderBy(desc(s.runs.startAt))
       .limit(1),
     d.execute(sql`SELECT count(*)::int AS n FROM runs WHERE status = 'valid'`),
+    kmByType(sql`start_at >= date_trunc('month', now() AT TIME ZONE ${TZ}) - interval '11 months'`),
   ]);
 
   const l = last28Rows.rows[0] as Record<string, string | number | null>;
@@ -162,15 +183,14 @@ export async function getHome() {
   const vo2 = (vo2Rows.rows as { day: string; v: string }[]).map((r) => ({ day: r.day, value: Number(r.v) }));
   const lr = lastRuns[0];
   const lastRun: RunListItem | null = lr ? toItem(lr, 60) : null;
-  const byType = await kmByType(sql`start_at >= date_trunc('month', now() AT TIME ZONE ${TZ}) - interval '11 months'`);
   return { last28, months, vo2, lastRun, byType, totalRuns: (totals.rows[0] as { n: number }).n };
 }
 
 // ─── Actividad ───────────────────────────────────────────────────────────────
 
-export async function listRuns(filter: SessionType | null) {
+export async function listRuns(filter: SessionType | null, ctx: Ctx = makeCtx()) {
   const d = db();
-  await ensureClassified(d);
+  await ctx.classified();
   const [rows, hidden, counts] = await Promise.all([
     d
       .select(listColumns())
@@ -188,23 +208,25 @@ export async function listRuns(filter: SessionType | null) {
 
 // ─── Detalle ─────────────────────────────────────────────────────────────────
 
-export async function getRun(id: string) {
+export async function getRun(id: string, ctx: Ctx = makeCtx()) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const d = db();
-  await ensureClassified(d);
-  const runRows = await d.select().from(s.runs).where(eq(s.runs.id, id)).limit(1);
-  const run = runRows[0];
-  if (!run) return null;
-  const [routeRows, splits, seriesRows, neighbours, zones] = await Promise.all([
+  await ctx.classified();
+  // Todo en una sola ronda: la carrera, su ruta, parciales, series, pista, vecinas y zonas.
+  const [runRows, routeRows, splits, seriesRows, trackRows, neighbours, zones] = await Promise.all([
+    d.select().from(s.runs).where(eq(s.runs.id, id)).limit(1),
     d.select().from(s.runRoutes).where(eq(s.runRoutes.runId, id)).limit(1),
     d.select().from(s.runSplits).where(eq(s.runSplits.runId, id)).orderBy(asc(s.runSplits.idx)),
     d.select().from(s.runSeries).where(eq(s.runSeries.runId, id)),
+    d.select().from(s.runTracks).where(eq(s.runTracks.runId, id)).limit(1),
     d.execute(sql`
       SELECT
-        (SELECT id FROM runs WHERE status='valid' AND start_at < ${run.startAt} ORDER BY start_at DESC LIMIT 1) AS prev,
-        (SELECT id FROM runs WHERE status='valid' AND start_at > ${run.startAt} ORDER BY start_at ASC LIMIT 1) AS next`),
-    getZones(d),
+        (SELECT p.id FROM runs p, runs c WHERE c.id = ${id} AND p.status = 'valid' AND p.start_at < c.start_at ORDER BY p.start_at DESC LIMIT 1) AS prev,
+        (SELECT n.id FROM runs n, runs c WHERE c.id = ${id} AND n.status = 'valid' AND n.start_at > c.start_at ORDER BY n.start_at ASC LIMIT 1) AS next`),
+    ctx.zones(),
   ]);
+  const run = runRows[0];
+  if (!run) return null;
   const series = Object.fromEntries(seriesRows.map((r) => [r.metric, { t: r.t, v: r.v }])) as Partial<
     Record<SeriesMetric, { t: number[]; v: number[] }>
   >;
@@ -213,7 +235,7 @@ export async function getRun(id: string) {
   if (!durability && splits.length) durability = durabilityFromSplits(splits, series.hr);
   const route = routeRows[0] ?? null;
   const nb = neighbours.rows[0] as { prev: string | null; next: string | null };
-  const track = route ? await ensureTrack(d, run, route.blobUrl) : null;
+  const track = route ? await ensureTrack(d, run, route.blobUrl, trackRows[0] ?? null) : null;
   const type = run.sessionTypeManual ?? run.sessionTypeAuto;
   // Series: solo en carreras de tipo Series, con los pasos de intervalo y sus horas.
   const intervals: IntervalAnalysis | null =
@@ -349,10 +371,11 @@ function buildExplorer(a: {
 
 // ─── Análisis ────────────────────────────────────────────────────────────────
 
-export async function getAnalysis(band: [number, number]) {
+export async function getAnalysis(band: [number, number], ctx: Ctx = makeCtx()) {
   const d = db();
-  await ensureClassified(d);
-  const [vo2Rows, runRows] = await Promise.all([
+  await ctx.classified();
+  // Una sola ronda (antes eran tres en serie).
+  const [vo2Rows, runRows, typeYearRows, byType12, byTypeAll] = await Promise.all([
     d.execute(sql`
       SELECT to_char((measured_at AT TIME ZONE ${TZ})::date, 'YYYY-MM-DD') AS day, avg(value) AS v
       FROM vo2max_readings GROUP BY 1 ORDER BY 1`),
@@ -367,6 +390,12 @@ export async function getAnalysis(band: [number, number]) {
       })
       .from(s.runs)
       .where(and(valid)),
+    d.execute(sql`
+      SELECT extract(year from start_at AT TIME ZONE ${TZ})::int AS y, coalesce(session_type_manual, session_type_auto) AS t,
+             sum(distance_m) / 1000 AS km
+      FROM runs WHERE status = 'valid' GROUP BY 1, 2`),
+    kmByType(sql`start_at >= now() - interval '12 months'`),
+    kmByType(sql`true`),
   ]);
   const vo2 = (vo2Rows.rows as { day: string; v: string }[]).map((r) => ({ day: r.day, value: Number(r.v) }));
   const thisYear = Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: TZ }).format(new Date()));
@@ -377,20 +406,16 @@ export async function getAnalysis(band: [number, number]) {
     const ys = runRows.filter((r) => Number(r.year) === y);
     kmByYear.push({ year: y, km: ys.reduce((a, r) => a + (r.distanceM ?? 0), 0) / 1000, runs: ys.length });
   }
-  const paceAtHr: YearPace[] = paceAtHrByYear(
-    // Las carreras en periodo de lesión no cuentan en medias de ritmo.
-    runRows.filter((r) => !r.inInjury).map((r) => ({ ...r, year: Number(r.year) })),
-    band,
-    firstYear,
-    thisYear,
+  // Las carreras en periodo de lesión no cuentan en medias de ritmo.
+  const forPace = runRows.filter((r) => !r.inInjury).map((r) => ({ ...r, year: Number(r.year) }));
+  const paceAtHr: YearPace[] = paceAtHrByYear(forPace, band, firstYear, thisYear);
+  // Todas las franjas a la vez: el selector cambia en el cliente, sin volver al servidor.
+  const paceAtHrByBand: Record<string, YearPace[]> = Object.fromEntries(
+    HR_BANDS.map(([lo, hi]) => [`${lo}-${hi}`, paceAtHrByYear(forPace, [lo, hi], firstYear, thisYear)]),
   );
   const longest = runRows.reduce<number | null>((m, r) => (r.distanceM !== null && (m === null || r.distanceM > m) ? r.distanceM : m), null);
   const hrYears = runRows.filter((r) => r.avgHr !== null).map((r) => Number(r.year));
   const firstHrYear = hrYears.length ? Math.min(...hrYears) : null;
-  const typeYearRows = await d.execute(sql`
-    SELECT extract(year from start_at AT TIME ZONE ${TZ})::int AS y, coalesce(session_type_manual, session_type_auto) AS t,
-           sum(distance_m) / 1000 AS km
-    FROM runs WHERE status = 'valid' GROUP BY 1, 2`);
   const typeByYear = kmByYear.map((y) => {
     const row: Record<SessionType, number> = Object.fromEntries(SESSION_TYPES.map((t) => [t, 0])) as Record<SessionType, number>;
     for (const r of typeYearRows.rows as { y: number; t: string | null; km: string | null }[]) {
@@ -398,15 +423,11 @@ export async function getAnalysis(band: [number, number]) {
     }
     return { year: y.year, km: row };
   });
-  const [byType12, byTypeAll] = await Promise.all([
-    kmByType(sql`start_at >= now() - interval '12 months'`),
-    kmByType(sql`true`),
-  ]);
-  return { vo2, kmByYear, paceAtHr, totalRuns: runRows.length, longestM: longest, firstHrYear, typeByYear, byType12, byTypeAll };
+  return { vo2, kmByYear, paceAtHr, paceAtHrByBand, totalRuns: runRows.length, longestM: longest, firstHrYear, typeByYear, byType12, byTypeAll };
 }
 
-export async function getTrainingSettingsView() {
-  const [types, zones] = await Promise.all([getTypeSettings(db()), getZones(db())]);
+export async function getTrainingSettingsView(ctx: Ctx = makeCtx()) {
+  const [types, zones] = await Promise.all([ctx.typeSettings(), ctx.zones()]);
   return { types, zones };
 }
 
@@ -439,8 +460,8 @@ async function runsForPeriods() {
 }
 
 /** Tarjeta de objetivos de Inicio: semana y mes en curso. */
-export async function getGoalsHome() {
-  const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
+export async function getGoalsHome(ctx: Ctx = makeCtx()) {
+  const [runs, goals] = await Promise.all([ctx.runs(), ctx.goals()]);
   const now = new Date();
   const week = buildPeriods(runs, "week", 1, now)[0];
   const month = buildPeriods(runs, "month", 1, now)[0];
@@ -454,15 +475,13 @@ export async function getGoalsHome() {
 }
 
 /** Gráficos por periodo de Análisis. */
-export async function getPeriodsView(unit: PeriodUnit, weeks: 12 | 26) {
-  const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
+export async function getPeriodsView(unit: PeriodUnit, weeks: 12 | 26, ctx: Ctx = makeCtx()) {
+  const [runs, goals, injuries] = await Promise.all([ctx.runs(), ctx.goals(), ctx.injuries()]);
   const count = unit === "week" ? weeks : unit === "month" ? 12 : yearsSinceFirst(runs);
   const periods = buildPeriods(runs, unit, count);
   const goal = goals[unit];
-  // Comparación con el periodo anterior: sin las carreras en periodo de lesión.
   // Mismo tramo del periodo anterior (no el periodo entero), sin carreras en lesión.
   const comparison = comparePeriodToDate(runs.filter((r) => !r.inInjury), unit);
-  const injuries = await listInjuries(db());
   const today = new Date(localDay(new Date()) * 86_400_000).toISOString().slice(0, 10);
   const injuryRanges = periodInjuryRanges(
     periods.map((p) => p.start),
@@ -472,8 +491,19 @@ export async function getPeriodsView(unit: PeriodUnit, weeks: 12 | 26) {
   return { periods, comparison, goalKm: goal.km && !goal.paused ? goal.km : null, injuries, injuryRanges };
 }
 
-export async function getGoalsSettings() {
-  const [runs, goals] = await Promise.all([runsForPeriods(), getGoals(db())]);
+/** Las cuatro vistas del selector de Volumen (semana 12/26, mes, año), con los mismos datos. */
+export async function getPeriodsAll(ctx: Ctx = makeCtx()) {
+  const [week12, week26, month, year] = await Promise.all([
+    getPeriodsView("week", 12, ctx),
+    getPeriodsView("week", 26, ctx),
+    getPeriodsView("month", 12, ctx),
+    getPeriodsView("year", 12, ctx),
+  ]);
+  return { week12, week26, month, year };
+}
+
+export async function getGoalsSettings(ctx: Ctx = makeCtx()) {
+  const [runs, goals] = await Promise.all([ctx.runs(), ctx.goals()]);
   return { goals, suggested: suggestGoals(runs.filter((r) => !r.inInjury)) };
 }
 
@@ -482,10 +512,9 @@ export async function getGoalsSettings() {
 import { bandsInYear, periodInjuryRanges } from "@/lib/analysis/injuries";
 import { calendarDays, pacePoints, smoothTrend, yearToDate, type PacePoint, type PaceRange } from "@/lib/analysis/insights";
 
-export async function getInsights(range: PaceRange, paceType: SessionType | null) {
-  const runs = await runsForPeriods();
+export async function getInsights(range: PaceRange, paceType: SessionType | null, ctx: Ctx = makeCtx()) {
+  const [runs, injuries] = await Promise.all([ctx.runs(), ctx.injuries()]);
   const points = pacePoints(runs, range, paceType);
-  const injuries = await listInjuries(db());
   const ytd = yearToDate(runs);
   const nowMs = Date.now();
   const bands = injuries.map((i) => ({ startDate: i.startDate, endDate: i.endDate }));
@@ -506,8 +535,8 @@ export async function getInsights(range: PaceRange, paceType: SessionType | null
 // ─── Eficiencia aeróbica: ritmo en Z2 por carrera ────────────────────────────
 
 /** Ritmo en Z2 de cada carrera de los últimos 6 meses (y su tendencia, sin lesiones). */
-export async function getEfficiency(onlyType: SessionType | null) {
-  await ensureClassified(db());
+export async function getEfficiency(onlyType: SessionType | null, ctx: Ctx = makeCtx()) {
+  await ctx.classified();
   const nowMs = Date.now();
   const from = new Date(nowMs - 182 * 86_400_000);
   const [rows, zones, injuries] = await Promise.all([
@@ -525,8 +554,8 @@ export async function getEfficiency(onlyType: SessionType | null) {
       .from(s.runs)
       .where(and(valid, sql`${s.runs.efZ2PaceSPerKm} IS NOT NULL`, sql`${s.runs.startAt} >= ${from}`))
       .orderBy(asc(s.runs.startAt)),
-    getZones(db()),
-    listInjuries(db()),
+    ctx.zones(),
+    ctx.injuries(),
   ]);
   const points: PacePoint[] = rows
     .filter((r) => !onlyType || r.type === onlyType)
@@ -554,8 +583,8 @@ export async function getEfficiency(onlyType: SessionType | null) {
 // ─── Récords personales ──────────────────────────────────────────────────────
 
 
-export async function getRecords() {
-  await ensureClassified(db());
+export async function getRecords(ctx: Ctx = makeCtx()) {
+  await ctx.classified();
   const rows = await db()
     .select({
       key: s.runEfforts.key,
@@ -590,14 +619,16 @@ export async function getRecordHistory(key: EffortKey) {
 }
 
 /** Periodos de lesión con el número de carreras válidas dentro, para Perfil. */
-export async function getInjuriesView() {
-  const injuries = await listInjuries(db());
-  const counts = await db().execute<{ id: string; n: number }>(sql`
+export async function getInjuriesView(ctx: Ctx = makeCtx()) {
+  const [injuries, counts] = await Promise.all([
+    ctx.injuries(),
+    db().execute<{ id: string; n: number }>(sql`
     SELECT i.id, count(r.id)::int AS n FROM injuries i
     LEFT JOIN runs r ON r.status = 'valid'
       AND (r.start_at AT TIME ZONE 'Europe/Madrid')::date >= i.start_date
       AND (i.end_date IS NULL OR (r.start_at AT TIME ZONE 'Europe/Madrid')::date <= i.end_date)
-    GROUP BY i.id`);
+    GROUP BY i.id`),
+  ]);
   const n = new Map(counts.rows.map((r) => [r.id, Number(r.n)]));
   const today = new Date(localDay(new Date()) * 86_400_000).toISOString().slice(0, 10);
   return { injuries: injuries.map((i) => ({ id: i.id, startDate: i.startDate, endDate: i.endDate, note: i.note, runs: n.get(i.id) ?? 0 })), today };
@@ -640,14 +671,14 @@ export async function getManualForEdit(id: string) {
 // ─── Inicio (rediseño) ───────────────────────────────────────────────────────
 
 /** Todo lo de Inicio en una llamada: hoy, semana, mes, lesión abierta, récords y eficiencia. */
-export async function getHomeOverview() {
+export async function getHomeOverview(ctx: Ctx = makeCtx()) {
   const now = new Date();
   const [runs, goals, injuries, records, efficiency] = await Promise.all([
-    runsForPeriods(),
-    getGoals(db()),
-    listInjuries(db()),
-    getRecords(),
-    getEfficiency("rodaje"),
+    ctx.runs(),
+    ctx.goals(),
+    ctx.injuries(),
+    getRecords(ctx),
+    getEfficiency("rodaje", ctx),
   ]);
   const { recommendToday, weekDays } = await import("@/lib/analysis/home");
   const today = new Date(localDay(now) * 86_400_000).toISOString().slice(0, 10);
@@ -684,7 +715,10 @@ export async function getHomeOverview() {
       ? {
           ...cur,
           openInjury: !!openInjury,
-          last28: fitness.points.slice(-28).map((p) => ({ date: p.date, acute: p.acute, chronic: p.chronic })),
+          last28: fitness.cols.date.slice(-28).map((date, i, a) => {
+            const k = fitness.cols.date.length - a.length + i;
+            return { date, acute: fitness.cols.acute[k], chronic: fitness.cols.chronic[k] };
+          }),
         }
       : null,
     efficiency: {
@@ -705,9 +739,9 @@ function fitnessRuns(runs: Awaited<ReturnType<typeof runsForPeriods>>): FitnessR
 }
 
 /** Carga y forma de los últimos 12 meses (el selector 3/6/12 recorta en el cliente). */
-export async function getFitness() {
+export async function getFitness(ctx: Ctx = makeCtx()) {
   const now = new Date();
-  const [runs, injuries] = await Promise.all([runsForPeriods(), listInjuries(db())]);
+  const [runs, injuries] = await Promise.all([ctx.runs(), ctx.injuries()]);
   const today = new Date(localDay(now) * 86_400_000).toISOString().slice(0, 10);
   const open = injuries.some((i) => i.startDate <= today && (i.endDate === null || i.endDate >= today));
   return buildFitnessView(fitnessRuns(runs), now, open);

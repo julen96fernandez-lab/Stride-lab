@@ -3,6 +3,7 @@ import { db } from "@/lib/db/client";
 import { blobRangeSource, putPrivate } from "@/lib/import/blob";
 import { runImportStep } from "@/lib/import/pipeline";
 import { checkRun, getImportView, toView } from "@/lib/import/status";
+import { dataChangedInRoute } from "@/lib/cache/invalidate";
 
 // Plan Hobby: 300 s por invocación. Se trabaja ~240 s y se guarda el punto de control.
 export const maxDuration = 300;
@@ -27,6 +28,8 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/import/[id
     },
     started + BUDGET_MS,
   );
+  // Cada tramo puede añadir o recalcular carreras: la caché de las pantallas caduca ya.
+  dataChangedInRoute();
   const out = toView(row);
   return NextResponse.json({ import: out, check: out.status === "done" ? await checkRun() : null });
 }

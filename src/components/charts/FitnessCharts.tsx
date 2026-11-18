@@ -6,7 +6,7 @@ import { EChart } from "./EChart";
 import { ChartEmpty } from "./ChartEmpty";
 import { ANIMATION, alpha, barItem, barSeries, baseOption, categoryAxis, lineSeries, refLine, tipHead, tipRow, tooltip, valueAxis } from "./theme";
 import { Segmented } from "@/components/ui/Segmented";
-import { RATIO_BANDS, STATE_LABEL, fmtRatio, type FitnessView, type LoadState } from "@/lib/analysis/fitness";
+import { RATIO_BANDS, STATE_LABEL, fmtRatio, viewPoints, type FitnessView, type LoadState } from "@/lib/analysis/fitness";
 import { TYPE_META, isSessionType } from "@/lib/analysis/session-type";
 
 export const STATE_COLOR: Record<LoadState, string> = {
@@ -64,7 +64,8 @@ function stateBands(states: (LoadState | null)[], dates: string[]) {
 export function FitnessCard({ view }: { view: FitnessView }) {
   const [range, setRange] = useState<(typeof RANGES)[number]["key"]>("6");
   const days = RANGES.find((r) => r.key === range)!.days;
-  const pts = useMemo(() => view.points.slice(-days), [view.points, days]);
+  const all = useMemo(() => viewPoints(view.cols), [view.cols]);
+  const pts = useMemo(() => all.slice(-days), [all, days]);
   const [sel, setSel] = useState<number | null>(null);
   const picked = sel !== null && sel < pts.length ? pts[sel] : null;
   const cur = view.current;

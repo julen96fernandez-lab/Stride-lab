@@ -1,12 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Segmented } from "@/components/ui/Segmented";
+import { ChoicePanel, ChoiceProvider, ChoiceSelector } from "@/components/ui/Choice";
 import { connection } from "next/server";
 import { ButtonLink, Card, PageHeader } from "@/components/ui/primitives";
 import { RunRow } from "@/components/ui/RunRow";
 import { SessionIcon } from "@/components/ui/SessionType";
-import { SESSION_TYPES, TYPE_META, isSessionType } from "@/lib/analysis/session-type";
-import { listRuns, type RunListItem } from "@/lib/db/queries";
+import { SESSION_TYPES, TYPE_META, isSessionType, type SessionType } from "@/lib/analysis/session-type";
+import { type RunListItem } from "@/lib/db/queries";
+import { activityScreen } from "@/lib/db/screens";
+import { ActivitySkeleton } from "@/components/ui/Skeletons";
+import { cacheDay } from "@/lib/cache/tags";
 import { TZ, cap, km } from "@/lib/format";
 
 export const metadata = { title: "Actividad · Stride Lab" };
@@ -28,7 +31,7 @@ export default function ActivityPage({ searchParams }: PageProps<"/actividad">) 
           }
         />
       </div>
-      <Suspense fallback={<div className="card h-[480px] animate-pulse" aria-hidden="true" />}>
+      <Suspense fallback={<ActivitySkeleton />}>
         <RunList searchParams={searchParams} />
       </Suspense>
     </div>
@@ -41,8 +44,8 @@ const monthKey = (d: Date) =>
 async function RunList({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await connection();
   const sp = await searchParams;
-  const filter = isSessionType(sp.tipo) ? sp.tipo : null;
-  const { items, counts, hiddenDuplicates, hiddenInvalid } = await listRuns(filter);
+  const initial = isSessionType(sp.tipo) ? sp.tipo : "todas";
+  const { items, counts, hiddenDuplicates, hiddenInvalid } = await activityScreen(cacheDay());
   const total = counts.reduce((a, c) => a + c.runs, 0);
 
   if (total === 0) {
@@ -59,6 +62,70 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
     );
   }
 
+  // Todas las listas llegan ya preparadas: el filtro cambia al instante, sin ir al servidor.
+  return (
+    <ChoiceProvider initial={{ tipo: initial }} defaults={{ tipo: "todas" }}>
+      <div className="flex flex-col gap-4">
+        <nav aria-label="Filtrar por tipo">
+          <ChoiceSelector
+            name="tipo"
+            variant="chips"
+            label="Filtrar por tipo"
+            items={[
+              {
+                key: "todas",
+                label: (
+                  <>
+                    Todas <span className="opacity-70">{total}</span>
+                  </>
+                ),
+              },
+              ...SESSION_TYPES.map((t) => {
+                const c = counts.find((x) => x.type === t)!;
+                return {
+                  key: t,
+                  label: (
+                    <span className={`flex items-center gap-1.5 ${c.runs === 0 ? "opacity-45" : ""}`}>
+                      <span style={{ color: TYPE_META[t].color }} className="flex">
+                        <SessionIcon type={t} size={15} />
+                      </span>
+                      {TYPE_META[t].label} <span className="opacity-70">{c.runs}</span>
+                    </span>
+                  ),
+                };
+              }),
+            ]}
+          />
+        </nav>
+        {(["todas", ...SESSION_TYPES] as const).map((f) => (
+          <ChoicePanel key={f} when={{ tipo: f }}>
+            <FilteredRuns
+              items={f === "todas" ? items : items.filter((r) => r.type === f)}
+              filter={f === "todas" ? null : f}
+              hidden={f === "todas" ? hiddenDuplicates + hiddenInvalid : 0}
+              hiddenDuplicates={hiddenDuplicates}
+              hiddenInvalid={hiddenInvalid}
+            />
+          </ChoicePanel>
+        ))}
+      </div>
+    </ChoiceProvider>
+  );
+}
+
+function FilteredRuns({
+  items,
+  filter,
+  hidden,
+  hiddenDuplicates,
+  hiddenInvalid,
+}: {
+  items: RunListItem[];
+  filter: SessionType | null;
+  hidden: number;
+  hiddenDuplicates: number;
+  hiddenInvalid: number;
+}) {
   const groups: { key: string; runs: RunListItem[] }[] = [];
   for (const r of items) {
     const k = monthKey(r.startAt);
@@ -66,45 +133,8 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
     if (g && g.key === k) g.runs.push(r);
     else groups.push({ key: k, runs: [r] });
   }
-
   return (
     <div className="flex flex-col gap-4">
-      {/* Filtros por tipo */}
-      <nav aria-label="Filtrar por tipo">
-        <Segmented
-          variant="chips"
-          label="Filtrar por tipo"
-          value={filter ?? "todas"}
-          items={[
-            {
-              key: "todas",
-              href: "/actividad",
-              label: (
-                <>
-                  Todas <span className="opacity-70">{total}</span>
-                </>
-              ),
-            },
-            ...SESSION_TYPES.map((t) => {
-              const c = counts.find((x) => x.type === t)!;
-              const active = filter === t;
-              return {
-                key: t,
-                href: `/actividad?tipo=${t}`,
-                label: (
-                  <span className={`flex items-center gap-1.5 ${c.runs === 0 && !active ? "opacity-45" : ""}`}>
-                    <span style={{ color: active ? undefined : TYPE_META[t].color }} className="flex">
-                      <SessionIcon type={t} size={15} />
-                    </span>
-                    {TYPE_META[t].label} <span className="opacity-70">{c.runs}</span>
-                  </span>
-                ),
-              };
-            }),
-          ]}
-        />
-      </nav>
-
       <p className="text-[13px] text-fg-2">
         {filter
           ? `${items.length} ${items.length === 1 ? "carrera" : "carreras"} de ${TYPE_META[filter].label.toLowerCase()} · ${km(
@@ -112,9 +142,7 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
               0,
             )} km`
           : `${items.length} carreras`}
-        {!filter &&
-          hiddenDuplicates + hiddenInvalid > 0 &&
-          ` · ocultas: ${hiddenDuplicates} duplicadas de Strava y ${hiddenInvalid} de menos de 0,5 km`}
+        {hidden > 0 && ` · ocultas: ${hiddenDuplicates} duplicadas de Strava y ${hiddenInvalid} de menos de 0,5 km`}
       </p>
 
       {items.length === 0 && (
@@ -124,10 +152,10 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
       )}
 
       <div className="stagger flex flex-col gap-4">
-        {groups.map((g) => {
+        {groups.map((g, gi) => {
           const sum = g.runs.reduce((a, r) => a + (r.distanceM ?? 0), 0);
           return (
-            <section key={g.key} className="card px-4 py-3">
+            <section key={g.key} className={`card px-4 py-3 ${gi > 1 ? "cv-auto" : ""}`}>
               <div className="flex items-baseline justify-between px-1 pt-1 pb-1">
                 <h2 className="font-display text-[17px] font-bold tracking-[-0.01em]">{g.key}</h2>
                 <span className="text-[12px] text-fg-2">

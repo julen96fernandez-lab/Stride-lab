@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import { db } from "@/lib/db/client";
+import { dataChanged } from "@/lib/cache/invalidate";
 import { deleteInjury, saveInjury } from "@/lib/analysis/injuries-db";
 import { reclassifyAll } from "@/lib/analysis/session-type-db";
 
@@ -26,6 +27,7 @@ export async function saveInjuryAction(_prev: InjuryState, formData: FormData): 
   await saveInjury(d, { id, startDate, endDate, note });
   // Las carreras dentro del periodo dejan de contar en la base del clasificador.
   await reclassifyAll(d, { efforts: false });
+  dataChanged();
   refresh();
   return { ok: id ? "Periodo actualizado." : "Periodo añadido." };
 }
@@ -35,6 +37,7 @@ export async function deleteInjuryAction(id: string): Promise<{ ok: boolean }> {
   const d = db();
   await deleteInjury(d, id);
   await reclassifyAll(d, { efforts: false });
+  dataChanged();
   refresh();
   return { ok: true };
 }

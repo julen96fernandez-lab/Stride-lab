@@ -8,7 +8,9 @@ import { RouteThumb } from "@/components/map/RouteMap";
 import { ButtonLink, Card, SectionTitle, Stat } from "@/components/ui/primitives";
 import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { Ring } from "@/components/ui/GoalCard";
-import { getHome, getHomeOverview } from "@/lib/db/queries";
+import { homeScreen } from "@/lib/db/screens";
+import { HomeSkeleton } from "@/components/ui/Skeletons";
+import { cacheDay } from "@/lib/cache/tags";
 import { FitnessMini } from "@/components/charts/FitnessCharts";
 import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
@@ -48,17 +50,6 @@ export default function HomePage() {
   );
 }
 
-function HomeSkeleton() {
-  return (
-    <div className="flex flex-col gap-4" aria-hidden="true">
-      <div className="mt-3 h-[60px]" />
-      <div className="card h-[140px] animate-pulse" />
-      <div className="card h-[150px] animate-pulse" />
-      <div className="card h-[120px] animate-pulse" />
-    </div>
-  );
-}
-
 const TODAY_STYLE: Record<TodayKind, { color: string; icon: string }> = {
   descanso: { color: "var(--fg-3)", icon: "M4 15h16M6 15V9a2 2 0 0 1 2-2h3v8m-5 0v3m14-3v3M11 11h7a2 2 0 0 1 2 2v2" },
   suave: { color: "var(--z2)", icon: "M3 17c3-6 6-6 9 0s6 6 9 0" },
@@ -68,7 +59,7 @@ const TODAY_STYLE: Record<TodayKind, { color: string; icon: string }> = {
 
 async function HomeData() {
   await connection();
-  const [h, o] = await Promise.all([getHome(), getHomeOverview()]);
+  const { home: h, overview: o } = await homeScreen(cacheDay());
 
   if (h.totalRuns === 0) {
     return (
