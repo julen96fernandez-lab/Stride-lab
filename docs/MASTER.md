@@ -391,6 +391,9 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
 - Detalle: bloque «Sensaciones» bajo «Tipo de sesión». Valoración y etiquetas se guardan al
   tocar; la nota al salir del campo o tras 1,2 s sin escribir; toast en cada guardado; borrar con
   doble toque. Objetivos de 44 px.
+- Carrera manual: ya no tiene «Nota» propia (columna `runs.note` eliminada en la migración 0012,
+  que antes copia cualquier nota a `run_feelings`). El formulario lleva «Sensaciones (opcional)»
+  y se guarda con la carrera; al editar viene rellena.
 
 ## Plan
 
@@ -784,6 +787,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Sensaciones, paso 2: sensación opcional en el formulario de carrera manual; fuera
+  la «Nota» de las manuales (migración 0012).
 - 2026‑11‑18 — Sensaciones, paso 1: tabla run_feelings y bloque en el detalle (guardar, editar,
   borrar; sobrevive a Reprocesar y a la sustitución por el zip). Migración 0011.
 - 2026‑11‑18 — Plan, paso 4: plan de cada semana guardado, previsto frente a realizado y botón

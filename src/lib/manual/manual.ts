@@ -18,11 +18,10 @@ export interface ManualInput {
   temperatureC: number | null;
   /** null = automático */
   sessionType: SessionType | null;
-  note: string | null;
   isIndoor: boolean;
 }
 
-export type ManualErrors = Partial<Record<keyof ManualInput | "date" | "time" | "duration" | "file", string>>;
+export type ManualErrors = Partial<Record<keyof ManualInput | "date" | "time" | "duration" | "file" | "feeling", string>>;
 
 const TZ = "Europe/Madrid";
 
@@ -100,8 +99,6 @@ export function parseManualForm(f: Record<string, string | undefined>, now: Date
   const temperatureC = opt("temperatureC", f.temperatureC, -30, 55, "Temperatura entre −30 y 55 °C.");
   const st = (f.sessionType ?? "auto").trim();
   if (st !== "auto" && !isSessionType(st)) errors.sessionType = "Tipo de sesión no válido.";
-  const note = (f.note ?? "").trim();
-  if (note.length > 500) errors.note = "La nota no puede pasar de 500 caracteres.";
 
   if (Object.keys(errors).length) return { input: null, errors };
   return {
@@ -116,7 +113,6 @@ export function parseManualForm(f: Record<string, string | undefined>, now: Date
       avgPowerW,
       temperatureC,
       sessionType: st === "auto" ? null : (st as SessionType),
-      note: note || null,
       isIndoor: f.isIndoor === "on" || f.isIndoor === "true",
     },
     errors,

@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { db } from "@/lib/db/client";
 import { dataChanged } from "@/lib/cache/invalidate";
+import { parseFeeling } from "@/lib/feelings/feelings";
+import { saveFeeling } from "@/lib/feelings/feelings-db";
 import { putPrivate } from "@/lib/import/blob";
 import { ActivityFileError } from "@/lib/import/activity-file";
 import { parseManualForm, type ManualErrors } from "@/lib/manual/manual";
@@ -53,6 +55,10 @@ export async function manualRunAction(_prev: ManualState, fd: FormData): Promise
   if (fd.get("intent") !== "save") return { preview };
   if (preview.duplicates.length && fd.get("confirm") !== "1") return { preview, needsConfirm: true };
 
+  // Sensación opcional del mismo formulario.
+  const fp = parseFeeling({ rating: fd.get("feelRating"), note: fd.get("feelNote"), tags: fd.getAll("feelTags") });
+  if ("error" in fp) return { preview, errors: { feeling: fp.error } };
+
   let saved: string;
   try {
     saved = await saveManualRun({ db: db(), putRoute: (p, body) => putPrivate(p, body, "application/gpx+xml") }, input, {
@@ -64,6 +70,7 @@ export async function manualRunAction(_prev: ManualState, fd: FormData): Promise
     if (e instanceof ActivityFileError) return { errors: { file: e.message } };
     return { error: e instanceof Error ? e.message : "No se pudo guardar la carrera." };
   }
+  await saveFeeling(db(), saved, fp.feeling); // vacía → no se guarda (o se borra al editar)
   dataChanged();
   refresh();
   redirect(`/actividad/${saved}?aviso=${id ? "carrera-actualizada" : "carrera-guardada"}`);

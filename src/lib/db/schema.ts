@@ -121,7 +121,6 @@ export const runs = pgTable(
     efZ2PaceSPerKm: real("ef_z2_pace_s_per_km"),
     efZ2Seconds: real("ef_z2_seconds"),
     /** Nota libre (carreras añadidas a mano; se conserva si el zip la sustituye). */
-    note: text("note"),
     /** La carga se estimó solo con el pulso medio (carrera manual sin muestras de pulso). */
     loadEstimated: boolean("load_estimated").notNull().default(false),
     shoeId: uuid("shoe_id").references(() => shoes.id, { onDelete: "set null" }),

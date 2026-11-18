@@ -644,7 +644,8 @@ export async function getInjuriesView(ctx: Ctx = makeCtx()) {
 /** Valores del formulario para editar una carrera manual (null si no existe o no es manual). */
 export async function getManualForEdit(id: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const r = (await db().select().from(s.runs).where(eq(s.runs.id, id)).limit(1))[0];
+  const [rows, feeling] = await Promise.all([db().select().from(s.runs).where(eq(s.runs.id, id)).limit(1), getFeeling(db(), id)]);
+  const r = rows[0];
   if (!r || r.source !== "manual") return null;
   const { dateToMadrid } = await import("@/lib/manual/manual");
   const { date, time } = dateToMadrid(r.startAt);
@@ -653,6 +654,7 @@ export async function getManualForEdit(id: string) {
   return {
     id: r.id,
     existingFile: r.routeFile,
+    feeling,
     values: {
       date,
       time,
@@ -667,7 +669,6 @@ export async function getManualForEdit(id: string) {
       avgPowerW: n(r.avgPowerW),
       temperatureC: n(r.temperatureC, 1),
       sessionType: r.sessionTypeManual ?? "auto",
-      note: r.note ?? "",
       isIndoor: !!r.isIndoor,
     },
   };

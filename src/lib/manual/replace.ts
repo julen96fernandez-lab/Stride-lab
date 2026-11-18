@@ -6,12 +6,12 @@ import { moveFeeling } from "@/lib/feelings/feelings-db";
 
 /**
  * Al importar el zip: cada manual con pareja en el zip (mismo día, inicio a < 30 min y
- * distancia ±5 %) se sustituye por ella. La del zip conserva el tipo elegido a mano, la nota y
- * el calzado de la manual. Las manuales sin pareja se quedan como están.
+ * distancia ±5 %) se sustituye por ella. La del zip conserva el tipo elegido a mano, la
+ * sensación y el calzado de la manual. Las manuales sin pareja se quedan como están.
  */
 export async function replaceManualRuns(db: Db): Promise<number> {
   const all = await db
-    .select({ id: s.runs.id, source: s.runs.source, startAt: s.runs.startAt, distanceM: s.runs.distanceM, sessionTypeManual: s.runs.sessionTypeManual, note: s.runs.note, shoeId: s.runs.shoeId })
+    .select({ id: s.runs.id, source: s.runs.source, startAt: s.runs.startAt, distanceM: s.runs.distanceM, sessionTypeManual: s.runs.sessionTypeManual, shoeId: s.runs.shoeId })
     .from(s.runs);
   const manual = all.filter((r) => r.source === "manual");
   if (!manual.length) return 0;
@@ -33,7 +33,6 @@ export async function replaceManualRuns(db: Db): Promise<number> {
         .update(s.runs)
         .set({
           sessionTypeManual: m.sessionTypeManual ?? z.sessionTypeManual,
-          note: m.note ?? z.note,
           shoeId: m.shoeId ?? z.shoeId,
           updatedAt: new Date(),
         })

@@ -33,7 +33,7 @@ async function EditForm({ params }: { params: Promise<{ id: string }> }) {
         </svg>
         Volver a la carrera
       </Link>
-      <ManualRunForm id={run.id} initial={run.values} existingFile={run.existingFile} />
+      <ManualRunForm id={run.id} initial={run.values} existingFile={run.existingFile} initialFeeling={run.feeling} />
     </>
   );
 }

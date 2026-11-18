@@ -93,7 +93,7 @@ d("sensaciones (base de datos)", () => {
   it("si el zip sustituye a una carrera manual, la sensación pasa a la del zip", async () => {
     const input: ManualInput = {
       startAt: new Date(REF_START + 10 * 60_000), distanceM: 21200, durationS: 6100, avgHr: null, maxHr: null, elevationGainM: null,
-      cadenceSpm: null, avgPowerW: null, temperatureC: null, sessionType: "competicion", note: null, isIndoor: false,
+      cadenceSpm: null, avgPowerW: null, temperatureC: null, sessionType: "competicion", isIndoor: false,
     };
     const manualId = await saveManualRun({ db, putRoute }, input);
     await saveFeeling(db, manualId, { rating: 5, note: "Media de Bilbao", tags: ["buen_dia"] });
@@ -106,7 +106,7 @@ d("sensaciones (base de datos)", () => {
   it("al borrar la carrera se borra su sensación", async () => {
     const manualId = await saveManualRun({ db, putRoute }, {
       startAt: new Date("2026-11-01T09:00:00Z"), distanceM: 8000, durationS: 2600, avgHr: null, maxHr: null, elevationGainM: null,
-      cadenceSpm: null, avgPowerW: null, temperatureC: null, sessionType: null, note: null, isIndoor: false,
+      cadenceSpm: null, avgPowerW: null, temperatureC: null, sessionType: null, isIndoor: false,
     });
     await saveFeeling(db, manualId, { rating: 4, note: null, tags: [] });
     await db.delete(s.runs).where(eq(s.runs.id, manualId));

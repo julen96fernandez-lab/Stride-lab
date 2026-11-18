@@ -22,7 +22,8 @@ describe("formulario de carrera manual", () => {
   it("mínimo: fecha, hora, distancia y duración; todo lo demás vacío", () => {
     const { input, errors } = parseManualForm(form(), NOW);
     expect(errors).toEqual({});
-    expect(input).toMatchObject({ distanceM: 10500, durationS: 3150, avgHr: null, sessionType: null, isIndoor: false, note: null });
+    expect(input).toMatchObject({ distanceM: 10500, durationS: 3150, avgHr: null, sessionType: null, isIndoor: false });
+    expect(input).not.toHaveProperty("note"); // la nota vive en Sensaciones
     expect(input!.startAt.toISOString()).toBe("2026-11-15T08:30:00.000Z"); // 09:30 en Madrid (invierno)
   });
 
@@ -33,8 +34,8 @@ describe("formulario de carrera manual", () => {
   });
 
   it("opcionales y tipo elegido a mano", () => {
-    const { input } = parseManualForm(form({ avgHr: "152", maxHr: "171", elevationGainM: "85", cadenceSpm: "172", avgPowerW: "250", temperatureC: "14,5", sessionType: "tempo", note: " Con viento ", isIndoor: "on" }), NOW);
-    expect(input).toMatchObject({ avgHr: 152, maxHr: 171, elevationGainM: 85, cadenceSpm: 172, avgPowerW: 250, temperatureC: 14.5, sessionType: "tempo", note: "Con viento", isIndoor: true });
+    const { input } = parseManualForm(form({ avgHr: "152", maxHr: "171", elevationGainM: "85", cadenceSpm: "172", avgPowerW: "250", temperatureC: "14,5", sessionType: "tempo", isIndoor: "on" }), NOW);
+    expect(input).toMatchObject({ avgHr: 152, maxHr: 171, elevationGainM: 85, cadenceSpm: 172, avgPowerW: 250, temperatureC: 14.5, sessionType: "tempo", isIndoor: true });
   });
 
   it("errores claros en español", () => {
@@ -120,7 +121,6 @@ d("carreras manuales (base de datos)", () => {
     avgPowerW: null,
     temperatureC: null,
     sessionType: null,
-    note: null,
     isIndoor: false,
     ...o,
   });
@@ -206,10 +206,10 @@ d("carreras manuales (base de datos)", () => {
   });
 
   it("edición y borrado solo de las manuales", async () => {
-    const id = await saveManualRun({ db, putRoute }, input({ note: "uno" }));
-    await saveManualRun({ db, putRoute }, input({ distanceM: 12000, note: "dos", sessionType: "tirada_larga" }), { id });
+    const id = await saveManualRun({ db, putRoute }, input());
+    await saveManualRun({ db, putRoute }, input({ distanceM: 12000, sessionType: "tirada_larga" }), { id });
     const r = await get(id);
-    expect(r).toMatchObject({ distanceM: 12000, note: "dos", sessionTypeManual: "tirada_larga" });
+    expect(r).toMatchObject({ distanceM: 12000, sessionTypeManual: "tirada_larga" });
     expect(r.avgPaceSPerKm).toBe(250);
     // Una importada no se edita ni se borra.
     await importZip();
@@ -221,13 +221,13 @@ d("carreras manuales (base de datos)", () => {
     expect(await get(id)).toBeUndefined();
   });
 
-  it("el zip sustituye a la manual que coincide (conserva tipo y nota) y deja la que no", async () => {
+  it("el zip sustituye a la manual que coincide (conserva tipo) y deja la que no", async () => {
     // La del 17-oct (21,34 km a las 09:00 de Madrid) añadida a mano 10 min tarde y con 21,2 km.
     const twin = await saveManualRun(
       { db, putRoute },
-      input({ startAt: new Date(REF_START + 10 * 60_000), distanceM: 21200, durationS: 6100, sessionType: "competicion", note: "Media de Bilbao" }),
+      input({ startAt: new Date(REF_START + 10 * 60_000), distanceM: 21200, durationS: 6100, sessionType: "competicion" }),
     );
-    const alone = await saveManualRun({ db, putRoute }, input({ startAt: new Date("2026-11-01T09:00:00Z"), note: "sin pareja" }));
+    const alone = await saveManualRun({ db, putRoute }, input({ startAt: new Date("2026-11-01T09:00:00Z") }));
     // Misma hora que otra del zip pero distancia muy distinta: no es la misma.
     const near = await saveManualRun({ db, putRoute }, input({ startAt: new Date(Date.parse("2026-10-18T08:00:00Z") + 5 * 60_000), distanceM: 30000, durationS: 9000 }));
 
@@ -237,10 +237,10 @@ d("carreras manuales (base de datos)", () => {
 
     expect(await get(twin)).toBeUndefined();
     const ref = (await db.select().from(s.runs).where(eq(s.runs.startAt, new Date(REF_START))))[0];
-    expect(ref).toMatchObject({ source: "apple_watch", sessionTypeManual: "competicion", note: "Media de Bilbao" });
+    expect(ref).toMatchObject({ source: "apple_watch", sessionTypeManual: "competicion" });
     expect(await count("run_series", ref.id)).toBeGreaterThan(0); // datos completos del zip
 
-    expect(await get(alone)).toMatchObject({ status: "valid", note: "sin pareja" });
+    expect(await get(alone)).toMatchObject({ status: "valid" });
     expect(await get(near)).toMatchObject({ status: "valid", duplicateOf: null }); // no se marca como duplicada
 
     // Reprocesar el zip: ni se borra ni se duplica ninguna manual sin pareja.

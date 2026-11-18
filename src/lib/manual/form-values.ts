@@ -15,7 +15,6 @@ export interface ManualValues {
   avgPowerW: string;
   temperatureC: string;
   sessionType: string;
-  note: string;
   isIndoor: boolean;
 }
 
@@ -36,7 +35,6 @@ export function emptyValues(now: Date = new Date()): ManualValues {
     avgPowerW: "",
     temperatureC: "",
     sessionType: "auto",
-    note: "",
     isIndoor: false,
   };
 }

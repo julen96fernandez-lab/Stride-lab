@@ -140,7 +140,6 @@ export async function saveManualRun(
     status: d.status,
     invalidReason: d.invalidReason,
     sessionTypeManual: input.sessionType,
-    note: input.note,
     updatedAt: new Date(),
   } as const;
 

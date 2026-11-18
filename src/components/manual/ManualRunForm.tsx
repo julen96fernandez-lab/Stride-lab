@@ -8,6 +8,8 @@ import { manualRunAction, type ManualState } from "@/app/(app)/actividad/manual-
 import { ActivityFileError, parseActivityFile } from "@/lib/import/activity-file";
 import { dateToMadrid } from "@/lib/manual/manual";
 import type { ManualValues } from "@/lib/manual/form-values";
+import { FeelingFields } from "@/components/feelings/FeelingFields";
+import type { Feeling } from "@/lib/feelings/feelings";
 export { emptyValues, type ManualValues } from "@/lib/manual/form-values";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 
@@ -24,7 +26,17 @@ const when = (d: Date | string) =>
   new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(d));
 
 /** Formulario de carrera manual (nueva o edición). */
-export function ManualRunForm({ initial, id, existingFile }: { initial: ManualValues; id?: string; existingFile?: string | null }) {
+export function ManualRunForm({
+  initial,
+  id,
+  existingFile,
+  initialFeeling,
+}: {
+  initial: ManualValues;
+  id?: string;
+  existingFile?: string | null;
+  initialFeeling?: Feeling | null;
+}) {
   const [state, action] = useActionState<ManualState, FormData>(manualRunAction, {});
   useActionToast(state);
   const [v, setV] = useState<ManualValues>(initial);
@@ -186,12 +198,11 @@ export function ManualRunForm({ initial, id, existingFile }: { initial: ManualVa
           <Num name="avgPowerW" label="Potencia media" unit="W" v={v} set={set} err={err.avgPowerW} />
           <Num name="temperatureC" label="Temperatura" unit="°C" v={v} set={set} err={err.temperatureC} signed />
         </div>
-        <label className={label}>
-          Nota
-          <textarea name="note" rows={3} maxLength={500} value={v.note} onChange={set("note")} placeholder="Ej.: carrera popular, con viento…" className={`${field} h-auto py-2.5 text-[15px]`} />
-        </label>
-        {err.note && <Err>{err.note}</Err>}
       </section>
+
+      {/* Sensaciones (opcional): se guardan con la carrera */}
+      <FeelingFields initial={initialFeeling} />
+      {err.feeling && <Err>{err.feeling}</Err>}
 
       {/* Vista previa */}
       {p && (

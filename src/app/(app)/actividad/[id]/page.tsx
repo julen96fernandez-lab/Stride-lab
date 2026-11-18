@@ -67,13 +67,6 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </header>
 
-      {run.note && (
-        <p className="-mt-1 rounded-2xl border border-line bg-inset px-4 py-3 text-[14px] leading-relaxed">
-          <span className="mr-1.5 text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">Nota</span>
-          {run.note}
-        </p>
-      )}
-
       {/* Números principales */}
       <section className="card card-hero p-5">
         <div className="eyebrow">Distancia</div>
