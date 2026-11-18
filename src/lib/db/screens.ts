@@ -15,8 +15,8 @@ export async function homeScreen(day: string) {
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
   const ctx = q.makeCtx();
-  const [home, overview, nextRace] = await Promise.all([q.getHome(ctx), q.getHomeOverview(ctx), q.getNextRace(day, ctx)]);
-  return { home, overview, nextRace };
+  const [home, overview, nextRace, mineToday] = await Promise.all([q.getHome(ctx), q.getHomeOverview(ctx), q.getNextRace(day, ctx), q.getMineOn(day)]);
+  return { home, overview, nextRace, mineToday };
 }
 
 export async function activityScreen(day: string) {

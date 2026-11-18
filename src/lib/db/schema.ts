@@ -283,6 +283,8 @@ export const planWeeks = pgTable("plan_weeks", {
   downgraded: boolean("downgraded").notNull().default(false),
   /** día previsto antes de reorganizar (null si no se reorganizó) */
   rescheduledFrom: date("rescheduled_from"),
+  /** sugerencia quitada por mí (no se muestra) */
+  dismissed: boolean("dismissed").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -324,3 +326,22 @@ export const raceGoals = pgTable("race_goals", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/** Sesiones previstas puestas por mí en Plan (mandan sobre la sugerencia). */
+export const plannedSessions = pgTable(
+  "planned_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    date: date("date").notNull(),
+    /** tirada_larga | calidad | suave | otro */
+    kind: text("kind").notNull(),
+    distanceM: real("distance_m"),
+    durationS: integer("duration_s"),
+    note: text("note"),
+    /** semana (lunes) cuya sugerencia sustituye, si se creó editando la sugerida */
+    replacesWeek: date("replaces_week"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("planned_sessions_date_idx").on(t.date)],
+);

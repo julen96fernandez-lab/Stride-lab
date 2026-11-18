@@ -506,6 +506,27 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
     parciales, lo dice y muestra solo el total.
 
 
+### Plan editable
+Decisiones acordadas: una sesión mía **exigente** (tirada larga o calidad) en una semana con
+sugerencia ocupa su sitio; si es suave u otro, la sugerencia se queda. «No repetir exigentes» =
+nunca dos exigentes en días consecutivos y nunca el mismo tipo exigente dos veces seguidas en la
+alternancia, siempre como sugerencia y aviso: **mis sesiones no se mueven nunca**. El
+cumplimiento de la sugerencia semanal sigue siendo por semana; la vinculación ±1 día es solo
+para mis sesiones.
+- **Paso 1 · Añadir, editar, mover y borrar (hecho).** Tabla `planned_sessions` (migración 0014:
+  fecha, tipo tirada larga / calidad / rodaje suave / otro, distancia y duración opcionales,
+  nota ≤ 200, `replaces_week`) y `plan_weeks.dismissed`. `lib/plan/mine.ts` (con pruebas):
+  formulario (de 4 semanas atrás a un año adelante; 0,5–100 km; 5 min–6 h en «45» o «1:15»),
+  traducción de la sugerida y de la recomendación de Hoy.
+  - Plan: «Añadir sesión»; mis sesiones con la marca «Puesta por mí» en su semana (o en «Más
+    adelante»); tocar una la edita (cambiar la fecha = moverla) o la borra.
+  - La sugerida: «Editar, mover o quitar» (en la semana en curso) o tocarla (en las próximas).
+    Al guardar pasa a ser mía y la sustituye («Sustituida»); borrar esa sesión mía la recupera.
+    «Quitar la sugerencia» la marca quitada («Recuperarla» la devuelve). Cambiar el ciclo de
+    turnos borra lo guardado desde la semana en curso, también lo quitado.
+  - Inicio: «Voy a correr hoy» en Hoy (tipo propuesto: calidad si Hoy dice calidad; si no,
+    suave) y, si ya hay, «Tu sesión de hoy … Puesta por mí».
+
 ## Rendimiento
 
 - **Región**: funciones en **fra1** (`vercel.json`), junto a Neon (eu-central-1). Antes en iad1:
@@ -836,6 +857,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Plan editable, paso 1: añadir, editar, mover y borrar sesiones (también la
+  sugerida), «Puesta por mí» y «Voy a correr hoy» en Inicio.
 - 2026‑11‑18 — Competición, paso 4: afinado en Plan, carrera marcada, vincular la carrera real
   (y marcarla Competición) y análisis posterior plan frente a real.
 - 2026‑11‑18 — Competición, paso 3: Día de carrera con la banda de ritmos y la imagen vertical

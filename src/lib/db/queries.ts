@@ -768,23 +768,62 @@ import { dayNum, shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan
 import { pickSources, predictAt, predictionHistory } from "@/lib/plan/predict";
 import { SESSION_LABEL, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
 import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
-import { freezeWeek, getStoredWeeks } from "@/lib/plan/plan-db";
+import { freezeWeek, getStoredWeeks, listMine, type MineRow } from "@/lib/plan/plan-db";
+import { MINE_LABEL, mineDetail, weekOf, type MineKind } from "@/lib/plan/mine";
+
+export interface MineView {
+  id: string;
+  date: string;
+  dayLabel: string;
+  week: string;
+  kind: MineKind;
+  label: string;
+  detail: string | null;
+  note: string | null;
+  replacesWeek: string | null;
+}
+const mineView = (m: MineRow): MineView => ({
+  id: m.id,
+  date: m.date,
+  dayLabel: fmtDay(m.date),
+  week: weekOf(m.date),
+  kind: m.kind as MineKind,
+  label: MINE_LABEL[m.kind as MineKind] ?? m.kind,
+  detail: mineDetail(m),
+  note: m.note,
+  replacesWeek: m.replacesWeek,
+});
+/** Por qué no se muestra la sugerencia de una semana. */
+export type Hidden = { by: "dismissed" } | { by: "replaced"; id: string };
+
+/** Mis sesiones de un día (para Inicio). */
+export async function getMineOn(day: string): Promise<MineView[]> {
+  return (await listMine(db(), day, day)).map(mineView);
+}
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
 export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const [anchor, predictions, runs, fitness, raceRows] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx), ctx.races()]);
   const races = await withRaceResults(raceViews(raceRows, today, predictions), runs);
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
-  if (!anchor || !weeks.length) return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races };
+  if (!anchor || !weeks.length) return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine: [] as MineView[], hidden: {} as Record<string, Hidden> };
 
   const madrid = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
   const history = runs.map((r) => ({ date: madrid(r.startAt), type: r.type }));
   const cur = fitness.current;
   const pastStart = ymdOf(weeks[0].startDay - 28);
-  const stored = await getStoredWeeks(db(), pastStart, weeks[weeks.length - 1].start);
+  const [stored, mineRows] = await Promise.all([
+    getStoredWeeks(db(), pastStart, weeks[weeks.length - 1].start),
+    listMine(db(), pastStart, ymdOf(dayNum(today)! + 365)),
+  ]);
   const byStart = new Map(stored.map((r) => [r.weekStart, r]));
+  const mine = mineRows.map(mineView);
+  // Sugerencias que no se muestran: quitadas por mí o sustituidas por una sesión mía.
+  const hidden: Record<string, Hidden> = {};
+  for (const r of stored) if (r.dismissed) hidden[r.weekStart] = { by: "dismissed" };
+  for (const m of mine) if (m.replacesWeek) hidden[m.replacesWeek] = { by: "replaced", id: m.id };
   const fixed = Object.fromEntries(
-    stored.map((r) => [r.weekStart, { session: r.session as SessionKind, day: r.day, when: r.whenText, reason: r.reason, downgraded: r.downgraded }]),
+    stored.filter((r) => !r.dismissed).map((r) => [r.weekStart, { session: r.session as SessionKind, day: r.day, when: r.whenText, reason: r.reason, downgraded: r.downgraded }]),
   );
   const sessions = planWeeks({
     weeks,
@@ -804,7 +843,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const status = weekStatus({ session: now.session, day: now.day, weekStart: now.start, today, runs: history });
   const latest = now.race ? ymdOf(dayNum(now.race.date)! - 2) : null;
   const newDay = status === "dia_pasado" ? rescheduleDay({ anchor, kind: now.kind, session: now.session, weekStart: now.start, today, latest }) : null;
-  const current = { ...now, status, rescheduledFrom: nowRow?.rescheduledFrom ?? null, canReschedule: newDay !== null && newDay !== now.day, rescheduleTo: newDay };
+  const current = { ...now, status, rescheduledFrom: nowRow?.rescheduledFrom ?? null, canReschedule: newDay !== null && newDay !== now.day, rescheduleTo: newDay, hidden: hidden[now.start] ?? null };
 
   // Las 4 semanas anteriores que tengan plan guardado, con su resultado.
   const past = stored
@@ -822,9 +861,10 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
         day: r.day,
         dayLabel: fmtDay(r.day),
         status: weekStatus({ session, day: r.day, weekStart: r.weekStart, today, runs: history }),
+        hidden: hidden[r.weekStart] ?? null,
       };
     });
-  return { anchor, today, weeks, sessions, current, past, predictions, races };
+  return { anchor, today, weeks, sessions, current, past, predictions, races, mine, hidden };
 }
 
 /** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */

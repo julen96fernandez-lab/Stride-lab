@@ -11,6 +11,9 @@ import { RacesBlock } from "@/components/race/RaceCards";
 import { fmtDay, type SessionKind, type WeekSession } from "@/lib/plan/weekly";
 import { STATUS_LABEL, type WeekStatus } from "@/lib/plan/compliance";
 import { RescheduleButton } from "./RescheduleButton";
+import { RestoreSuggestion } from "./RestoreSuggestion";
+import type { Hidden, MineView } from "@/lib/db/queries";
+import type { MineKind } from "@/lib/plan/mine";
 
 export const metadata = { title: "Plan · Stride Lab" };
 
@@ -53,6 +56,8 @@ async function PlanData() {
     past,
     predictions,
     races,
+    mine,
+    hidden,
   } = await planScreen(cacheDay());
   const preds = (
     <PredictionsCard
@@ -86,6 +91,10 @@ async function PlanData() {
   const sessionsBy = new Map(sessions.map((x) => [x.start, x]));
   const todayDay = dayNum(today)!;
   const left = current.startDay + 6 - todayDay;
+  const mineBy = new Map<string, MineView[]>();
+  for (const m of mine) mineBy.set(m.week, [...(mineBy.get(m.week) ?? []), m]);
+  const lastWeek = weeks[weeks.length - 1].start;
+  const later = mine.filter((m) => m.week > lastWeek);
   return (
     <>
       <RacesBlock races={races} />
@@ -107,6 +116,18 @@ async function PlanData() {
           Semana {current.pos + 1} de 5 del ciclo.
         </p>
         {cur && <SessionBlock s={cur} />}
+        {(mineBy.get(current.start) ?? []).length > 0 && (
+          <div className="relative mt-3">
+            <div className="text-[12px] text-fg-2">Tus sesiones esta semana</div>
+            <MineList items={mineBy.get(current.start)!} today={today} />
+          </div>
+        )}
+        <Link
+          href="/plan/sesion/nueva"
+          className="relative mt-3 flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-line-strong text-[15px] font-semibold"
+        >
+          <span aria-hidden="true">＋</span> Añadir sesión
+        </Link>
       </section>
 
       <section className="card p-5" aria-label="Próximas semanas">
@@ -121,36 +142,36 @@ async function PlanData() {
         </div>
         <ol className="mt-2 divide-y divide-line">
           {weeks.slice(1).map((w) => (
-            <li
-              key={w.start}
-              className="flex min-h-[52px] items-center justify-between gap-3 py-2"
-            >
+            <li key={w.start} className="min-h-[52px] py-2">
               <div>
-                <div className="text-[15px] font-semibold">
-                  {range(w.start, w.end)}
-                </div>
-                <div className="text-[12px] text-fg-2">
-                  {fmt(w.start, { year: "numeric" }) !==
-                  fmt(today, { year: "numeric" })
-                    ? `${fmt(w.start, { year: "numeric" })} · `
-                    : ""}
-                  semana {w.pos + 1} de 5
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[15px] font-semibold">
+                      {range(w.start, w.end)}
+                    </div>
+                    <div className="text-[12px] text-fg-2">
+                      {fmt(w.start, { year: "numeric" }) !==
+                      fmt(today, { year: "numeric" })
+                        ? `${fmt(w.start, { year: "numeric" })} · `
+                        : ""}
+                      semana {w.pos + 1} de 5
+                    </div>
+                  </div>
+                  <ShiftPill kind={w.kind} />
                 </div>
                 {sessionsBy.get(w.start)?.race && (
                   <RaceMark race={sessionsBy.get(w.start)!.race!} />
                 )}
                 {sessionsBy.get(w.start) && (
-                  <div className="mt-1 text-[13px]">
-                    <SessionDot kind={sessionsBy.get(w.start)!.session} />{" "}
-                    <b>{sessionsBy.get(w.start)!.label}</b>
-                    <span className="text-fg-2">
-                      {" "}
-                      · {sessionsBy.get(w.start)!.dayLabel}
-                    </span>
-                  </div>
+                  <Suggestion
+                    s={sessionsBy.get(w.start)!}
+                    hidden={hidden[w.start] ?? null}
+                  />
+                )}
+                {(mineBy.get(w.start) ?? []).length > 0 && (
+                  <MineList items={mineBy.get(w.start)!} today={today} />
                 )}
               </div>
-              <ShiftPill kind={w.kind} />
             </li>
           ))}
         </ol>
@@ -176,17 +197,27 @@ async function PlanData() {
             {past.map((w) => (
               <li
                 key={w.start}
-                className="flex min-h-[52px] items-center justify-between gap-3 py-2"
+                className="flex min-h-[52px] items-start justify-between gap-3 py-2"
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-semibold">
                     {range(w.start, w.end)}
                   </div>
                   <div className="text-[12px] text-fg-2">
-                    <SessionDot kind={w.session} /> {w.label} · {w.dayLabel}
+                    <SessionDot kind={w.session} />{" "}
+                    <span className={w.hidden ? "line-through" : ""}>
+                      {w.label} · {w.dayLabel}
+                    </span>
                   </div>
+                  {(mineBy.get(w.start) ?? []).length > 0 && (
+                    <MineList items={mineBy.get(w.start)!} today={today} />
+                  )}
                 </div>
-                <StatusPill status={w.status} />
+                {w.hidden ? (
+                  <HiddenPill hidden={w.hidden} />
+                ) : (
+                  <StatusPill status={w.status} />
+                )}
               </li>
             ))}
           </ol>
@@ -197,8 +228,101 @@ async function PlanData() {
         </section>
       )}
 
+      {later.length > 0 && (
+        <section className="card p-5" aria-label="Más adelante">
+          <div className="eyebrow">Tus sesiones más adelante</div>
+          <MineList items={later} today={today} />
+        </section>
+      )}
+
       {preds}
     </>
+  );
+}
+
+const MINE_COLOR: Record<MineKind, string> = {
+  tirada_larga: "var(--t-tirada_larga)",
+  calidad: "var(--t-series)",
+  suave: "var(--t-rodaje)",
+  otro: "var(--chart-line)",
+};
+
+/** Mis sesiones: cada una abre su edición. */
+function MineList({ items, today }: { items: MineView[]; today: string }) {
+  return (
+    <ul className="mt-1.5 flex flex-col gap-1.5">
+      {items.map((m) => (
+        <li key={m.id}>
+          <Link
+            href={`/plan/sesion/${m.id}`}
+            className="flex min-h-[48px] items-center gap-3 rounded-2xl border border-line bg-inset px-3 py-2"
+          >
+            <span
+              className="h-2 w-2 flex-none rounded-full"
+              style={{ background: MINE_COLOR[m.kind] }}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1 text-[14px]">
+              <b>{m.label}</b>
+              <span className="text-fg-2">
+                {" "}
+                · {m.date === today ? "hoy" : m.dayLabel}
+                {m.detail ? ` · ${m.detail}` : ""}
+              </span>
+              {m.note && (
+                <span className="block truncate text-[12px] text-fg-2">
+                  {m.note}
+                </span>
+              )}
+            </span>
+            <MinePill />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function MinePill() {
+  return (
+    <span className="flex-none rounded-full border border-lime/40 bg-lime/10 px-2 py-0.5 text-[11px] font-semibold text-lime-text">
+      Puesta por mí
+    </span>
+  );
+}
+
+function HiddenPill({ hidden }: { hidden: Hidden }) {
+  return (
+    <span className="flex-none rounded-full border border-line-strong px-2.5 py-1 text-[12px] font-semibold text-fg-2">
+      {hidden.by === "dismissed" ? "Quitada" : "Sustituida"}
+    </span>
+  );
+}
+
+/** Sugerencia de una semana próxima: tocar para editarla, moverla o quitarla. */
+function Suggestion({ s, hidden }: { s: WeekSession; hidden: Hidden | null }) {
+  if (hidden?.by === "replaced") return null;
+  if (hidden?.by === "dismissed") {
+    return (
+      <div className="mt-1 flex items-center gap-2 text-[13px] text-fg-2">
+        <span className="line-through">
+          {s.label} · {s.dayLabel}
+        </span>
+        <RestoreSuggestion weekStart={s.start} />
+      </div>
+    );
+  }
+  return (
+    <Link
+      href={`/plan/sesion/nueva?semana=${s.start}`}
+      className="-ml-1 mt-0.5 flex min-h-[44px] items-center gap-1.5 px-1 text-[13px]"
+    >
+      <SessionDot kind={s.session} /> <b>{s.label}</b>
+      <span className="text-fg-2">· {s.dayLabel}</span>
+      <span className="text-fg-3" aria-hidden="true">
+        ›
+      </span>
+    </Link>
   );
 }
 
@@ -247,8 +371,32 @@ function SessionBlock({
     rescheduledFrom: string | null;
     canReschedule: boolean;
     rescheduleTo: string | null;
+    hidden: Hidden | null;
   };
 }) {
+  if (s.hidden) {
+    return (
+      <div className="relative mt-4 rounded-2xl border border-line bg-inset p-3.5 text-[13px] text-fg-2">
+        <div className="text-[12px]">Sesión de la semana</div>
+        {s.hidden.by === "dismissed" ? (
+          <div className="mt-1 flex flex-wrap items-center gap-x-2">
+            <span>
+              Quitaste la sugerencia (
+              <span className="line-through">
+                {s.label} · {s.dayLabel}
+              </span>
+              ).
+            </span>
+            <RestoreSuggestion weekStart={s.start} />
+          </div>
+        ) : (
+          <p className="mt-1">
+            La sugerencia ({s.label} · {s.dayLabel}) la sustituye tu sesión.
+          </p>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="relative mt-4 rounded-2xl border border-line bg-inset p-3.5">
       <div className="flex items-center justify-between gap-2">
@@ -283,6 +431,12 @@ function SessionBlock({
         Sugerencia, no obligación: si no te encuentras bien, cambia a suave o
         descansa.
       </p>
+      <Link
+        href={`/plan/sesion/nueva?semana=${s.start}`}
+        className="mt-1 -mb-1.5 inline-flex min-h-[44px] items-center text-[13px] font-semibold text-fg underline-offset-2 hover:underline"
+      >
+        Editar, mover o quitar ›
+      </Link>
     </div>
   );
 }

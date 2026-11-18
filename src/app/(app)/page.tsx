@@ -15,6 +15,7 @@ import { FitnessMini } from "@/components/charts/FitnessCharts";
 import { RaceCountdown } from "@/components/race/RaceCards";
 import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
+import { mineKindForToday } from "@/lib/plan/mine";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
 
 const MONTH_NAME = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -60,7 +61,8 @@ const TODAY_STYLE: Record<TodayKind, { color: string; icon: string }> = {
 
 async function HomeData() {
   await connection();
-  const { home: h, overview: o, nextRace } = await homeScreen(cacheDay());
+  const today = cacheDay();
+  const { home: h, overview: o, nextRace, mineToday } = await homeScreen(today);
 
   if (h.totalRuns === 0) {
     return (
@@ -129,6 +131,22 @@ async function HomeData() {
           </div>
         </div>
         <p className="relative mt-2 text-[14px] leading-snug text-fg-2">{o.advice.reason}</p>
+        {mineToday.length ? (
+          <Link href={`/plan/sesion/${mineToday[0].id}`} className="relative mt-3 flex min-h-[48px] items-center gap-2 rounded-2xl border border-line bg-inset px-3.5 text-[14px]">
+            <span className="min-w-0 flex-1">
+              Tu sesión de hoy: <b>{mineToday[0].label}</b>
+              {mineToday[0].detail ? <span className="text-fg-2"> · {mineToday[0].detail}</span> : null}
+            </span>
+            <span className="flex-none rounded-full border border-lime/40 bg-lime/10 px-2 py-0.5 text-[11px] font-semibold text-lime-text">Puesta por mí</span>
+          </Link>
+        ) : (
+          <Link
+            href={`/plan/sesion/nueva?fecha=${today}&tipo=${mineKindForToday(o.advice.kind)}&volver=inicio`}
+            className="relative mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-line-strong text-[15px] font-semibold"
+          >
+            Voy a correr hoy
+          </Link>
+        )}
       </section>
 
       {/* Carga y forma */}

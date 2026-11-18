@@ -99,6 +99,13 @@
       "when": 1795035000000,
       "tag": "0013_race_goals",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795036000000,
+      "tag": "0014_planned_sessions",
+      "breakpoints": true
     }
   ]
 }
