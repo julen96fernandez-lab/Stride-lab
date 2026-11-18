@@ -158,6 +158,7 @@ export async function ensureClassified(db: Db): Promise<void> {
   // Una vez comprobado, no se vuelve a mirar en un rato (son 2 consultas en cada pantalla), y si
   // varias consultas lo piden a la vez comparten la misma comprobación: dos recálculos
   // simultáneos chocaban al reescribir los récords.
+  if (!memoEnabled) return checkAndClassify(db);
   if (classifiedUntil > Date.now()) return;
   inFlight ??= checkAndClassify(db).finally(() => {
     inFlight = null;
@@ -169,6 +170,13 @@ export async function ensureClassified(db: Db): Promise<void> {
 export function forgetClassified() {
   classifiedUntil = 0;
 }
+
+/** Diagnóstico: medir como antes (comprobación en cada consulta). */
+export function setClassifyMemo(on: boolean) {
+  memoEnabled = on;
+  classifiedUntil = 0;
+}
+let memoEnabled = true;
 
 const CLASSIFIED_TTL_MS = 5 * 60_000;
 let classifiedUntil = 0;
