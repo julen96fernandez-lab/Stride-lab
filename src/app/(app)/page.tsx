@@ -12,6 +12,7 @@ import { homeScreen } from "@/lib/db/screens";
 import { HomeSkeleton } from "@/components/ui/Skeletons";
 import { cacheDay } from "@/lib/cache/tags";
 import { FitnessMini } from "@/components/charts/FitnessCharts";
+import { RaceCountdown } from "@/components/race/RaceCards";
 import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
@@ -59,7 +60,7 @@ const TODAY_STYLE: Record<TodayKind, { color: string; icon: string }> = {
 
 async function HomeData() {
   await connection();
-  const { home: h, overview: o } = await homeScreen(cacheDay());
+  const { home: h, overview: o, nextRace } = await homeScreen(cacheDay());
 
   if (h.totalRuns === 0) {
     return (
@@ -131,6 +132,9 @@ async function HomeData() {
       </section>
 
       {/* Carga y forma */}
+      {/* Próxima carrera objetivo */}
+      {nextRace && <RaceCountdown race={nextRace} />}
+
       {o.fitness && <FitnessMini f={o.fitness} />}
 
       {/* 2) Semana */}

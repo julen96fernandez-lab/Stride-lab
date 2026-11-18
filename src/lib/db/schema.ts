@@ -301,3 +301,26 @@ export const runFeelings = pgTable("run_feelings", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * Carreras objetivo (puede haber varias; la más próxima manda en Plan e Inicio). El GPX solo
+ * aporta el perfil de altitud, ya escalado a la distancia oficial.
+ */
+export const raceGoals = pgTable("race_goals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  date: date("date").notNull(),
+  distanceKey: text("distance_key").notNull(),
+  distanceM: real("distance_m").notNull(),
+  /** HH:MM o null */
+  startTime: text("start_time"),
+  targetS: real("target_s").notNull(),
+  /** uniforme / negativa 2 % / negativa 5 % / positiva */
+  strategy: text("strategy").notNull().default("even"),
+  /** { d: number[], e: number[], gpxM, scale, gainM } */
+  profile: jsonb("profile"),
+  /** carrera real vinculada tras correrla */
+  runId: uuid("run_id").references(() => runs.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});

@@ -15,6 +15,7 @@ import { ensureTrack } from "@/lib/analysis/track-db";
 import { memoOnce } from "@/lib/cache/memo";
 import { getFeeling } from "@/lib/feelings/feelings-db";
 import { getShiftAnchor } from "@/lib/plan/shifts-db";
+import { listRaces } from "@/lib/race/race-db";
 
 const TZ = "Europe/Madrid";
 const valid = eq(s.runs.status, "valid");
@@ -35,6 +36,7 @@ export function makeCtx() {
     zones: () => once("zones", () => getZones(db())),
     typeSettings: () => once("typeSettings", () => getTypeSettings(db())),
     shiftAnchor: () => once("shiftAnchor", () => getShiftAnchor(db())),
+    races: () => once("races", () => listRaces(db())),
   };
 }
 export type Ctx = ReturnType<typeof makeCtx>;
@@ -763,16 +765,17 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 // ─── Plan ────────────────────────────────────────────────────────────────────
 
 import { shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
-import { predictAt, predictionHistory } from "@/lib/plan/predict";
+import { pickSources, predictAt, predictionHistory } from "@/lib/plan/predict";
 import { SESSION_LABEL, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
 import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
 import { freezeWeek, getStoredWeeks } from "@/lib/plan/plan-db";
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
 export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
-  const [anchor, predictions, runs, fitness] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx)]);
+  const [anchor, predictions, runs, fitness, raceRows] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx), ctx.races()]);
+  const races = raceViews(raceRows, today, predictions);
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
-  if (!anchor || !weeks.length) return { anchor, today, weeks, sessions: [], current: null, past: [], predictions };
+  if (!anchor || !weeks.length) return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races };
 
   const madrid = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
   const history = runs.map((r) => ({ date: madrid(r.startAt), type: r.type }));
@@ -811,7 +814,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
         status: weekStatus({ session, day: r.day, weekStart: r.weekStart, today, runs: history }),
       };
     });
-  return { anchor, today, weeks, sessions, current, past, predictions };
+  return { anchor, today, weeks, sessions, current, past, predictions, races };
 }
 
 /** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */
@@ -827,7 +830,7 @@ export async function getPredictions(ctx: Ctx = makeCtx()) {
   const e = efforts.map((x) => ({ key: x.key, timeS: x.timeS, at: x.startAt.getTime(), runId: x.runId }));
   const r = runs.map((x) => ({ at: x.startAt.getTime(), distanceM: x.distanceM }));
   const longestM = r.filter((x) => now - x.at <= 365 * 86_400_000).reduce((m, x) => Math.max(m, x.distanceM ?? 0), 0);
-  return { now: predictAt(e, r, now), history: predictionHistory(e, r, now, 24), longestM };
+  return { now: predictAt(e, r, now), history: predictionHistory(e, r, now, 24), longestM, sources: pickSources(e, now) };
 }
 
 // ─── Sensaciones ─────────────────────────────────────────────────────────────
@@ -845,4 +848,46 @@ export async function getFeelingStats(today: string) {
     rows.map((r) => ({ date: new Date(localDay(r.startAt) * 86_400_000).toISOString().slice(0, 10), rating: r.rating, tags: (r.tags ?? []) as FeelingTag[] })),
     today,
   );
+}
+
+// ─── Carreras objetivo ───────────────────────────────────────────────────────
+
+import { RACE_DISTANCES, daysUntil, realism, type RaceDistanceKey, type RaceProfile } from "@/lib/race/race";
+import { predictDistance, type Prediction } from "@/lib/plan/predict";
+import type { RaceRow } from "@/lib/race/race-db";
+
+/** Predicción para la distancia de la carrera: la de Plan si es estándar, si no, Riegel a esa distancia. */
+function predictionFor(m: number, key: string, p: Awaited<ReturnType<typeof getPredictions>>): Prediction | null {
+  const std = p.now.find((x) => x.key === key && key in RACE_DISTANCES);
+  return std ?? predictDistance(m, p.sources, p.longestM);
+}
+
+export function raceViews(rows: readonly RaceRow[], today: string, p: Awaited<ReturnType<typeof getPredictions>>) {
+  return rows
+    .map((r) => {
+      const pred = predictionFor(r.distanceM, r.distanceKey, p);
+      return {
+        id: r.id,
+        name: r.name,
+        date: r.date,
+        distanceKey: r.distanceKey as RaceDistanceKey,
+        distanceM: r.distanceM,
+        startTime: r.startTime,
+        targetS: r.targetS,
+        strategy: r.strategy,
+        profile: (r.profile ?? null) as RaceProfile | null,
+        runId: r.runId,
+        days: daysUntil(r.date, today),
+        prediction: pred ? { timeS: pred.timeS, lowS: pred.lowS, highS: pred.highS, confidence: pred.confidence } : null,
+        realism: realism(r.targetS, pred),
+      };
+    })
+    .sort((a, b) => (a.days < 0) === (b.days < 0) ? (a.days < 0 ? b.days - a.days : a.days - b.days) : a.days < 0 ? 1 : -1);
+}
+export type RaceView = ReturnType<typeof raceViews>[number];
+
+/** Próxima carrera objetivo (hoy o después), para Inicio. */
+export async function getNextRace(today: string, ctx: Ctx = makeCtx()) {
+  const [rows, p] = await Promise.all([ctx.races(), getPredictions(ctx)]);
+  return raceViews(rows, today, p).find((r) => r.days >= 0) ?? null;
 }

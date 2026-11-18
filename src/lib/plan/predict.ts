@@ -157,3 +157,12 @@ export function fmtRaceTime(s: number): string {
   const ss = String(t % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
+
+/**
+ * Predicción para una distancia cualquiera (carreras objetivo «Otra»): mismas fuentes y reglas.
+ * A partir de ~40 km se exige, como en el maratón, una tirada de 30 km o más.
+ */
+export function predictDistance(m: number, sources: readonly Source[], longestRecentM: number): Prediction | null {
+  const key: TargetKey = m >= 40_000 ? "marathon" : m >= 15_000 ? "half" : m >= 7_500 ? "10k" : "5k";
+  return predictTarget({ key, label: `${(m / 1000).toLocaleString("es-ES", { maximumFractionDigits: 2 })} km`, m }, sources, longestRecentM);
+}

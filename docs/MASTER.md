@@ -465,6 +465,22 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
   válido, lo dice.
 - Plan: estado de la semana en curso y «Semanas anteriores» (4) con su resultado.
 
+### Modo competición
+- **Paso 1 · Carrera objetivo (hecho).** Tabla `race_goals` (migración 0013); puede haber varias
+  y la más próxima (hoy o después) manda en Plan e Inicio. Nombre, fecha, distancia (5K, 10K,
+  media, maratón u otra en km), hora de salida opcional, tiempo objetivo y GPX opcional: solo se
+  guarda el perfil de altitud (cada ~50 m) escalado a la distancia oficial, y se avisa de la
+  diferencia GPX/oficial. `lib/race/race.ts` (con pruebas): formulario, tiempos, realismo,
+  cuenta atrás y perfil.
+  - Tiempo por defecto: la predicción central de Plan (para «otra», Riegel a esa distancia con
+    las mismas fuentes; desde ~40 km, como el maratón, solo con tirada ≥ 30 km).
+  - Etiqueta: **realista** dentro del rango; **ambicioso** más rápido que el límite inferior;
+    **muy ambicioso** más de un 3 % más rápido; **conservador** más lento que el superior (añadida
+    para no llamar «realista» a un objetivo por encima del rango). Sin predicción, sin etiqueta.
+  - Cuenta atrás en Inicio (bajo «Hoy») y en Plan (arriba). `/plan/carrera/nueva` y
+    `/plan/carrera/[id]` (ver, editar, borrar).
+
+
 ## Rendimiento
 
 - **Región**: funciones en **fra1** (`vercel.json`), junto a Neon (eu-central-1). Antes en iad1:
@@ -795,6 +811,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Competición, paso 1: carreras objetivo con tiempo propuesto, realismo, cuenta
+  atrás y perfil del GPX. Migración 0013.
 - 2026‑11‑18 — Sensaciones, paso 4: sección en Análisis (media por mes y etiquetas junto a
   peores y mejores, solo con ≥ 8 valoradas).
 - 2026‑11‑18 — Sensaciones, paso 3: indicador en Actividad y filtro «Con nota».

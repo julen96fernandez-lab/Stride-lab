@@ -92,6 +92,13 @@
       "when": 1795034000000,
       "tag": "0012_drop_run_note",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795035000000,
+      "tag": "0013_race_goals",
+      "breakpoints": true
     }
   ]
 }

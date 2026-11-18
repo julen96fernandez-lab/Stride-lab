@@ -14,10 +14,9 @@ export async function homeScreen(day: string) {
   "use cache: remote";
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
-  void day;
   const ctx = q.makeCtx();
-  const [home, overview] = await Promise.all([q.getHome(ctx), q.getHomeOverview(ctx)]);
-  return { home, overview };
+  const [home, overview, nextRace] = await Promise.all([q.getHome(ctx), q.getHomeOverview(ctx), q.getNextRace(day, ctx)]);
+  return { home, overview, nextRace };
 }
 
 export async function activityScreen(day: string) {

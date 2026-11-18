@@ -65,6 +65,9 @@ export const FLASH: Record<string, { kind: ToastKind; text: string }> = {
   "carrera-guardada": { kind: "success", text: "Carrera guardada." },
   "carrera-actualizada": { kind: "success", text: "Cambios guardados." },
   "carrera-borrada": { kind: "success", text: "Carrera borrada." },
+  "carrera-objetivo-creada": { kind: "success", text: "Carrera objetivo guardada." },
+  "carrera-objetivo-actualizada": { kind: "success", text: "Cambios guardados." },
+  "carrera-objetivo-borrada": { kind: "success", text: "Carrera objetivo borrada." },
 };
 
 export const FLASH_PARAM = "aviso";

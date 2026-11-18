@@ -7,6 +7,7 @@ import { planScreen } from "@/lib/db/screens";
 import { cacheDay } from "@/lib/cache/tags";
 import { SHIFT_META, dayNum, ymdOf } from "@/lib/plan/shifts";
 import { PredictionsCard } from "@/components/charts/PredictionsCard";
+import { RacesBlock } from "@/components/race/RaceCards";
 import { fmtDay, type SessionKind, type WeekSession } from "@/lib/plan/weekly";
 import { STATUS_LABEL, type WeekStatus } from "@/lib/plan/compliance";
 import { RescheduleButton } from "./RescheduleButton";
@@ -51,6 +52,7 @@ async function PlanData() {
     current: cur,
     past,
     predictions,
+    races,
   } = await planScreen(cacheDay());
   const preds = (
     <PredictionsCard
@@ -62,6 +64,7 @@ async function PlanData() {
   if (!anchor) {
     return (
       <>
+        <RacesBlock races={races} />
         <Card>
           <div className="eyebrow">Sin ciclo de turnos</div>
           <p className="mt-3 text-[14px] text-fg-2">
@@ -85,6 +88,8 @@ async function PlanData() {
   const left = current.startDay + 6 - todayDay;
   return (
     <>
+      <RacesBlock races={races} />
+
       <section className="card card-hero p-5" aria-label="Esta semana">
         <div className="flex items-center justify-between">
           <div className="eyebrow">

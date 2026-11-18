@@ -41,7 +41,7 @@ describe("clave y vida de la caché", () => {
 });
 
 describe("invalidación: todo lo que escribe datos invalida la caché", () => {
-  const actions = ["src/app/(app)/actividad/actions.ts", "src/app/(app)/perfil/injury-actions.ts", "src/app/(app)/actividad/manual-actions.ts", "src/app/(app)/actividad/feeling-actions.ts"];
+  const actions = ["src/app/(app)/actividad/actions.ts", "src/app/(app)/perfil/injury-actions.ts", "src/app/(app)/actividad/manual-actions.ts", "src/app/(app)/actividad/feeling-actions.ts", "src/app/(app)/plan/race-actions.ts"];
   for (const f of actions) {
     it(`${f}: cada acción exportada llama a dataChanged()`, () => {
       const src = read(f);
