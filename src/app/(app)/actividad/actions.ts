@@ -105,7 +105,11 @@ export async function rescheduleWeekAction(weekStart: string): Promise<{ ok: boo
   const today = cacheDay();
   const w = shiftWeek(anchor, weekStart);
   const session = row.session as Parameters<typeof rescheduleDay>[0]["session"];
-  const day = rescheduleDay({ anchor, kind: w.kind, session, weekStart, today });
+  // Semana de carrera: como mucho 2 días antes de la carrera.
+  const { listRaces } = await import("@/lib/race/race-db");
+  const race = (await listRaces(d)).find((r) => r.date >= w.start && r.date <= w.end);
+  const latest = race ? new Date(Date.parse(`${race.date}T00:00:00Z`) - 2 * 86_400_000).toISOString().slice(0, 10) : null;
+  const day = rescheduleDay({ anchor, kind: w.kind, session, weekStart, today, latest });
   if (!day) return { ok: false, message: "No queda ningún día válido esta semana para esa sesión." };
   if (day === row.day) return { ok: true, message: `Sigue siendo el ${fmtDay(day)}.` };
   await moveWeekDay(d, weekStart, day, row.day, row.rescheduledFrom);

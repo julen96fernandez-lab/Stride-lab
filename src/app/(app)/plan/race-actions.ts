@@ -57,3 +57,22 @@ export async function setRaceStrategyAction(id: string, strategy: string): Promi
   dataChanged();
   return { ok: true };
 }
+
+/** «Vincular»: la carrera real de ese día pasa a ser la de esta carrera objetivo. */
+export async function linkRaceAction(raceId: string, runId: string, markCompetition: boolean): Promise<{ ok: boolean; message: string }> {
+  if (!UUID.test(raceId) || !UUID.test(runId)) return { ok: false, message: "Carrera no válida." };
+  const { linkRun } = await import("@/lib/race/race-db");
+  await linkRun(db(), raceId, runId, markCompetition);
+  dataChanged();
+  refresh();
+  return { ok: true, message: markCompetition ? "Vinculada y marcada como Competición." : "Carrera vinculada." };
+}
+
+export async function unlinkRaceAction(raceId: string): Promise<{ ok: boolean; message: string }> {
+  if (!UUID.test(raceId)) return { ok: false, message: "Carrera no válida." };
+  const { unlinkRun } = await import("@/lib/race/race-db");
+  await unlinkRun(db(), raceId);
+  dataChanged();
+  refresh();
+  return { ok: true, message: "Vínculo quitado." };
+}

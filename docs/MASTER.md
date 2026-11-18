@@ -491,6 +491,19 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
   (27 % de arriba) y la de los accesos (10 % de abajo); `lib/race/band.ts` (con pruebas) reparte
   las filas y la letra (1 columna hasta la media; 2 en el maratón). Se comparte con el menú de
   iOS («Guardar imagen» → Fotos) o se descarga si no hay menú.
+- **Paso 4 · Afinado y después de la carrera (hecho).**
+  - Afinado en Plan (`applyTaper` en `lib/plan/weekly.ts`, con pruebas; manda sobre las semanas
+    guardadas): 2 semanas antes, calidad corta en lugar de la sesión exigente (en semana de
+    noches, suave); la semana anterior, solo suave; la semana de la carrera, «Rodaje suave
+    corto» como mínimo 2 días antes y la carrera marcada (🏁) en su día. «Reorganizar» no pasa
+    ninguna sesión más allá de 2 días antes de la carrera.
+  - Después (día de la carrera o más tarde): en la ficha de la carrera, las carreras de ese día
+    para «Vincular» (y marcarla como Competición, activado por defecto); «Quitar el vínculo».
+  - Análisis (`lib/race/postrace.ts`, con pruebas): plan frente a real por km (con los
+    parciales de la carrera), diferencia acumulada en barras (verde por delante, rojo por
+    detrás), mitades y resumen en lenguaje llano solo con hechos (total, dónde más
+    adelantado/atrasado, tramos seguidos de más pérdida y ganancia, mitades), sin causas. Sin
+    parciales, lo dice y muestra solo el total.
 
 
 ## Rendimiento
@@ -823,6 +836,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Competición, paso 4: afinado en Plan, carrera marcada, vincular la carrera real
+  (y marcarla Competición) y análisis posterior plan frente a real.
 - 2026‑11‑18 — Competición, paso 3: Día de carrera con la banda de ritmos y la imagen vertical
   para fondo de pantalla (oscura o clara).
 - 2026‑11‑18 — Competición, paso 2: estrategia de ritmos por km (uniforme, negativas, positiva;

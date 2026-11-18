@@ -50,3 +50,14 @@ describe("reorganizar con las mismas reglas", () => {
     expect(rescheduleDay({ anchor: A, kind: "tardes", session: "tirada_larga", weekStart: "2026-12-28", today: "2026-12-31" })).toBe("2027-01-02");
   });
 });
+
+describe("reorganizar en semana de carrera", () => {
+  it("nunca más tarde de 2 días antes de la carrera", () => {
+    expect(rescheduleDay({ anchor: A, kind: "libre", session: "suave_corto", weekStart: "2026-12-07", today: "2026-12-11", latest: "2026-12-11" })).toBe("2026-12-11");
+    expect(rescheduleDay({ anchor: A, kind: "libre", session: "suave_corto", weekStart: "2026-12-07", today: "2026-12-12", latest: "2026-12-11" })).toBeNull();
+  });
+  it("«solo la carrera» no se reorganiza ni cuenta como fallo", () => {
+    expect(rescheduleDay({ anchor: A, kind: "libre", session: "solo_carrera", weekStart: "2026-12-07", today: "2026-12-08" })).toBeNull();
+    expect(weekStatus({ session: "solo_carrera", day: "2026-12-09", weekStart: "2026-12-07", today: "2026-12-14", runs: [] })).toBe("opcional");
+  });
+});

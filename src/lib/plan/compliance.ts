@@ -46,8 +46,8 @@ export function weekStatus(o: {
   });
   if (inWeek.some((r) => matchesSession(o.session, r.type))) return "cumplida";
   if (inWeek.length) return "otra";
-  if (today > end) return o.session === "suave_opcional" ? "opcional" : "no_cumplida";
-  if (o.session === "suave_opcional") return "pendiente";
+  if (today > end) return o.session === "suave_opcional" || o.session === "solo_carrera" ? "opcional" : "no_cumplida";
+  if (o.session === "suave_opcional" || o.session === "solo_carrera") return "pendiente";
   return today > dayNum(o.day)! ? "dia_pasado" : "pendiente";
 }
 
@@ -57,12 +57,14 @@ export function weekStatus(o: {
  * nunca calidad el día después de una noche. Desde hoy (si hoy es válido) hasta el domingo.
  * null si no queda ningún día válido esta semana.
  */
-export function rescheduleDay(o: { anchor: string; kind: ShiftKind; session: SessionKind; weekStart: string; today: string }): string | null {
+export function rescheduleDay(o: { anchor: string; kind: ShiftKind; session: SessionKind; weekStart: string; today: string; /** último día válido (semana de carrera: 2 días antes) */ latest?: string | null }): string | null {
+  if (o.session === "solo_carrera" || o.session === "suave_opcional") return null;
   const start = dayNum(o.weekStart)!;
   const today = dayNum(o.today)!;
   const allowedWd = o.kind === "tardes" ? [5, 6] : o.kind === "mananas" ? [0, 1, 2, 3, 4] : [0, 1, 2, 3, 4, 5, 6];
   const quality = o.session === "calidad" || o.session === "calidad_corta";
-  for (let d = Math.max(start, today); d <= start + 6; d++) {
+  const last = Math.min(start + 6, o.latest ? dayNum(o.latest)! : Infinity);
+  for (let d = Math.max(start, today); d <= last; d++) {
     if (!allowedWd.includes(weekdayOf(d))) continue;
     if (afterNights(o.anchor, d) && (o.kind === "libre" || quality)) continue;
     return ymdOf(d);

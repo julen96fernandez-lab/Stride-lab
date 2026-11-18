@@ -12,9 +12,9 @@
  * - Baja a rodaje suave: lesión abierta (todas las semanas), carga alta (ratio > 1,3) o más de
  *   3 semanas sin correr (solo la semana en curso: la carga futura no se conoce).
  */
-import { afterNights, dayNum, weekdayOf, ymdOf, type ShiftKind, type ShiftWeek } from "./shifts";
+import { afterNights, dayNum, mondayOfDay, weekdayOf, ymdOf, type ShiftKind, type ShiftWeek } from "./shifts";
 
-export type SessionKind = "tirada_larga" | "calidad" | "calidad_corta" | "suave" | "suave_opcional";
+export type SessionKind = "tirada_larga" | "calidad" | "calidad_corta" | "suave" | "suave_opcional" | "suave_corto" | "solo_carrera";
 
 export const SESSION_LABEL: Record<SessionKind, string> = {
   tirada_larga: "Tirada larga",
@@ -22,6 +22,8 @@ export const SESSION_LABEL: Record<SessionKind, string> = {
   calidad_corta: "Calidad corta",
   suave: "Rodaje suave",
   suave_opcional: "Rodaje suave (opcional)",
+  suave_corto: "Rodaje suave corto",
+  solo_carrera: "Solo la carrera",
 };
 
 /** Sesiones que cuentan como «exigentes» para alternar. */
@@ -51,6 +53,8 @@ export interface WeekSession {
   reason: string;
   /** se rebajó a suave por carga, lesión o parón */
   downgraded: boolean;
+  /** carrera objetivo que cae en esta semana */
+  race?: { name: string; date: string; dayLabel: string } | null;
 }
 
 export const LOAD_HIGH = 1.3;
@@ -78,7 +82,59 @@ export function planWeeks(o: {
   openInjury: boolean;
   /** semanas ya guardadas (congeladas): se respetan tal cual y cuentan para alternar */
   fixed?: Readonly<Record<string, Pick<WeekSession, "session" | "day" | "when" | "reason" | "downgraded">>>;
+  /** carreras objetivo (afinado: 2 semanas antes, la anterior y la de la carrera) */
+  races?: readonly { name: string; date: string }[];
 }): WeekSession[] {
+  const races = (o.races ?? []).map((r) => ({ ...r, day: dayNum(r.date)! })).sort((a, b) => a.day - b.day);
+  return planWeeksBase(o).map((s, i) => applyTaper(s, o.weeks[i], races, dayNum(o.today)!));
+}
+
+/** Margen mínimo entre el último rodaje y la carrera. */
+export const RACE_GAP_DAYS = 2;
+
+/**
+ * Afinado antes de una carrera objetivo (manda sobre lo calculado o guardado):
+ * - semana de la carrera: rodaje suave corto como mínimo 2 días antes (o solo la carrera);
+ * - la semana anterior: rodaje suave (en noches, el suave opcional de siempre);
+ * - dos semanas antes: calidad corta en lugar de la exigente (en noches, suave opcional).
+ */
+function applyTaper(s: WeekSession, w: ShiftWeek, races: readonly { name: string; date: string; day: number }[], today: number): WeekSession {
+  const end = w.startDay + 6;
+  const inWeek = races.find((r) => r.day >= w.startDay && r.day <= end);
+  if (inWeek) {
+    const race = { name: inWeek.name, date: inWeek.date, dayLabel: fmtDay(inWeek.date) };
+    const latest = inWeek.day - RACE_GAP_DAYS;
+    const cands = [latest - 1, latest, latest - 2, latest - 3].filter((d) => d >= w.startDay && d >= today && d <= end);
+    if (!cands.length) {
+      return { ...s, session: "solo_carrera", label: SESSION_LABEL.solo_carrera, day: inWeek.date, dayLabel: race.dayLabel, when: null, reason: `Semana de la carrera: solo la carrera (${race.dayLabel}); descansa los días antes.`, downgraded: false, race };
+    }
+    const day = ymdOf(cands[0]);
+    return {
+      ...s,
+      session: "suave_corto",
+      label: SESSION_LABEL.suave_corto,
+      day,
+      dayLabel: fmtDay(day),
+      when: s.kind === "mananas" ? "por la tarde, tras el turno" : null,
+      reason: `Semana de la carrera: solo un rodaje suave corto, al menos ${RACE_GAP_DAYS} días antes (${race.name}, ${race.dayLabel}).`,
+      downgraded: false,
+      race,
+    };
+  }
+  const next = races.find((r) => r.day > end);
+  if (!next) return s;
+  const weeksBefore = Math.round((mondayOfDay(next.day) - w.startDay) / 7);
+  if (weeksBefore === 1) {
+    if (s.session === "suave_opcional") return { ...s, reason: `${s.reason} La semana que viene es la carrera.` };
+    return { ...s, session: "suave", label: SESSION_LABEL.suave, reason: `Semana anterior a la carrera (${next.name}): rodaje suave para llegar fresco.`, downgraded: false };
+  }
+  if (weeksBefore === 2 && (s.session === "tirada_larga" || s.session === "calidad")) {
+    return { ...s, session: "calidad_corta", label: SESSION_LABEL.calidad_corta, reason: `Dos semanas antes de la carrera (${next.name}): calidad corta en lugar de ${s.session === "tirada_larga" ? "la tirada larga" : "la calidad larga"}.`, downgraded: false };
+  }
+  return s;
+}
+
+function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
   const today = dayNum(o.today)!;
   const past = o.history.filter((r) => dayNum(r.date)! <= today).sort((a, b) => a.date.localeCompare(b.date));
   const lastRun = past.reduce<number | null>((m, r) => Math.max(m ?? -Infinity, dayNum(r.date)!), null);

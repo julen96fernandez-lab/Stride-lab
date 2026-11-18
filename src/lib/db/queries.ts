@@ -764,7 +764,7 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 
 // ─── Plan ────────────────────────────────────────────────────────────────────
 
-import { shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
+import { dayNum, shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
 import { pickSources, predictAt, predictionHistory } from "@/lib/plan/predict";
 import { SESSION_LABEL, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
 import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
@@ -773,7 +773,7 @@ import { freezeWeek, getStoredWeeks } from "@/lib/plan/plan-db";
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
 export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const [anchor, predictions, runs, fitness, raceRows] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx), ctx.races()]);
-  const races = raceViews(raceRows, today, predictions);
+  const races = await withRaceResults(raceViews(raceRows, today, predictions), runs);
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
   if (!anchor || !weeks.length) return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races };
 
@@ -786,14 +786,24 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const fixed = Object.fromEntries(
     stored.map((r) => [r.weekStart, { session: r.session as SessionKind, day: r.day, when: r.whenText, reason: r.reason, downgraded: r.downgraded }]),
   );
-  const sessions = planWeeks({ weeks, anchor, today, history, ratio: cur && !cur.warmup ? cur.ratio : null, openInjury: fitness.openInjury, fixed });
+  const sessions = planWeeks({
+    weeks,
+    anchor,
+    today,
+    history,
+    ratio: cur && !cur.warmup ? cur.ratio : null,
+    openInjury: fitness.openInjury,
+    fixed,
+    races: raceRows.map((r) => ({ name: r.name, date: r.date })),
+  });
 
   // La semana en curso se congela la primera vez que se ve: ya no cambia al recalcular.
   const now = sessions[0];
   if (!byStart.has(now.start)) await freezeWeek(db(), now);
   const nowRow = byStart.get(now.start);
   const status = weekStatus({ session: now.session, day: now.day, weekStart: now.start, today, runs: history });
-  const newDay = status === "dia_pasado" ? rescheduleDay({ anchor, kind: now.kind, session: now.session, weekStart: now.start, today }) : null;
+  const latest = now.race ? ymdOf(dayNum(now.race.date)! - 2) : null;
+  const newDay = status === "dia_pasado" ? rescheduleDay({ anchor, kind: now.kind, session: now.session, weekStart: now.start, today, latest }) : null;
   const current = { ...now, status, rescheduledFrom: nowRow?.rescheduledFrom ?? null, canReschedule: newDay !== null && newDay !== now.day, rescheduleTo: newDay };
 
   // Las 4 semanas anteriores que tengan plan guardado, con su resultado.
@@ -890,4 +900,41 @@ export type RaceView = ReturnType<typeof raceViews>[number];
 export async function getNextRace(today: string, ctx: Ctx = makeCtx()) {
   const [rows, p] = await Promise.all([ctx.races(), getPredictions(ctx)]);
   return raceViews(rows, today, p).find((r) => r.days >= 0) ?? null;
+}
+
+/**
+ * Carreras ya corridas (hoy o antes): si están vinculadas, la carrera real y sus parciales; si
+ * no, las carreras de ese día para «Vincular».
+ */
+async function withRaceResults(races: RaceView[], runs: Awaited<ReturnType<typeof runsForPeriods>>) {
+  const madridYmd = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
+  const linked = races.filter((r) => r.runId).map((r) => r.runId!);
+  const splits = linked.length
+    ? await db()
+        .select({ runId: s.runSplits.runId, idx: s.runSplits.idx, distanceM: s.runSplits.distanceM, durationS: s.runSplits.durationS })
+        .from(s.runSplits)
+        .where(sql`${s.runSplits.runId} IN (${sql.join(linked.map((x) => sql`${x}`), sql`, `)})`)
+    : [];
+  const byRun = new Map(runs.map((r) => [r.id, r]));
+  return races.map((r) => {
+    if (r.days > 0) return { ...r, actual: null, candidates: [] };
+    const run = r.runId ? byRun.get(r.runId) : undefined;
+    return {
+      ...r,
+      actual: run
+        ? {
+            runId: run.id,
+            durationS: run.durationS,
+            distanceM: run.distanceM,
+            type: run.type,
+            splits: splits.filter((x) => x.runId === run.id).map((x) => ({ idx: x.idx, distanceM: x.distanceM, durationS: x.durationS })),
+          }
+        : null,
+      candidates: r.runId
+        ? []
+        : runs
+            .filter((x) => madridYmd(x.startAt) === r.date)
+            .map((x) => ({ id: x.id, distanceM: x.distanceM, durationS: x.durationS, type: x.type, startAt: x.startAt.toISOString() })),
+    };
+  });
 }

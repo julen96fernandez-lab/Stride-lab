@@ -101,3 +101,43 @@ describe("semanas guardadas (congeladas)", () => {
     expect(ws[1]).toMatchObject({ kind: "mananas", session: "calidad_corta" });
   });
 });
+
+describe("afinado antes de una carrera objetivo", () => {
+  // Carrera el domingo 20-dic-2026 (semana 14–20 dic: mañanas).
+  const race = [{ name: "Media de prueba", date: "2026-12-20" }];
+  const ws = plan("2026-11-30", [{ date: "2026-11-28", type: "tirada_larga" }], { races: race });
+  const by = Object.fromEntries(ws.map((w) => [w.start, w]));
+  it("semana de la carrera: rodaje suave corto como mínimo 2 días antes, y la carrera marcada", () => {
+    const w = by["2026-12-14"];
+    expect(w.session).toBe("suave_corto");
+    expect(dayNum(w.day)!).toBeLessThanOrEqual(dayNum("2026-12-18")!);
+    expect(w.race).toMatchObject({ name: "Media de prueba", date: "2026-12-20" });
+    expect(w.reason).toMatch(/al menos 2 días antes/);
+  });
+  it("la semana anterior: rodaje suave", () => {
+    expect(by["2026-12-07"]).toMatchObject({ session: "suave" });
+    expect(by["2026-12-07"].reason).toMatch(/Semana anterior a la carrera/);
+  });
+  it("dos semanas antes: calidad corta en lugar de la exigente; en noches, suave opcional", () => {
+    // 30-nov es de noches: se queda en suave opcional
+    expect(by["2026-11-30"].session).toBe("suave_opcional");
+    const other = plan("2026-11-23", [{ date: "2026-11-15", type: "series" }], { races: [{ name: "10K", date: "2026-12-13" }] });
+    const w = other.find((x) => x.start === "2026-11-23")!; // tardes, 2 semanas antes
+    expect(w.session).toBe("calidad_corta");
+    expect(w.reason).toMatch(/en lugar de la tirada larga/);
+  });
+  it("si la carrera es lunes o martes y ya no queda un día 2 días antes: solo la carrera", () => {
+    const w = plan("2026-12-14", [{ date: "2026-12-10", type: "rodaje" }], { races: [{ name: "Martes", date: "2026-12-15" }] })[0];
+    expect(w).toMatchObject({ session: "solo_carrera", day: "2026-12-15" });
+  });
+  it("manda sobre una semana ya guardada", () => {
+    const fixed = { "2026-12-14": { session: "tirada_larga" as const, day: "2026-12-19", when: null, reason: "Guardada", downgraded: false } };
+    const w = plan("2026-12-14", [{ date: "2026-12-10", type: "rodaje" }], { races: race, fixed })[0];
+    expect(w.session).toBe("suave_corto");
+  });
+  it("sin carreras, nada cambia", () => {
+    expect(plan("2026-11-30", [{ date: "2026-11-28", type: "tirada_larga" }]).map((w) => w.session)).toEqual(
+      plan("2026-11-30", [{ date: "2026-11-28", type: "tirada_larga" }], { races: [] }).map((w) => w.session),
+    );
+  });
+});

@@ -136,6 +136,9 @@ async function PlanData() {
                     : ""}
                   semana {w.pos + 1} de 5
                 </div>
+                {sessionsBy.get(w.start)?.race && (
+                  <RaceMark race={sessionsBy.get(w.start)!.race!} />
+                )}
                 {sessionsBy.get(w.start) && (
                   <div className="mt-1 text-[13px]">
                     <SessionDot kind={sessionsBy.get(w.start)!.session} />{" "}
@@ -221,6 +224,8 @@ const SESSION_COLOR: Record<SessionKind, string> = {
   calidad_corta: "var(--t-tempo)",
   suave: "var(--t-rodaje)",
   suave_opcional: "var(--fg-3)",
+  suave_corto: "var(--t-recuperacion)",
+  solo_carrera: "var(--t-competicion)",
 };
 
 function SessionDot({ kind }: { kind: SessionKind }) {
@@ -263,6 +268,7 @@ function SessionBlock({
           Reorganizada (antes, el {fmtDay(s.rescheduledFrom)}).
         </div>
       )}
+      {s.race && <RaceMark race={s.race} />}
       <p className="mt-1.5 text-[12px] leading-snug text-fg-2">{s.reason}</p>
       {s.status === "dia_pasado" &&
         (s.canReschedule && s.rescheduleTo ? (
@@ -304,5 +310,14 @@ function StatusPill({ status }: { status: WeekStatus }) {
       {status === "cumplida" ? "✓ " : status === "no_cumplida" ? "✕ " : ""}
       {STATUS_LABEL[status]}
     </span>
+  );
+}
+
+/** La carrera objetivo marcada en su semana. */
+function RaceMark({ race }: { race: { name: string; dayLabel: string } }) {
+  return (
+    <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--t-competicion)_16%,transparent)] px-2.5 py-1 text-[12px] font-semibold text-[var(--t-competicion)]">
+      <span aria-hidden="true">🏁</span> {race.name} · {race.dayLabel}
+    </div>
   );
 }

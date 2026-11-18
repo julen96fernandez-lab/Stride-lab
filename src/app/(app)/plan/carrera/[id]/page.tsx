@@ -9,6 +9,7 @@ import { planScreen } from "@/lib/db/screens";
 import { cacheDay } from "@/lib/cache/tags";
 import { fmtTime } from "@/lib/race/race";
 import { PacingCard } from "@/components/race/PacingCard";
+import { PostRaceCard } from "@/components/race/PostRaceCard";
 import { isStrategy } from "@/lib/race/pacing";
 
 export const metadata = { title: "Carrera objetivo · Stride Lab" };
@@ -48,6 +49,18 @@ async function RaceData({ params }: { params: Promise<{ id: string }> }) {
       )}
       {profileNote && (
         <p className="rounded-2xl border border-line bg-inset px-3.5 py-3 text-[13px] leading-snug">{profileNote}</p>
+      )}
+      {race.days <= 0 && (
+        <PostRaceCard
+          raceId={race.id}
+          date={race.date}
+          distanceM={race.distanceM}
+          targetS={race.targetS}
+          strategy={isStrategy(race.strategy) ? race.strategy : "even"}
+          profile={race.profile}
+          actual={race.actual}
+          candidates={race.candidates}
+        />
       )}
       <PacingCard
         raceId={race.id}
