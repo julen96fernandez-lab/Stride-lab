@@ -485,6 +485,12 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
   pendiente). Los parciales suman exactamente el objetivo (se redondea el acumulado). Tabla por
   km (ritmo, parcial, acumulado, hora del día con hora de salida), gráfico del ritmo sobre la
   altitud media de cada km y aviso «guía, no garantía». La estrategia se guarda al elegirla.
+- **Paso 3 · Día de carrera (hecho).** `/plan/carrera/[id]/dia`: tabla grande (km, ritmo, paso
+  acumulado y hora). «Guardar como imagen»: se dibuja en el móvil un PNG de 1179 × 2556 (pantalla
+  del iPhone), oscuro o claro a elegir, con la zona del reloj de la pantalla de bloqueo libre
+  (27 % de arriba) y la de los accesos (10 % de abajo); `lib/race/band.ts` (con pruebas) reparte
+  las filas y la letra (1 columna hasta la media; 2 en el maratón). Se comparte con el menú de
+  iOS («Guardar imagen» → Fotos) o se descarga si no hay menú.
 
 
 ## Rendimiento
@@ -817,6 +823,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Competición, paso 3: Día de carrera con la banda de ritmos y la imagen vertical
+  para fondo de pantalla (oscura o clara).
 - 2026‑11‑18 — Competición, paso 2: estrategia de ritmos por km (uniforme, negativas, positiva;
   ajuste por pendiente con GPX), tabla y gráfico.
 - 2026‑11‑18 — Competición, paso 1: carreras objetivo con tiempo propuesto, realismo, cuenta

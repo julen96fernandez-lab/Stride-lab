@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { EChart } from "@/components/charts/EChart";
 import { T, alpha, baseOption, categoryAxis, lineSeries, tipHead, tipRow, tooltip, valueAxis } from "@/components/charts/theme";
@@ -108,6 +109,10 @@ export function PacingCard({
       <p className="mt-3 rounded-xl border border-line-strong bg-inset px-3 py-2 text-[12px] leading-snug">
         <b>Es una guía, no una garantía.</b> Escucha a tu cuerpo el día de la carrera: el calor, el viento o cómo hayas dormido cambian lo que es posible.
       </p>
+
+      <Link href={`/plan/carrera/${raceId}/dia`} className="mt-3 flex min-h-[48px] items-center justify-center rounded-2xl bg-lime text-[15px] font-semibold text-lime-ink">
+        Día de carrera: banda de ritmos
+      </Link>
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-[13px]">
