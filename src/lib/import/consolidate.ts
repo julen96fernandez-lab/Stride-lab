@@ -77,6 +77,13 @@ async function mergePair(db: Db, a: Run, b: Run): Promise<Run> {
   const evB = ((rawB.intervalEvents as Ev[] | undefined) ?? []).map((e) => ({ ...e, startS: e.startS + offset }));
   const keysA = new Set(evA.map((e) => e.key));
   const intervalEvents = [...evA, ...evB.filter((e) => !keysA.has(e.key))];
+  // Pausas: las de b al reloj de a, y el hueco entre las dos partes también es pausa.
+  type Pz = { startS: number; endS: number };
+  const pauses = [
+    ...((rawA.pauses as Pz[] | undefined) ?? []),
+    { startS: Math.round((a.endAt.getTime() - a.startAt.getTime()) / 1000), endS: offset },
+    ...((rawB.pauses as Pz[] | undefined) ?? []).map((p) => ({ startS: p.startS + offset, endS: p.endS + offset })),
+  ].filter((p) => p.endS > p.startS);
 
   const values = {
     endAt: b.endAt,
@@ -95,7 +102,7 @@ async function mergePair(db: Db, a: Run, b: Run): Promise<Run> {
     elevationGainM: add(a.elevationGainM, b.elevationGainM),
     activeEnergyKcal: add(a.activeEnergyKcal, b.activeEnergyKcal),
     routeFile: a.routeFile ?? b.routeFile,
-    raw: { ...rawA, intervalSteps, intervalEvents, mergedFrom, mergedParts: [rawA.attributes, rawB.attributes] },
+    raw: { ...rawA, intervalSteps, intervalEvents, pauses, mergedFrom, mergedParts: [rawA.attributes, rawB.attributes] },
     updatedAt: new Date(),
   };
 

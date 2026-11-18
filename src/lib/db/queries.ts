@@ -8,7 +8,7 @@ import { durabilityFromSeries, durabilityFromSplits, type Durability } from "@/l
 import type { SeriesMetric } from "./schema";
 import { effectiveType, ensureClassified, getTypeSettings, getZones } from "@/lib/analysis/session-type-db";
 import { SESSION_TYPES, isSessionType, type SessionType } from "@/lib/analysis/session-type";
-import { buildStream, gradeAlong, isHrSparse, missingDistance, preferGpsKm, splitViews, trackCumulative, type SplitView } from "@/lib/analysis/run-stream";
+import { buildStream, countStretches, gradeAlong, isHrSparse, markSplitEstimates, missingDistance, preferGpsKm, splitViews, trackCumulative, type PaceSource, type SplitView } from "@/lib/analysis/run-stream";
 import { analyzeIntervals, type IntervalAnalysis, type StepTiming } from "@/lib/analysis/intervals";
 import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { ensureTrack } from "@/lib/analysis/track-db";
@@ -255,6 +255,12 @@ export interface Explorer {
   avgPace: number | null;
   splits: SplitView[];
   zoneLimits: number[];
+  /** origen del ritmo en cada instante (reloj, GPS, parcial, muestra cercana) */
+  paceSource: (PaceSource | null)[];
+  /** pausas reales (s): el ritmo se corta y se une con un punteado fino */
+  pauses: [number, number][];
+  /** tramos con ritmo estimado (para la nota bajo los gráficos) */
+  estimatedStretches: { gps: number; split: number };
   /** Muestras de pulso tal cual (para dibujar con cortes y buscar la más cercana) */
   hrRaw: { t: number[]; v: number[] } | null;
   /** Pocas muestras de pulso: se dibuja por parciales */
@@ -271,7 +277,7 @@ const r1 = (x: number | null) => (x === null ? null : Math.round(x * 10) / 10);
 const r0 = (x: number | null) => (x === null ? null : Math.round(x));
 
 function buildExplorer(a: {
-  run: { durationS: number; avgPaceSPerKm: number | null; distanceM: number | null };
+  run: { durationS: number; avgPaceSPerKm: number | null; distanceM: number | null; raw?: unknown };
   series: Partial<Record<SeriesMetric, { t: number[]; v: number[] }>>;
   track: Awaited<ReturnType<typeof ensureTrack>>;
   splits: { idx: number; distanceM: number; durationS: number; paceSPerKm: number | null; avgHr: number | null; elevationGainM: number | null; elevationLossM: number | null; basis: string }[];
@@ -283,7 +289,14 @@ function buildExplorer(a: {
   const gpsM = track && track.t.length > 1 ? (trackCumulative(track).at(-1) ?? null) : null;
   const kmFromGps = preferGpsKm(samplesM, gpsM, run.distanceM);
   const miss = missingDistance(series.distance, track);
+  // Parciales (con su tramo de tiempo) antes del ritmo: sin GPS, rellenan los huecos.
+  const startS = splits[0]?.basis === "gpx" ? (track?.t[0] ?? 0) : 0;
+  // Primero se corrigen con GPS los que tienen tramos sin distancia; después, más rápido/lento y barras.
+  const views = splitViews(markSplitEstimates(splitViews(splits, startS), miss, track), startS);
+  const pauses = (run.raw as { pauses?: { startS: number; endS: number }[] } | null)?.pauses ?? null;
   const st = buildStream({
+    pauses,
+    splits: views,
     durationS: run.durationS,
     distance: series.distance,
     hr: series.hr,
@@ -293,8 +306,6 @@ function buildExplorer(a: {
     avgPace: run.avgPaceSPerKm,
     kmFromGps,
   });
-  // Los parciales del reloj empiezan en 0; los del GPX, en el primer punto con hora.
-  const startS = splits[0]?.basis === "gpx" ? (track?.t[0] ?? 0) : 0;
   return {
     t: st.t.map((x) => Math.round(x)),
     km: st.km.map((k) => (k === null ? null : Math.round(k * 1000) / 1000)),
@@ -308,7 +319,10 @@ function buildExplorer(a: {
     lon: track && st.trackIdx ? st.trackIdx.map((i) => track.lon[i]) : null,
     coarsePace: st.coarsePace,
     avgPace: st.avgPace,
-    splits: splitViews(splits, startS),
+    splits: views,
+    paceSource: st.paceSource,
+    pauses: st.pauses,
+    estimatedStretches: { gps: countStretches(st.paceSource, "gps"), split: countStretches(st.paceSource, "split") + countStretches(st.paceSource, "near") },
     zoneLimits: [...zones.limits],
     hrRaw: series.hr && series.hr.t.length ? { t: series.hr.t.map((x) => Math.round(x)), v: series.hr.v.map((x) => Math.round(x)) } : null,
     hrSparse: isHrSparse(series.hr, run.durationS),

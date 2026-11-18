@@ -51,3 +51,34 @@ export function intervalEvents(xml: string, startMs: number, endMs: number): Int
     return { key: e.key, startS: Math.round(e.startS * 10) / 10, durationS: Math.round(durationS * 10) / 10 };
   });
 }
+
+/**
+ * Pausas del reloj (WorkoutEvent Pause/Resume y MotionPaused/MotionResumed), en s desde el
+ * inicio. Una pausa sin reanudación llega hasta el final del entrenamiento.
+ */
+export function pauseEvents(xml: string, startMs: number, endMs: number): { startS: number; endS: number }[] {
+  const re = /<WorkoutEvent\b([^>]*?)(?:\/>|>[\s\S]*?<\/WorkoutEvent>)/g;
+  const ev: { t: number; on: boolean }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml))) {
+    const a = parseAttrs(`<WorkoutEvent ${m[1]}>`);
+    const type = a.type ?? "";
+    const pause = type === "HKWorkoutEventTypePause" || type === "HKWorkoutEventTypeMotionPaused";
+    const resume = type === "HKWorkoutEventTypeResume" || type === "HKWorkoutEventTypeMotionResumed";
+    if (!pause && !resume) continue;
+    const d = parseHealthDate(a.date);
+    if (d) ev.push({ t: (d.getTime() - startMs) / 1000, on: pause });
+  }
+  ev.sort((x, y) => x.t - y.t);
+  const out: { startS: number; endS: number }[] = [];
+  let open: number | null = null;
+  for (const e of ev) {
+    if (e.on && open === null) open = e.t;
+    else if (!e.on && open !== null) {
+      if (e.t > open) out.push({ startS: Math.round(open), endS: Math.round(e.t) });
+      open = null;
+    }
+  }
+  if (open !== null) out.push({ startS: Math.round(open), endS: Math.round((endMs - startMs) / 1000) });
+  return out;
+}

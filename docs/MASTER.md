@@ -224,7 +224,13 @@ media en 92 carreras); para dibujarla habría que reimportar con los pasos por i
     vertical y color por pendiente (bajada azul, llano neutro, subida ámbar/roja).
   - Franja fija encima de los gráficos (sticky) con ritmo, km, tiempo, pulso + zona, altitud
     y potencia; sobre los gráficos solo el punto con brillo (la tarjeta flotante tapaba datos).
-  - Ritmo: banda tenue «sin datos» en los huecos dentro de la carrera; relleno que se desvanece.
+  - Ritmo continuo (`fillPace`): donde el reloj no tiene ritmo se usa el del GPS (mismo
+    suavizado) o, sin GPS, el del parcial o la muestra anterior (escalera). Solo hay hueco en
+    pausas reales: pausas del reloj guardadas al importar (`raw.pauses`, eventos Pause/Resume y
+    MotionPaused/Resumed; hace falta Reprocesar) o, con GPS, donde el GPS está parado. Las
+    pausas se unen con un punteado muy fino sin texto. Una sola nota bajo los gráficos
+    («Ritmo estimado con GPS en X tramos»). Parciales que tocan tramos sin distancia del reloj:
+    ritmo recalculado con el GPS (o mejor estimación sin GPS) y marcado «≈».
   - Pulso por parciales: eje desde 60 ppm (marcas cada 20) y barra discontinua tenue en los
     parciales sin pulso.
   - Eje de km: la suma de muestras del reloj, salvo que se desvíe > 2 % del total y el GPS no

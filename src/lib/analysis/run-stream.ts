@@ -194,6 +194,8 @@ export interface SplitView extends SplitRow {
   slowest: boolean;
   /** Último parcial incompleto (< 990 m). */
   partial: boolean;
+  /** el ritmo es una estimación: recalculado con GPS o el mejor posible sin datos fiables */
+  estimated?: "gps" | "approx" | null;
 }
 
 /**
@@ -242,6 +244,10 @@ export interface RunStream {
   zone: (number | null)[] | null;
   /** índice del punto de la pista más cercano (para el mapa), o null sin pista */
   trackIdx: number[] | null;
+  /** de dónde sale el ritmo en cada instante: reloj, GPS (tramo sin distancia del reloj), parcial o muestra cercana */
+  paceSource: (PaceSource | null)[];
+  /** pausas reales dentro de la carrera (s): ahí no hay ritmo */
+  pauses: [number, number][];
   /** el ritmo no se puede dibujar como curva (muestras cada ~5 min): usar parciales */
   coarsePace: boolean;
   /** ritmo medio de referencia (s/km) */
@@ -263,6 +269,10 @@ export function buildStream(input: {
   avgPace?: number | null;
   /** Eje de km con la distancia del GPS (cuando cuadra mejor con el total que las muestras). */
   kmFromGps?: boolean;
+  /** pausas del reloj guardadas en la importación (s desde el inicio), si las hay */
+  pauses?: { startS: number; endS: number }[] | null;
+  /** parciales con su tramo de tiempo (para rellenar sin GPS) */
+  splits?: { t0: number; t1: number; paceSPerKm: number | null }[];
 }): RunStream {
   const { distance, hr, power, track, zones } = input;
   const end = Math.max(
@@ -299,7 +309,12 @@ export function buildStream(input: {
 
   const coarsePace = isCoarse(distance);
   // Ritmo: media de ~30 s por tramos válidos y, encima, mediana + media cortas para quitar picos.
-  const pace = !coarsePace && distance ? cleanPace(smoothSpeed(distance, t).map(paceFromSpeed)) : t.map(() => null);
+  const watchPace = !coarsePace && distance ? cleanPace(smoothSpeed(distance, t).map(paceFromSpeed)) : t.map(() => null);
+  const gpsPace = track && track.t.length > 1 ? cleanPace(smoothSpeed(trackIntervals(track), t).map(paceFromSpeed)) : null;
+  const filled = coarsePace
+    ? { pace: watchPace, source: watchPace.map(() => null as PaceSource | null), pauses: [] as [number, number][] }
+    : fillPace(t, watchPace, gpsPace, { pauses: input.pauses ?? null, splits: input.splits ?? [], hasTrack: !!(track && track.t.length > 1), span: distance && distance.t.length ? [distance.t[0], distance.t[distance.t.length - 1]] : null });
+  const pace = filled.pace;
 
   const series = (s: Series | null | undefined) => {
     if (!s || s.t.length < 2) return null;
@@ -346,6 +361,8 @@ export function buildStream(input: {
     power: powerOut,
     zone,
     trackIdx,
+    paceSource: filled.source,
+    pauses: filled.pauses,
     coarsePace,
     avgPace: input.avgPace ?? null,
   };
@@ -564,4 +581,113 @@ export function hrAxisFrom60(values: readonly (number | null)[]): { min: number;
   const span = hi + 5 - min;
   const interval = span > 160 ? 40 : 20;
   return { min, max: Math.ceil((hi + 5) / interval) * interval, interval };
+}
+
+// ─── Ritmo continuo: relleno de huecos ───────────────────────────────────────
+
+export type PaceSource = "watch" | "gps" | "split" | "near";
+
+/** La pista GPS como muestras de distancia por intervalo (mismo formato que las del reloj). */
+export function trackIntervals(track: Track): Series {
+  const t: number[] = [];
+  const v: number[] = [];
+  for (let i = 1; i < track.t.length; i++) {
+    if (track.t[i] <= track.t[i - 1]) continue;
+    t.push(track.t[i]);
+    v.push(hav(track.lat[i - 1], track.lon[i - 1], track.lat[i], track.lon[i]));
+  }
+  return { t, v };
+}
+
+/**
+ * Ritmo sin huecos falsos. Donde el reloj tiene ritmo, se queda. Donde no:
+ * - pausa del reloj guardada (si la hay) → hueco real;
+ * - con GPS: el ritmo del GPS (mismo suavizado); si el GPS está parado → pausa real (hueco);
+ * - sin GPS: el ritmo del parcial o, si no, el de la muestra más cercana (escalera).
+ * Devuelve el ritmo, su origen y las pausas reales.
+ */
+export function fillPace(
+  t: readonly number[],
+  watch: readonly (number | null)[],
+  gps: readonly (number | null)[] | null,
+  o: { pauses: { startS: number; endS: number }[] | null; splits: readonly { t0: number; t1: number; paceSPerKm: number | null }[]; hasTrack: boolean; span: [number, number] | null },
+): { pace: (number | null)[]; source: (PaceSource | null)[]; pauses: [number, number][] } {
+  const pace: (number | null)[] = [];
+  const source: (PaceSource | null)[] = [];
+  const first = watch.findIndex((p) => p !== null);
+  let last = watch.length - 1;
+  while (last >= 0 && watch[last] === null) last--;
+  const inPause = (x: number) => !!o.pauses?.some((p) => x > p.startS && x < p.endS);
+  let prev: number | null = null;
+  for (let i = 0; i < t.length; i++) {
+    const w = watch[i];
+    if (w !== null) {
+      pace.push(w);
+      source.push("watch");
+      prev = w;
+      continue;
+    }
+    const inside = (first >= 0 && i > first && i < last) || (o.span !== null && t[i] >= o.span[0] && t[i] <= o.span[1]);
+    if (!inside || inPause(t[i])) {
+      pace.push(null);
+      source.push(null);
+      continue;
+    }
+    if (o.hasTrack) {
+      const g = gps?.[i] ?? null;
+      pace.push(g);
+      source.push(g === null ? null : "gps"); // GPS parado: pausa real
+      continue;
+    }
+    const sp = o.splits.find((x) => t[i] >= x.t0 && t[i] <= x.t1)?.paceSPerKm ?? null;
+    if (sp !== null) {
+      pace.push(sp);
+      source.push("split");
+    } else if (prev !== null) {
+      pace.push(prev);
+      source.push("near");
+    } else {
+      pace.push(null);
+      source.push(null);
+    }
+  }
+  // Pausas reales: huecos que quedan dentro de la parte con ritmo.
+  const pauses: [number, number][] = [];
+  const f = pace.findIndex((p) => p !== null);
+  let l = pace.length - 1;
+  while (l >= 0 && pace[l] === null) l--;
+  let start = -1;
+  for (let i = f; i >= 0 && i <= l; i++) {
+    if (pace[i] === null && start < 0) start = i;
+    if (pace[i] !== null && start >= 0) {
+      pauses.push([t[start - 1], t[i]]);
+      start = -1;
+    }
+  }
+  return { pace, source, pauses };
+}
+
+/** Cuántos tramos (seguidos) tienen ritmo de un origen dado. */
+export function countStretches(source: readonly (PaceSource | null)[], kind: PaceSource): number {
+  let n = 0;
+  for (let i = 0; i < source.length; i++) if (source[i] === kind && source[i - 1] !== kind) n++;
+  return n;
+}
+
+/**
+ * Parciales con tramos que el reloj no registró: su ritmo se recalcula con la distancia del GPS
+ * en ese tiempo (marcado «gps») o, sin GPS, se deja como mejor estimación («approx»).
+ */
+export function markSplitEstimates(splits: SplitView[], missing: readonly { t0: number; t1: number }[], track: Track | null): SplitView[] {
+  if (!missing.length) return splits;
+  const cd = track && track.t.length > 1 ? trackCumulative(track) : null;
+  return splits.map((s) => {
+    const hit = missing.some((m) => m.t0 < s.t1 && m.t1 > s.t0);
+    if (!hit) return s;
+    if (cd && track) {
+      const d = interp(track.t, cd, s.t1) - interp(track.t, cd, s.t0);
+      if (d > 50) return { ...s, paceSPerKm: s.durationS / (d / 1000), estimated: "gps" as const };
+    }
+    return { ...s, estimated: "approx" as const };
+  });
 }

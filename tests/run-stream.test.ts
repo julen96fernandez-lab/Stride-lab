@@ -5,6 +5,8 @@ import {
   gradeAlong,
   gridStep,
   isCoarse,
+  countStretches,
+  markSplitEstimates,
   hrAxisFrom60,
   missingDistance,
   noDataRanges,
@@ -380,5 +382,103 @@ describe("eje del pulso por parciales", () => {
     expect(hrAxisFrom60([121, 150, 138])).toEqual({ min: 60, max: 160, interval: 20 });
     expect(hrAxisFrom60([52, 170])).toMatchObject({ min: 40 });
     expect(hrAxisFrom60([null])).toBeNull();
+  });
+});
+
+describe("ritmo continuo: relleno de huecos", () => {
+  // Carrera a 2,6 m/s (6:25 /km) de 3600 s; el reloj no registra distancia en 5 tramos (como el
+  // 4-jul), el GPS sí. Además, una pausa real de 120 s (el GPS parado).
+  const PAUSE: [number, number] = [3000, 3120];
+  const gaps: [number, number][] = [
+    [600, 700],
+    [1200, 1450],
+    [1800, 1860],
+    [2300, 2560],
+    [2700, 2900],
+  ];
+  const inGap = (t: number) => gaps.some(([a, b]) => t > a && t <= b);
+  const moving = (t: number) => !(t > PAUSE[0] && t < PAUSE[1]);
+  const pos = (t: number) => 43 + ((t <= PAUSE[0] ? t : t < PAUSE[1] ? PAUSE[0] : t - (PAUSE[1] - PAUSE[0])) * 2.6) / 111_195;
+  const track = { t: [] as number[], lat: [] as number[], lon: [] as number[], ele: [] as (number | null)[] };
+  for (let t = 0; t <= 3600; t += 2) {
+    track.t.push(t);
+    track.lat.push(pos(t));
+    track.lon.push(-3);
+    track.ele.push(null);
+  }
+  const dt: number[] = [];
+  const dv: number[] = [];
+  for (let t = 3; t <= 3600; t += 3) {
+    if (inGap(t)) continue;
+    const prev = dt.at(-1) ?? 0;
+    dt.push(t);
+    // tras un hueco, la primera muestra cubre solo sus 3 s (el reloj no registró el resto)
+    dv.push(moving(t) ? 7.8 : 0.1);
+    void prev;
+  }
+  const distance = { t: dt, v: dv };
+  const splits = [
+    { t0: 0, t1: 385, paceSPerKm: 385 },
+    { t0: 385, t1: 3600, paceSPerKm: 390 },
+  ];
+
+  it("4-jul con GPS: sin huecos en los 5 tramos; el ritmo sale del GPS y es correcto", () => {
+    const st = buildStream({ durationS: 3600, distance, track, splits });
+    for (const [a, b] of gaps) {
+      const idx = st.t.map((x, i) => [x, i] as const).filter(([x]) => x > a + 15 && x < b - 15).map(([, i]) => i);
+      expect(idx.every((i) => st.pace[i] !== null)).toBe(true);
+      expect(idx.some((i) => st.paceSource[i] === "gps")).toBe(true);
+      for (const i of idx) expect(st.pace[i]!).toBeGreaterThan(360);
+      for (const i of idx) expect(st.pace[i]!).toBeLessThan(410); // ≈ 6:25
+    }
+    // donde el reloj sí tiene muestras, se queda el reloj
+    const i100 = st.t.findIndex((x) => x >= 300);
+    expect(st.paceSource[i100]).toBe("watch");
+    expect(countStretches(st.paceSource, "gps")).toBeGreaterThanOrEqual(5);
+  });
+
+  it("pausa real (GPS parado): hueco de verdad, sin inventar ritmo", () => {
+    const st = buildStream({ durationS: 3600, distance, track, splits });
+    const mid = st.t.findIndex((x) => x >= 3060);
+    expect(st.pace[mid]).toBeNull();
+    expect(st.pauses.some(([a, b]) => a <= 3060 && b >= 3060)).toBe(true);
+  });
+
+  it("sin GPS: el hueco se rellena con el ritmo del parcial (escalera), sin cortes", () => {
+    const st = buildStream({ durationS: 3600, distance, splits });
+    const i = st.t.findIndex((x) => x >= 1300);
+    expect(st.pace[i]).toBe(390);
+    expect(st.paceSource[i]).toBe("split");
+  });
+
+  it("sin GPS ni parciales: la muestra más cercana anterior", () => {
+    const st = buildStream({ durationS: 3600, distance });
+    const i = st.t.findIndex((x) => x >= 1300);
+    expect(st.pace[i]).not.toBeNull();
+    expect(st.paceSource[i]).toBe("near");
+  });
+
+  it("pausas del reloj guardadas: solo ahí hay hueco", () => {
+    const st = buildStream({ durationS: 3600, distance, pauses: [{ startS: 1200, endS: 1450 }], splits });
+    const i = st.t.findIndex((x) => x >= 1300);
+    expect(st.pace[i]).toBeNull();
+    const j = st.t.findIndex((x) => x >= 2400);
+    expect(st.pace[j]).not.toBeNull();
+  });
+});
+
+describe("parciales con tramos sin distancia del reloj", () => {
+  it("se recalculan con el GPS y se marcan; sin GPS, ≈", () => {
+    const track = { t: [0, 300, 600], lat: [43, 43 + 1000 / 111_195, 43 + 2000 / 111_195], lon: [-3, -3, -3], ele: [null, null, null] };
+    const views = splitViews([
+      { idx: 1, distanceM: 1000, durationS: 250, paceSPerKm: 250, avgHr: null, elevationGainM: null },
+      { idx: 2, distanceM: 1000, durationS: 350, paceSPerKm: 350, avgHr: null, elevationGainM: null },
+    ]);
+    const m = markSplitEstimates(views, [{ t0: 100, t1: 200 }], track);
+    expect(m[0].estimated).toBe("gps");
+    expect(m[0].paceSPerKm!).toBeCloseTo(250 / (((250 / 300) * 1000) / 1000), 0); // 300 s/km
+    expect(m[1].estimated).toBeUndefined();
+    expect(markSplitEstimates(views, [{ t0: 100, t1: 200 }], null)[0].estimated).toBe("approx");
+    expect(markSplitEstimates(views, [], track)).toBe(views);
   });
 });

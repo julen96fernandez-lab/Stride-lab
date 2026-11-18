@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { intervalEvents } from "@/lib/import/interval-events";
+import { intervalEvents, pauseEvents } from "@/lib/import/interval-events";
 
 const T0 = Date.parse("2026-10-06T15:48:42Z");
 const at = (s: number) => {
@@ -44,5 +44,20 @@ describe("pasos de intervalos del Apple Watch", () => {
   it("eventos sin clave de paso (pausas, vueltas) se ignoran", () => {
     const xml = `<WorkoutEvent type="HKWorkoutEventTypePause" date="${at(100)}"/>` + ev("0.0.0", 0, 1);
     expect(intervalEvents(xml, T0, T0 + 200_000)).toEqual([{ key: "0.0.0", startS: 0, durationS: 60 }]);
+  });
+});
+
+describe("pausas del reloj", () => {
+  const pe = (type: string, s: number) => `<WorkoutEvent type="HKWorkoutEventType${type}" date="${at(s)}"/>`;
+  it("pausa/reanudación y pausa automática por movimiento", () => {
+    const xml = [pe("Pause", 600), pe("Resume", 720), pe("MotionPaused", 1500), pe("MotionResumed", 1530), ev("0.0.0", 0, 1)].join("");
+    expect(pauseEvents(xml, T0, T0 + 3000_000)).toEqual([
+      { startS: 600, endS: 720 },
+      { startS: 1500, endS: 1530 },
+    ]);
+  });
+  it("pausa sin reanudar llega al final; sin pausas, lista vacía", () => {
+    expect(pauseEvents(pe("Pause", 2900), T0, T0 + 3000_000)).toEqual([{ startS: 2900, endS: 3000 }]);
+    expect(pauseEvents(ev("0.0.0", 0, 1), T0, T0 + 1000)).toEqual([]);
   });
 });

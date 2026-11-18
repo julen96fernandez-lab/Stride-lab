@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Explorer } from "@/lib/db/queries";
 import type { RouteShape } from "@/lib/db/queries";
-import { hrAxisFrom60, hrSegments, nearestIndex, nearestWithin, niceXStep, noDataRanges, paceAxisRange } from "@/lib/analysis/run-stream";
+import { hrAxisFrom60, hrSegments, nearestIndex, nearestWithin, niceXStep, paceAxisRange } from "@/lib/analysis/run-stream";
 import { zoneOf, type HrZones } from "@/lib/analysis/hr-zones";
 import { regularAxis } from "@/lib/analysis/axis";
 import { RouteMap, type MapApi } from "@/components/map/RouteMap";
@@ -173,21 +173,20 @@ export function RunExplorer({
     () => paceAxisRange(paceVals, data.avgPace ? [data.avgPace] : []),
     [paceVals, data.avgPace],
   );
-  // Tramos sin ritmo dentro de la carrera (pausas, muestras no fiables): banda tenue «sin datos».
-  const gapBands = useMemo(
-    () =>
-      data.coarsePace
-        ? []
-        : noDataRanges(data.t, data.pace).map(([a, b]) => [
-            {
-              xAxis: xAt(a),
-              itemStyle: { color: "alpha(var(--fg),0.045)" },
-              label: { show: true, position: "insideTop", formatter: "sin datos", color: "alpha(var(--fg),0.45)", fontSize: 9, fontFamily: C.font },
-            },
-            { xAxis: xAt(b) },
-          ]),
-    [data, xAt],
-  );
+  // Pausas reales: el ritmo se corta y se une con un punteado muy fino, sin texto.
+  const pauseLinks = useMemo(() => {
+    if (data.coarsePace) return [];
+    const out: (number | string)[][] = [];
+    for (const [a, b] of data.pauses) {
+      const i0 = nearestIndex(data.t, a);
+      const i1 = nearestIndex(data.t, b);
+      const p0 = data.pace[i0];
+      const p1 = data.pace[i1];
+      if (p0 === null || p1 === null) continue;
+      out.push([xs[i0], p0], [xs[i1], p1], [xs[i1], "-"]);
+    }
+    return out;
+  }, [data, xs]);
   const paceOpt = useMemo(() => {
     if (!hasPace || !paceAx) return null;
     return {
@@ -226,7 +225,7 @@ export function RunExplorer({
               ],
             },
           },
-          markArea: { silent: true, data: [...gapBands, ...(selArea ? selArea.data : [])] },
+          markArea: selArea,
           // Ritmo medio: referencia fina, sin etiqueta dentro (va en la cabecera, no la tapa el cursor).
           markLine: data.avgPace
             ? { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: "alpha(var(--fg),0.45)", type: [3, 4], width: 1 }, data: [{ yAxis: data.avgPace }] }
@@ -234,13 +233,16 @@ export function RunExplorer({
           clip: true,
           z: 3,
         },
+        ...(pauseLinks.length
+          ? [{ type: "line", data: pauseLinks, showSymbol: false, silent: true, connectNulls: false, lineStyle: { width: 1, color: "alpha(var(--fg),0.35)", type: [1, 4], cap: "round" }, z: 1 }]
+          : []),
         ...(showGap && data.gap
           ? [{ type: "line", data: pts(data.gap), showSymbol: false, connectNulls: false, smooth: 0.5, lineStyle: { width: 1.2, color: "alpha(var(--fg),0.6)", cap: "round" }, clip: true, z: 2 }]
           : []),
       ],
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paceVals, paceAx, showGap, data, base, pts, selArea, gapBands, hasPace, lastKey]);
+  }, [paceVals, paceAx, showGap, data, base, pts, selArea, pauseLinks, hasPace, lastKey]);
 
   const hrAx = useMemo(() => {
     // Por parciales: eje desde 60 ppm para no exagerar diferencias entre barras.
@@ -640,7 +642,7 @@ export function RunExplorer({
               style={{ willChange: "transform", background: "linear-gradient(to bottom, transparent, var(--chart-line) 8%, var(--chart-line) 92%, transparent)" }}
             />
           </div>
-          <DistanceNote info={data.distanceInfo} />
+          <DistanceNote info={data.distanceInfo} est={data.estimatedStretches} />
           <Legend coarse={data.coarsePace} gap={!!data.gap && showGap} avg={data.avgPace !== null} hrBySplits={!!hrStep} ele={!!data.ele} />
         </section>
       )}
@@ -698,19 +700,15 @@ function Cell({ refEl, unit, lime, big }: { refEl: React.RefObject<HTMLSpanEleme
   );
 }
 
-/** Aviso de distancia: de dónde sale el eje de km y qué no registró el reloj. */
-function DistanceNote({ info }: { info: Explorer["distanceInfo"] }) {
+/** Una sola nota pequeña bajo los gráficos: ritmo estimado y de dónde sale el eje de km. */
+function DistanceNote({ info, est }: { info: Explorer["distanceInfo"]; est: Explorer["estimatedStretches"] }) {
   const km = (m: number | null) => (m === null ? "—" : (m / 1000).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   const parts: string[] = [];
-  if (info.missing) {
-    parts.push(
-      `El reloj no registró distancia en ${info.missing.stretches} ${info.missing.stretches === 1 ? "tramo" : "tramos"} donde el GPS marca ${Math.round(info.missing.gpsM - info.missing.watchM)} m: ahí no hay ritmo (banda «sin datos»).`,
-    );
-  }
-  if (info.kmFrom === "gps" && info.samplesM !== null)
-    parts.push(`Eje de km con el GPS (${km(info.gpsM)} km): las muestras del reloj suman ${km(info.samplesM)} km y el total es ${km(info.totalM)} km.`);
+  if (est.gps) parts.push(`Ritmo estimado con GPS en ${est.gps} ${est.gps === 1 ? "tramo" : "tramos"} donde el reloj no registró distancia.`);
+  if (est.split) parts.push(`Ritmo del parcial en ${est.split} ${est.split === 1 ? "tramo" : "tramos"} sin datos fiables.`);
+  if (info.kmFrom === "gps" && info.samplesM !== null) parts.push(`Eje de km con el GPS (${km(info.gpsM)} km; total ${km(info.totalM)} km).`);
   else if (info.samplesM !== null && info.totalM && Math.abs(info.samplesM - info.totalM) / info.totalM > 0.02)
-    parts.push(`Las muestras del reloj suman ${km(info.samplesM)} km; el total del entrenamiento es ${km(info.totalM)} km.`);
+    parts.push(`Las muestras del reloj suman ${km(info.samplesM)} km; el total es ${km(info.totalM)} km.`);
   if (!parts.length) return null;
   return <p className="mt-2 px-1 text-[10px] leading-relaxed text-fg-2">{parts.join(" ")}</p>;
 }
@@ -748,7 +746,7 @@ function Legend({ coarse, gap, avg, hrBySplits, ele }: { coarse: boolean; gap: b
           <span className="ml-0.5">bajada · llano · subida</span>
         </li>
       )}
-      {!coarse && <li>Sin ritmo en pausas ni muestras imposibles.</li>}
+      {!coarse && <li>Punteado fino: pausa.</li>}
     </ul>
   );
 }
@@ -800,7 +798,10 @@ function SplitsTable({ splits, sel, onSel }: { splits: Explorer["splits"]; sel: 
                       ...(s.slowest ? { background: "color-mix(in srgb, var(--z5) 28%, transparent)" } : {}),
                     }}
                   />
-                  <span className={`num relative pl-2 text-[15px] ${s.fastest ? "text-lime-ink" : ""}`}>{paceStr(s.paceSPerKm)}</span>
+                  <span className={`num relative pl-2 text-[15px] ${s.fastest ? "text-lime-ink" : ""}`} title={s.estimated === "gps" ? "Ritmo con GPS" : s.estimated ? "Estimación" : undefined}>
+                    {s.estimated ? "≈" : ""}
+                    {paceStr(s.paceSPerKm)}
+                  </span>
                   {(s.fastest || s.slowest) && (
                     <span className={`relative ml-auto pr-1.5 text-[10px] font-bold ${s.fastest ? "text-lime-ink" : "text-fg-2"}`}>
                       {s.fastest ? "MÁS RÁPIDO" : "MÁS LENTO"}
@@ -816,6 +817,11 @@ function SplitsTable({ splits, sel, onSel }: { splits: Explorer["splits"]; sel: 
           );
         })}
       </ol>
+      {splits.some((x) => x.estimated) && (
+        <p className="mt-2 text-[11px] text-fg-2">
+          ≈ estimación: {splits.some((x) => x.estimated === "gps") ? "ritmo con la distancia del GPS donde el reloj no registró distancia" : "el reloj no registró distancia fiable en ese km"}.
+        </p>
+      )}
     </section>
   );
 }
