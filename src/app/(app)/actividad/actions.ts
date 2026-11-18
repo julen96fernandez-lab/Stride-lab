@@ -76,9 +76,40 @@ export async function saveShiftAnchorAction(_prev: ShiftState, formData: FormDat
   const v = String(formData.get("shiftAnchor") ?? "").trim();
   if (!isMonday(v)) return { error: "Elige un lunes: los bloques van de lunes a domingo." };
   await saveShiftAnchor(db(), v);
+  // La semana en curso y las futuras se vuelven a calcular con el ciclo nuevo.
+  const { releaseFrom } = await import("@/lib/plan/plan-db");
+  const { cacheDay: today } = await import("@/lib/cache/tags");
+  await releaseFrom(db(), shiftWeek(v, today()).start);
   dataChanged();
   refresh();
   const { cacheDay } = await import("@/lib/cache/tags");
   const now = shiftWeek(v, cacheDay());
   return { ok: `Guardado. Esta semana: ${SHIFT_META[now.kind].label.toLowerCase()}.` };
+}
+
+/** Reorganizar la semana: mueve la sesión al primer día válido que queda (mismas reglas del turno). */
+export async function rescheduleWeekAction(weekStart: string): Promise<{ ok: boolean; message: string }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return { ok: false, message: "Semana no válida." };
+  const [{ getShiftAnchor }, { getStoredWeeks, moveWeekDay }, { rescheduleDay }, { shiftWeek }, { cacheDay }, { fmtDay, SESSION_LABEL }] = await Promise.all([
+    import("@/lib/plan/shifts-db"),
+    import("@/lib/plan/plan-db"),
+    import("@/lib/plan/compliance"),
+    import("@/lib/plan/shifts"),
+    import("@/lib/cache/tags"),
+    import("@/lib/plan/weekly"),
+  ]);
+  const d = db();
+  const [anchor, rows] = await Promise.all([getShiftAnchor(d), getStoredWeeks(d, weekStart, weekStart)]);
+  const row = rows[0];
+  if (!anchor || !row) return { ok: false, message: "No hay plan guardado para esa semana." };
+  const today = cacheDay();
+  const w = shiftWeek(anchor, weekStart);
+  const session = row.session as Parameters<typeof rescheduleDay>[0]["session"];
+  const day = rescheduleDay({ anchor, kind: w.kind, session, weekStart, today });
+  if (!day) return { ok: false, message: "No queda ningún día válido esta semana para esa sesión." };
+  if (day === row.day) return { ok: true, message: `Sigue siendo el ${fmtDay(day)}.` };
+  await moveWeekDay(d, weekStart, day, row.day, row.rescheduledFrom);
+  dataChanged();
+  refresh();
+  return { ok: true, message: `${SESSION_LABEL[session as keyof typeof SESSION_LABEL]}: ahora el ${fmtDay(day)}.` };
 }

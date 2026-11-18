@@ -91,3 +91,13 @@ describe("prudencia: baja a suave", () => {
     expect(plan("2026-11-23", [])[0].session).toBe("suave");
   });
 });
+
+describe("semanas guardadas (congeladas)", () => {
+  it("se respetan tal cual al recalcular y la alternancia sigue desde ellas", () => {
+    const fixed = { "2026-12-07": { session: "tirada_larga" as const, day: "2026-12-10", when: null, reason: "Guardada", downgraded: false } };
+    const ws = plan("2026-12-07", [{ date: "2026-12-05", type: "tirada_larga" }], { fixed });
+    expect(ws[0]).toMatchObject({ session: "tirada_larga", day: "2026-12-10", reason: "Guardada", dayLabel: "jueves 10" });
+    // la siguiente exigente (mañanas) alterna desde la guardada: calidad corta
+    expect(ws[1]).toMatchObject({ kind: "mananas", session: "calidad_corta" });
+  });
+});

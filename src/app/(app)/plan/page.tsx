@@ -7,7 +7,9 @@ import { planScreen } from "@/lib/db/screens";
 import { cacheDay } from "@/lib/cache/tags";
 import { SHIFT_META, dayNum, ymdOf } from "@/lib/plan/shifts";
 import { PredictionsCard } from "@/components/charts/PredictionsCard";
-import type { SessionKind, WeekSession } from "@/lib/plan/weekly";
+import { fmtDay, type SessionKind, type WeekSession } from "@/lib/plan/weekly";
+import { STATUS_LABEL, type WeekStatus } from "@/lib/plan/compliance";
+import { RescheduleButton } from "./RescheduleButton";
 
 export const metadata = { title: "Plan · Stride Lab" };
 
@@ -41,8 +43,15 @@ function range(start: string, end: string) {
 
 async function PlanData() {
   await connection();
-  const { anchor, today, weeks, sessions, predictions } =
-    await planScreen(cacheDay());
+  const {
+    anchor,
+    today,
+    weeks,
+    sessions,
+    current: cur,
+    past,
+    predictions,
+  } = await planScreen(cacheDay());
   const preds = (
     <PredictionsCard
       now={predictions.now}
@@ -92,7 +101,7 @@ async function PlanData() {
             : `Quedan ${left} ${left === 1 ? "día" : "días"} de este bloque.`}{" "}
           Semana {current.pos + 1} de 5 del ciclo.
         </p>
-        {sessions[0] && <SessionBlock s={sessions[0]} />}
+        {cur && <SessionBlock s={cur} />}
       </section>
 
       <section className="card p-5" aria-label="Próximas semanas">
@@ -150,6 +159,36 @@ async function PlanData() {
         </p>
       </section>
 
+      {past.length > 0 && (
+        <section className="card p-5" aria-label="Semanas anteriores">
+          <div className="eyebrow">
+            Semanas anteriores · previsto frente a realizado
+          </div>
+          <ol className="mt-2 divide-y divide-line">
+            {past.map((w) => (
+              <li
+                key={w.start}
+                className="flex min-h-[52px] items-center justify-between gap-3 py-2"
+              >
+                <div>
+                  <div className="text-[15px] font-semibold">
+                    {range(w.start, w.end)}
+                  </div>
+                  <div className="text-[12px] text-fg-2">
+                    <SessionDot kind={w.session} /> {w.label} · {w.dayLabel}
+                  </div>
+                </div>
+                <StatusPill status={w.status} />
+              </li>
+            ))}
+          </ol>
+          <p className="mt-2 text-[12px] text-fg-2">
+            Cumplida: una carrera del tipo previsto en esa semana (tirada larga;
+            calidad = series, tempo o competición; suave = cualquier carrera).
+          </p>
+        </section>
+      )}
+
       {preds}
     </>
   );
@@ -189,11 +228,23 @@ function SessionDot({ kind }: { kind: SessionKind }) {
   );
 }
 
-/** Sesión de la semana en curso: qué, cuándo y por qué (en una línea). */
-function SessionBlock({ s }: { s: WeekSession }) {
+/** Sesión de la semana en curso: qué, cuándo, por qué y cómo va. */
+function SessionBlock({
+  s,
+}: {
+  s: WeekSession & {
+    status: WeekStatus;
+    rescheduledFrom: string | null;
+    canReschedule: boolean;
+    rescheduleTo: string | null;
+  };
+}) {
   return (
     <div className="relative mt-4 rounded-2xl border border-line bg-inset p-3.5">
-      <div className="text-[12px] text-fg-2">Sesión de la semana</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[12px] text-fg-2">Sesión de la semana</div>
+        <StatusPill status={s.status} />
+      </div>
       <div className="mt-1 flex items-baseline gap-2">
         <SessionDot kind={s.session} />
         <span className="font-display text-[20px] font-bold">{s.label}</span>
@@ -202,11 +253,51 @@ function SessionBlock({ s }: { s: WeekSession }) {
         {s.dayLabel}
         {s.when ? `, ${s.when}` : ""}
       </div>
+      {s.rescheduledFrom && (
+        <div className="mt-0.5 text-[12px] text-fg-2">
+          Reorganizada (antes, el {fmtDay(s.rescheduledFrom)}).
+        </div>
+      )}
       <p className="mt-1.5 text-[12px] leading-snug text-fg-2">{s.reason}</p>
+      {s.status === "dia_pasado" &&
+        (s.canReschedule && s.rescheduleTo ? (
+          <RescheduleButton weekStart={s.start} to={fmtDay(s.rescheduleTo)} />
+        ) : (
+          <p className="mt-2 text-[12px] text-fg-2">
+            El día previsto ya pasó y no queda otro día válido esta semana para
+            esta sesión.
+          </p>
+        ))}
       <p className="mt-1.5 text-[11px] text-fg-3">
         Sugerencia, no obligación: si no te encuentras bien, cambia a suave o
         descansa.
       </p>
     </div>
+  );
+}
+
+const STATUS_COLOR: Record<WeekStatus, string> = {
+  cumplida: "var(--load-low)",
+  otra: "var(--load-mod)",
+  pendiente: "var(--fg-2)",
+  dia_pasado: "var(--load-mod)",
+  no_cumplida: "var(--load-high)",
+  opcional: "var(--fg-3)",
+};
+
+function StatusPill({ status }: { status: WeekStatus }) {
+  const c = STATUS_COLOR[status];
+  return (
+    <span
+      className="flex-none rounded-full px-2.5 py-1 text-[12px] font-semibold"
+      style={{
+        color: c,
+        background: `color-mix(in srgb, ${c} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${c} 40%, transparent)`,
+      }}
+    >
+      {status === "cumplida" ? "✓ " : status === "no_cumplida" ? "✕ " : ""}
+      {STATUS_LABEL[status]}
+    </span>
   );
 }

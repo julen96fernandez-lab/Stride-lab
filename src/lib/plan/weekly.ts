@@ -76,6 +76,8 @@ export function planWeeks(o: {
   /** ratio aguda/crónica actual (null sin historial suficiente) */
   ratio: number | null;
   openInjury: boolean;
+  /** semanas ya guardadas (congeladas): se respetan tal cual y cuentan para alternar */
+  fixed?: Readonly<Record<string, Pick<WeekSession, "session" | "day" | "when" | "reason" | "downgraded">>>;
 }): WeekSession[] {
   const today = dayNum(o.today)!;
   const past = o.history.filter((r) => dayNum(r.date)! <= today).sort((a, b) => a.date.localeCompare(b.date));
@@ -86,6 +88,12 @@ export function planWeeks(o: {
   const lastTxt = lastDemandingRun ? `la última exigente fue ${lastDemanding === "long" ? "tirada larga" : "calidad"} el ${fmtDate(lastDemandingRun.date)}` : "sin sesiones exigentes recientes";
 
   return o.weeks.map((w, i) => {
+    const f = o.fixed?.[w.start];
+    if (f) {
+      const dem = demandingOf(f.session);
+      if (dem) lastDemanding = dem;
+      return { start: w.start, end: w.end, kind: w.kind, pos: w.pos, ...f, label: SESSION_LABEL[f.session], dayLabel: fmtDay(f.day) };
+    }
     const current = i === 0 && today >= w.startDay && today <= w.startDay + 6;
     const noQualityOn = (d: number) => !afterNights(o.anchor, d);
     let session: SessionKind;

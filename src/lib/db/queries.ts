@@ -751,26 +751,56 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 
 // ─── Plan ────────────────────────────────────────────────────────────────────
 
-import { shiftWeeks, type ShiftWeek } from "@/lib/plan/shifts";
+import { shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
 import { predictAt, predictionHistory } from "@/lib/plan/predict";
-import { planWeeks } from "@/lib/plan/weekly";
+import { SESSION_LABEL, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
+import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
+import { freezeWeek, getStoredWeeks } from "@/lib/plan/plan-db";
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
 export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const [anchor, predictions, runs, fitness] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx)]);
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
+  if (!anchor || !weeks.length) return { anchor, today, weeks, sessions: [], current: null, past: [], predictions };
+
+  const madrid = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
+  const history = runs.map((r) => ({ date: madrid(r.startAt), type: r.type }));
   const cur = fitness.current;
-  const sessions = anchor
-    ? planWeeks({
-        weeks,
-        anchor,
-        today,
-        history: runs.map((r) => ({ date: new Date(localDay(r.startAt) * 86_400_000).toISOString().slice(0, 10), type: r.type })),
-        ratio: cur && !cur.warmup ? cur.ratio : null,
-        openInjury: fitness.openInjury,
-      })
-    : [];
-  return { anchor, today, weeks, sessions, predictions };
+  const pastStart = ymdOf(weeks[0].startDay - 28);
+  const stored = await getStoredWeeks(db(), pastStart, weeks[weeks.length - 1].start);
+  const byStart = new Map(stored.map((r) => [r.weekStart, r]));
+  const fixed = Object.fromEntries(
+    stored.map((r) => [r.weekStart, { session: r.session as SessionKind, day: r.day, when: r.whenText, reason: r.reason, downgraded: r.downgraded }]),
+  );
+  const sessions = planWeeks({ weeks, anchor, today, history, ratio: cur && !cur.warmup ? cur.ratio : null, openInjury: fitness.openInjury, fixed });
+
+  // La semana en curso se congela la primera vez que se ve: ya no cambia al recalcular.
+  const now = sessions[0];
+  if (!byStart.has(now.start)) await freezeWeek(db(), now);
+  const nowRow = byStart.get(now.start);
+  const status = weekStatus({ session: now.session, day: now.day, weekStart: now.start, today, runs: history });
+  const newDay = status === "dia_pasado" ? rescheduleDay({ anchor, kind: now.kind, session: now.session, weekStart: now.start, today }) : null;
+  const current = { ...now, status, rescheduledFrom: nowRow?.rescheduledFrom ?? null, canReschedule: newDay !== null && newDay !== now.day, rescheduleTo: newDay };
+
+  // Las 4 semanas anteriores que tengan plan guardado, con su resultado.
+  const past = stored
+    .filter((r) => r.weekStart < now.start)
+    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
+    .map((r) => {
+      const session = r.session as SessionKind;
+      const w = shiftWeek(anchor, r.weekStart);
+      return {
+        start: r.weekStart,
+        end: w.end,
+        kind: r.shiftKind,
+        session,
+        label: SESSION_LABEL[session],
+        day: r.day,
+        dayLabel: fmtDay(r.day),
+        status: weekStatus({ session, day: r.day, weekStart: r.weekStart, today, runs: history }),
+      };
+    });
+  return { anchor, today, weeks, sessions, current, past, predictions };
 }
 
 /** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */

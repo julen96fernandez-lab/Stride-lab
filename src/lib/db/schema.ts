@@ -268,3 +268,21 @@ export const runEfforts = pgTable(
   },
   (t) => [primaryKey({ columns: [t.runId, t.key] }), index("run_efforts_key_time_idx").on(t.key, t.timeS)],
 );
+
+/**
+ * Plan guardado de cada semana (lunes a domingo): se congela cuando la semana pasa a ser la
+ * actual, para que no cambie al recalcular. «Reorganizar» solo mueve el día.
+ */
+export const planWeeks = pgTable("plan_weeks", {
+  weekStart: date("week_start").primaryKey(),
+  shiftKind: text("shift_kind").notNull(),
+  session: text("session").notNull(),
+  day: date("day").notNull(),
+  whenText: text("when_text"),
+  reason: text("reason").notNull(),
+  downgraded: boolean("downgraded").notNull().default(false),
+  /** día previsto antes de reorganizar (null si no se reorganizó) */
+  rescheduledFrom: date("rescheduled_from"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});

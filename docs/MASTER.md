@@ -428,8 +428,18 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
 - Plan: «Sesión de la semana» en la tarjeta de esta semana y la sesión y el día en cada semana
   próxima, con la nota «sugerencia, no obligación».
 
-### Pendiente
-4. Previsto frente a realizado y reorganizar.
+### Paso 4 · Previsto frente a realizado (hecho)
+- Tabla `plan_weeks` (migración 0010): la semana en curso se congela la primera vez que se ve
+  (sesión, día, motivo); ya no cambia al recalcular y la alternancia de las futuras parte de
+  ella. Cambiar el ciclo en Perfil libera la semana en curso y las futuras.
+- `src/lib/plan/compliance.ts` (con pruebas): **cumplida** (carrera del tipo previsto en la
+  semana: tirada larga; calidad = series, tempo o competición; suave = cualquiera), **otra
+  sesión**, **pendiente**, **día pasado**, **no cumplida**; en noches, sin correr es «opcional».
+- **Reorganizar** (solo con «día pasado»): primer día válido desde hoy con las mismas reglas
+  (tardes fin de semana; mañanas entre semana; libre sin el lunes tras noches; nunca calidad
+  tras una noche). Guarda el día anterior («Reorganizada (antes, el …)»). Si no queda día
+  válido, lo dice.
+- Plan: estado de la semana en curso y «Semanas anteriores» (4) con su resultado.
 
 ## Rendimiento
 
@@ -761,6 +771,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Plan, paso 4: plan de cada semana guardado, previsto frente a realizado y botón
+  «Reorganizar». Migración 0010.
 - 2026‑11‑18 — Plan, paso 3: una sesión por semana con día y motivo según el turno, la carga, la
   lesión y lo hecho antes.
 - 2026‑11‑18 — Plan, paso 2: predicción de 5K, 10K, media y maratón con rango, confianza y
