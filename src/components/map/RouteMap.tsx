@@ -1,7 +1,7 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { RouteShape } from "@/lib/db/queries";
 
 import { onThemeChange } from "@/components/charts/EChart";
@@ -18,6 +18,14 @@ function isLight(): boolean {
   return window.matchMedia("(prefers-color-scheme: light)").matches;
 }
 
+/** Control del mapa desde fuera, sin re-renderizar (para el cursor de los gráficos). */
+export interface MapApi {
+  /** Punto del instante señalado; null lo oculta. */
+  setCursor(lat: number | null, lon: number | null): void;
+  /** Tramo resaltado ([lat, lon][]); null lo quita. */
+  setHighlight(points: [number, number][] | null): void;
+}
+
 /**
  * Mapa de la ruta. Debajo siempre se dibuja la ruta en SVG (funciona sin red de
  * teselas); encima se carga MapLibre con el mapa base oscuro y, si carga, aparece.
@@ -27,13 +35,17 @@ export function RouteMap({
   bbox,
   shape,
   height = 300,
+  apiRef,
 }: {
   points: [number, number][]; // [lat, lon]
   bbox: readonly [number | null, number | null, number | null, number | null];
   shape: RouteShape | null;
   height?: number;
+  apiRef?: MutableRefObject<MapApi | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Último estado pedido, para aplicarlo cuando el mapa termine de cargar.
+  const want = useRef<{ cursor: [number, number] | null; hl: [number, number][] | null }>({ cursor: null, hl: null });
   const [ready, setReady] = useState(false);
   const [themeKey, setThemeKey] = useState(0);
 
@@ -89,6 +101,39 @@ export function RouteMap({
             "circle-stroke-width": 2.5,
           },
         });
+        // Tramo resaltado (parcial tocado) y cursor del instante señalado.
+        map.addSource("hl", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        map.addLayer({ id: "hl", type: "line", source: "hl", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": FG, "line-width": 6, "line-opacity": 0.9 } });
+        const dot = document.createElement("div");
+        dot.setAttribute("aria-hidden", "true");
+        dot.style.cssText = `width:16px;height:16px;border-radius:50%;background:${LIME};border:3px solid ${BG};box-shadow:0 0 0 1.5px ${FG};will-change:transform;display:none`;
+        void import("maplibre-gl").then(({ Marker }) => {
+          if (!map) return;
+          const marker = new Marker({ element: dot }).setLngLat(coords[0] as [number, number]).addTo(map);
+          const api: MapApi = {
+            setCursor(lat, lon) {
+              want.current.cursor = lat === null || lon === null ? null : [lat, lon];
+              if (lat === null || lon === null) {
+                dot.style.display = "none";
+                return;
+              }
+              dot.style.display = "block";
+              marker.setLngLat([lon, lat]);
+            },
+            setHighlight(pts) {
+              want.current.hl = pts;
+              const src = map?.getSource("hl") as import("maplibre-gl").GeoJSONSource | undefined;
+              src?.setData(
+                pts && pts.length > 1
+                  ? { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: pts.map(([la, lo]) => [lo, la]) } }
+                  : { type: "FeatureCollection", features: [] },
+              );
+            },
+          };
+          if (apiRef) apiRef.current = api;
+          if (want.current.cursor) api.setCursor(...want.current.cursor);
+          if (want.current.hl) api.setHighlight(want.current.hl);
+        });
         setReady(true);
       });
       map.on("error", () => {
@@ -98,9 +143,10 @@ export function RouteMap({
     return () => {
       cancelled = true;
       setReady(false);
+      if (apiRef) apiRef.current = null;
       map?.remove();
     };
-  }, [points, bbox, themeKey]);
+  }, [points, bbox, themeKey, apiRef]);
 
   return (
     <div className="relative overflow-hidden rounded-[22px] bg-map" style={{ height }}>

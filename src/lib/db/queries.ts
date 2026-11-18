@@ -8,6 +8,8 @@ import { durabilityFromSeries, durabilityFromSplits, type Durability } from "@/l
 import type { SeriesMetric } from "./schema";
 import { effectiveType, ensureClassified, getTypeSettings, getZones } from "@/lib/analysis/session-type-db";
 import { SESSION_TYPES, isSessionType, type SessionType } from "@/lib/analysis/session-type";
+import { buildStream, splitViews, type SplitView } from "@/lib/analysis/run-stream";
+import { ensureTrack } from "@/lib/analysis/track-db";
 
 const TZ = "Europe/Madrid";
 const valid = eq(s.runs.status, "valid");
@@ -207,6 +209,8 @@ export async function getRun(id: string) {
   if (!durability && splits.length) durability = durabilityFromSplits(splits, series.hr);
   const route = routeRows[0] ?? null;
   const nb = neighbours.rows[0] as { prev: string | null; next: string | null };
+  const track = route ? await ensureTrack(d, run, route.blobUrl) : null;
+  const explorer = buildExplorer({ run, series, track, splits, zones });
   return {
     run,
     route: route
@@ -217,8 +221,68 @@ export async function getRun(id: string) {
     power: series.power ?? null,
     durability,
     zones,
+    explorer,
     prevId: nb.prev,
     nextId: nb.next,
+  };
+}
+
+/** Datos compactos para los gráficos sincronizados del detalle (ver run-stream.ts). */
+export interface Explorer {
+  t: number[];
+  km: (number | null)[];
+  pace: (number | null)[];
+  gap: (number | null)[] | null;
+  hr: (number | null)[] | null;
+  ele: (number | null)[] | null;
+  power: (number | null)[] | null;
+  zone: (number | null)[] | null;
+  /** posición en el mapa en cada instante (null sin pista) */
+  lat: number[] | null;
+  lon: number[] | null;
+  coarsePace: boolean;
+  avgPace: number | null;
+  splits: SplitView[];
+  zoneLimits: number[];
+}
+
+const r1 = (x: number | null) => (x === null ? null : Math.round(x * 10) / 10);
+const r0 = (x: number | null) => (x === null ? null : Math.round(x));
+
+function buildExplorer(a: {
+  run: { durationS: number; avgPaceSPerKm: number | null };
+  series: Partial<Record<SeriesMetric, { t: number[]; v: number[] }>>;
+  track: Awaited<ReturnType<typeof ensureTrack>>;
+  splits: { idx: number; distanceM: number; durationS: number; paceSPerKm: number | null; avgHr: number | null; elevationGainM: number | null; elevationLossM: number | null; basis: string }[];
+  zones: { limits: readonly number[] };
+}): Explorer {
+  const { run, series, track, splits, zones } = a;
+  const st = buildStream({
+    durationS: run.durationS,
+    distance: series.distance,
+    hr: series.hr,
+    power: series.power,
+    track,
+    zones: zones as never,
+    avgPace: run.avgPaceSPerKm,
+  });
+  // Los parciales del reloj empiezan en 0; los del GPX, en el primer punto con hora.
+  const startS = splits[0]?.basis === "gpx" ? (track?.t[0] ?? 0) : 0;
+  return {
+    t: st.t.map((x) => Math.round(x)),
+    km: st.km.map((k) => (k === null ? null : Math.round(k * 1000) / 1000)),
+    pace: st.pace.map(r1),
+    gap: st.gap?.map(r1) ?? null,
+    hr: st.hr?.map(r0) ?? null,
+    ele: st.ele?.map(r1) ?? null,
+    power: st.power?.map(r0) ?? null,
+    zone: st.zone,
+    lat: track && st.trackIdx ? st.trackIdx.map((i) => track.lat[i]) : null,
+    lon: track && st.trackIdx ? st.trackIdx.map((i) => track.lon[i]) : null,
+    coarsePace: st.coarsePace,
+    avgPace: st.avgPace,
+    splits: splitViews(splits, startS),
+    zoneLimits: [...zones.limits],
   };
 }
 

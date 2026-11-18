@@ -231,6 +231,22 @@ export const injuries = pgTable("injuries", {
   createdAt: createdAt(),
 });
 
+/**
+ * Pista con tiempo de cada carrera con GPX (para sincronizar mapa y gráficos): como mucho un
+ * punto cada 2 s, sacada del GPX completo de Blob la primera vez que se abre la carrera.
+ * `t` en s desde el inicio; `ele` puede tener nulos.
+ */
+export const runTracks = pgTable("run_tracks", {
+  runId: uuid("run_id")
+    .primaryKey()
+    .references(() => runs.id, { onDelete: "cascade" }),
+  t: real("t").array().notNull(),
+  lat: doublePrecision("lat").array().notNull(),
+  lon: doublePrecision("lon").array().notNull(),
+  ele: real("ele").array(),
+  createdAt: createdAt(),
+});
+
 /** Mejor esfuerzo de cada carrera por distancia (tramos continuos; ver best-efforts.ts). */
 export const runEfforts = pgTable(
   "run_efforts",

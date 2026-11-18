@@ -2,8 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { RunLineChart } from "@/components/charts/charts";
-import { RouteMap } from "@/components/map/RouteMap";
+import { RunExplorer } from "@/components/charts/RunExplorer";
 import { CountUp } from "@/components/ui/CountUp";
 import { Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/RunRow";
@@ -40,7 +39,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getRun(id);
   if (!data) notFound();
-  const { run, route, splits, hr, power, durability, zones, prevId, nextId } = data;
+  const { run, route, durability, zones, explorer, prevId, nextId } = data;
 
   return (
     <div className="stagger flex flex-col gap-4">
@@ -88,44 +87,20 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
         />
       )}
 
-      {/* Mapa */}
-      {route ? (
-        <section className="card p-2">
-          <RouteMap points={route.points} bbox={route.bbox} shape={route.shape} />
-        </section>
-      ) : (
+      {/* Mapa, gráficos sincronizados y parciales */}
+      {!route && (
         <Card>
           <div className="eyebrow">Recorrido</div>
           <p className="mt-2 text-[14px] text-fg-2">{run.isIndoor ? "Carrera en cinta: sin ruta GPS." : "Esta carrera no tiene ruta GPS."}</p>
         </Card>
       )}
-
-      {/* Parciales */}
-      <Splits splits={splits} />
+      <RunExplorer data={explorer} route={route} />
 
       {/* Durabilidad */}
       <DurabilityCard d={durability} />
 
       {/* Tiempo en zonas y carga */}
       <ZonesCard seconds={run.hrZoneSeconds} load={run.trainingLoad} zones={zones} />
-
-      {/* Pulso y potencia a lo largo de la carrera */}
-      {hr && hr.t.length > 1 && (
-        <Card>
-          <div className="eyebrow">Pulso</div>
-          <div className="mt-3">
-            <RunLineChart t={hr.t} v={hr.v} unit="ppm" label="Pulso a lo largo de la carrera" />
-          </div>
-        </Card>
-      )}
-      {power && power.t.length > 1 && (
-        <Card>
-          <div className="eyebrow">Potencia</div>
-          <div className="mt-3">
-            <RunLineChart t={power.t} v={power.v} unit="W" label="Potencia a lo largo de la carrera" />
-          </div>
-        </Card>
-      )}
 
       {/* Métricas */}
       <Metrics run={run} />
@@ -159,61 +134,6 @@ function Big({ label, value, unit }: { label: string; value: string; unit?: stri
         {unit && <span className="text-[11px] text-fg-2">{unit}</span>}
       </div>
     </div>
-  );
-}
-
-function Splits({ splits }: { splits: Run["splits"] }) {
-  if (splits.length === 0) {
-    return (
-      <Card>
-        <div className="eyebrow">Parciales por km</div>
-        <p className="mt-2 text-[14px] text-fg-2">Sin datos de distancia suficientes para calcularlos.</p>
-      </Card>
-    );
-  }
-  const paces = splits.map((s) => s.paceSPerKm).filter((p): p is number => p !== null);
-  const fastest = Math.min(...paces);
-  const slowest = Math.max(...paces);
-  const hasHr = splits.some((s) => s.avgHr !== null);
-  const hasElev = splits.some((s) => s.elevationGainM !== null);
-  const fastestIdx = splits.find((s) => s.paceSPerKm === fastest)?.idx;
-  return (
-    <Card>
-      <div className="flex items-baseline justify-between">
-        <div className="eyebrow">Parciales por km</div>
-        <span className="text-[11px] text-fg-2">{splits[0].basis === "samples" ? "Distancia del reloj" : "Distancia del GPS"}</span>
-      </div>
-      <div className="mt-3 grid grid-cols-[28px_1fr_52px_auto] items-center gap-x-3 gap-y-0 text-[11px] font-semibold tracking-[0.06em] text-fg-3 uppercase">
-        <span>Km</span>
-        <span>Ritmo</span>
-        <span className="text-right">{hasHr ? "FC" : ""}</span>
-        <span className="w-[44px] text-right">{hasElev ? "Desn." : ""}</span>
-      </div>
-      <ol className="mt-1">
-        {splits.map((s) => {
-          // Barra: más larga = más rápido (escala entre el más lento y el más rápido).
-          const w =
-            s.paceSPerKm === null ? 0 : slowest === fastest ? 100 : 35 + (65 * (slowest - s.paceSPerKm)) / (slowest - fastest);
-          const partial = s.distanceM < 990;
-          return (
-            <li key={s.idx} className="grid min-h-[34px] grid-cols-[28px_1fr_52px_auto] items-center gap-x-3">
-              <span className="num text-[13px] text-fg-2">{partial ? dec(s.distanceM / 1000, 2) : s.idx}</span>
-              <div className="relative flex h-[26px] items-center">
-                <div
-                  className={`absolute inset-y-0 left-0 rounded-lg ${s.idx === fastestIdx ? "bg-lime shadow-[0_0_14px_rgba(200,242,58,0.4)]" : "bg-ov-2"}`}
-                  style={{ width: `${w}%` }}
-                />
-                <span className={`num relative pl-2.5 text-[15px] ${s.idx === fastestIdx ? "text-lime-ink" : ""}`}>{pace(s.paceSPerKm)}</span>
-              </div>
-              <span className="num text-right text-[14px] text-fg-2">{s.avgHr === null ? (hasHr ? DASH : "") : int(s.avgHr)}</span>
-              <span className="w-[44px] text-right text-[12px] text-fg-2">
-                {s.elevationGainM === null ? (hasElev ? DASH : "") : `+${int(s.elevationGainM)}`}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </Card>
   );
 }
 

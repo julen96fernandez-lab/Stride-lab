@@ -116,6 +116,33 @@ Cálculos en `src/lib/analysis/insights.ts` (y `kmByType` en `periods.ts`), con 
   completo, discontinuo) y tabla del 1 de enero hasta hoy frente al mismo tramo del año
   pasado: km, horas, desnivel, carreras y ritmo medio (sin especiales).
 
+## Detalle de carrera: mapa y gráficos sincronizados
+
+`src/components/charts/RunExplorer.tsx` + lógica pura en `src/lib/analysis/run-stream.ts` (con
+pruebas). Debajo del mapa, gráficos apilados y alineados (mismo margen izquierdo/derecho) en
+el eje de distancia o tiempo (selector): **ritmo** (suavizado ~30 s, ritmo medio como línea de
+referencia), **pulso** con las bandas de las zonas de fondo, **altitud** y **potencia**. Solo
+se dibuja el gráfico de una serie que existe. **Cadencia**: no hay serie guardada (solo la
+media en 92 carreras); para dibujarla habría que reimportar con los pasos por intervalo.
+- Línea de tiempo común: rejilla de ~3 s (≤ 1500 puntos); cada serie se interpola y deja un
+  hueco donde no tiene muestras cerca (nada se inventa).
+- Ritmo: mismas reglas de validez que los récords (`continuousSegments`: pausas y muestras
+  imposibles parten la carrera; la ventana nunca cruza un corte; < 0,66 m/s = parado, sin
+  ritmo). Carreras antiguas con muestras de distancia cada > 60 s: ritmo por parciales
+  (escalera), no curva.
+- GAP (interruptor): coste de Minetti (2002) con la pendiente en ±50 m de distancia; solo con
+  altitud del GPX.
+- Cursor: una capa transparente recoge el dedo (touch-action: pan-y; el scroll vertical sigue
+  funcionando), y con requestAnimationFrame mueve una sola línea vertical por todos los
+  gráficos, el punto del mapa (Marker de MapLibre) y la tarjeta fija (distancia, tiempo,
+  ritmo, pulso, altitud, zona, y GAP/potencia si hay) sin re-renderizar React. 60 fps con la
+  CPU 4× más lenta.
+- Parciales por km: km, tiempo, ritmo con barra relativa, FC y desnivel; más rápido y más
+  lento marcados (ninguno si todos van al mismo segundo; el último incompleto no compite).
+  Tocar uno lo resalta en todos los gráficos y en el mapa.
+- Pista con tiempo: tabla `run_tracks` (≤ 1 punto cada 2 s, con altitud) sacada del GPX
+  completo de Blob; el build rellena las que falten y, si no, se hace al abrir la carrera.
+
 ## Comparación con el mismo tramo
 
 Las tarjetas de Volumen (semana, mes, año) comparan lo transcurrido del periodo con el
@@ -466,6 +493,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Detalle de carrera: mapa y gráficos sincronizados (ritmo suavizado con GAP
+  opcional, pulso con zonas, altitud, potencia), tarjeta del instante, parciales que se
+  resaltan en mapa y gráficos. Tabla `run_tracks` (migración 0006).
 - 2026‑11‑17 — Récords: las muestras con velocidad implícita imposible (muestras largas con hueco corto o > 7 m/s) se descartan y parten el tramo; reglas versión 8; el build recalcula tras migrar
   (`scripts/recompute.mts`, no rompe el despliegue si falla). Análisis: tarjetas con el mismo
   tramo del periodo anterior y ejes de ritmo regulares.
