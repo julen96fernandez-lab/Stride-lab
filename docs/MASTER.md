@@ -116,6 +116,31 @@ Cálculos en `src/lib/analysis/insights.ts` (y `kmByType` en `periods.ts`), con 
   completo, discontinuo) y tabla del 1 de enero hasta hoy frente al mismo tramo del año
   pasado: km, horas, desnivel, carreras y ritmo medio (sin especiales).
 
+## Series y eficiencia aeróbica
+
+**Series** (`src/lib/analysis/intervals.ts`, sección en el detalle de carreras de tipo Series):
+los pasos del reloj son `WorkoutEvent`/`WorkoutActivity` con `WOIntervalStepKeyPath`
+«bloque.repetición.fase». El importador ahora guarda `raw.intervalEvents` (clave, inicio y
+duración; `src/lib/import/interval-events.ts`). Las carreras importadas antes solo tienen las
+claves: hasta pulsar **Reprocesar** (Perfil → Importar datos) la sección explica que faltan las
+horas. En un bloque con repeticiones, fase 0 = trabajo y fase 1 = recuperación; se comprueba
+con el ritmo (si el trabajo no es más rápido, no se separa y se dice por qué). Tabla con
+calentamiento, repeticiones, recuperaciones intercaladas y enfriamiento (distancia, tiempo,
+ritmo, FC media y máxima; en recuperaciones, bajada de pulso desde el final de la repetición
+anterior), barras con el ritmo de cada repetición y la media de trabajo, caída de ritmo de la
+1.ª a la última (%) y recuperación media de pulso. Tocar una repetición la resalta en mapa y
+gráficos.
+
+**Desacople aeróbico** (`src/lib/analysis/efficiency.ts`): solo en Rodaje y Tirada larga con
+pulso, ≥ 4 km completos y variación del ritmo de los parciales ≤ 5 % (coeficiente de
+variación). Si no, la tarjeta de mitades se queda sin el % y dice por qué.
+
+**Eficiencia aeróbica**: por carrera, ritmo medio (por distancia) de los instantes con pulso en
+Z2 (de las zonas guardadas; 131–144 con 47/187), con ≥ 5 min en Z2 y la línea de tiempo del
+detalle (sin pausas ni muestras inválidas). Columnas `runs.ef_z2_*` (migración 0007),
+recalculadas en `reclassifyAll` (reglas versión 9). En Análisis: puntos de los últimos 6 meses
+con tendencia suavizada (sin lesiones), filtro Rodaje / Todas.
+
 ## Detalle de carrera: mapa y gráficos sincronizados
 
 `src/components/charts/RunExplorer.tsx` + lógica pura en `src/lib/analysis/run-stream.ts` (con
@@ -493,6 +518,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Series (repeticiones y recuperaciones desde los pasos del reloj; hace falta
+  Reprocesar para las carreras ya importadas), desacople solo con ritmo estable y eficiencia
+  aeróbica en Z2 con su tendencia en Análisis. Reglas versión 9, migración 0007.
 - 2026‑11‑18 — Detalle de carrera: mapa y gráficos sincronizados (ritmo suavizado con GAP
   opcional, pulso con zonas, altitud, potencia), tarjeta del instante, parciales que se
   resaltan en mapa y gráficos. Tabla `run_tracks` (migración 0006).

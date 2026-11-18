@@ -1,6 +1,7 @@
 import type { RunSource } from "@/lib/db/schema";
 import { attr, childTags, parseAttrs, parseHealthDate } from "./xml";
 import { allDistanceStats, chooseDistance } from "./distance";
+import { intervalEvents } from "./interval-events";
 import {
   bool01,
   elevationM,
@@ -147,6 +148,8 @@ export function parseRunningWorkout(xml: string): ParsedRun | null {
     statistics: Object.fromEntries(stats),
     metadata: Object.fromEntries(meta),
     intervalSteps,
+    // Hora y duración de cada paso (para separar repeticiones y recuperaciones).
+    intervalEvents: intervalSteps.length ? intervalEvents(xml, startAt.getTime(), endAt.getTime()) : [],
     distanceFrom,
     distanceStats: distanceStats.map((d) => ({ ...d, km: d.meters / 1000 })),
   };

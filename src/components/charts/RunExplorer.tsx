@@ -8,6 +8,7 @@ import { regularAxis } from "@/lib/analysis/axis";
 import { RouteMap, type MapApi } from "@/components/map/RouteMap";
 import type { EChartsCoreOption } from "echarts/core";
 import { C, EChart, axisLabel } from "./EChart";
+import { IntervalsCard } from "./IntervalsCard";
 
 /** Márgenes del área de dibujo, iguales en todos los gráficos: así el cursor es una sola línea. */
 const L = 44;
@@ -40,7 +41,8 @@ export function RunExplorer({
   const hasKm = data.km.some((k) => k !== null && k > 0);
   const [axis, setAxis] = useState<Axis>(hasKm ? "dist" : "time");
   const [showGap, setShowGap] = useState(false);
-  const [sel, setSel] = useState<number | null>(null); // parcial tocado
+  // Tramo tocado: un parcial («km:3») o un paso de las series («step:1.2.0»).
+  const [sel, setSel] = useState<string | null>(null);
   const mapApi = useRef<MapApi | null>(null);
 
   // Eje X: km (rellenando el inicio sin distancia con 0, no decreciente) o tiempo en s.
@@ -60,7 +62,12 @@ export function RunExplorer({
     [data.splits],
   );
 
-  const selRange = sel === null ? null : data.splits.find((s) => s.idx === sel) ?? null;
+  const selRange = useMemo(() => {
+    if (!sel) return null;
+    if (sel.startsWith("km:")) return data.splits.find((s) => `km:${s.idx}` === sel) ?? null;
+    const rows = data.intervals?.ok ? data.intervals.rows : [];
+    return rows.find((r) => `step:${r.key}` === sel) ?? null;
+  }, [sel, data]);
   const selArea = useMemo(
     () =>
       selRange
@@ -407,7 +414,13 @@ export function RunExplorer({
         </section>
       )}
 
-      <SplitsTable splits={data.splits} sel={sel} onSel={setSel} />
+      {data.intervals && <IntervalsCard analysis={data.intervals} sel={sel} onSel={setSel} />}
+
+      <SplitsTable
+        splits={data.splits}
+        sel={sel?.startsWith("km:") ? Number(sel.slice(3)) : null}
+        onSel={(i) => setSel(i === null ? null : `km:${i}`)}
+      />
     </>
   );
 }

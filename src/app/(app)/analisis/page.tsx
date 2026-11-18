@@ -7,7 +7,7 @@ import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { DEFAULT_HR_BAND, MIN_DISTANCE_M, parseBand } from "@/lib/analysis/pace-at-hr";
-import { getAnalysis, getInsights, getPeriodsView } from "@/lib/db/queries";
+import { getAnalysis, getEfficiency, getInsights, getPeriodsView } from "@/lib/db/queries";
 import { ConsistencyCalendar, PaceTrend, YearCumulative } from "@/components/charts/InsightCharts";
 import type { PaceRange } from "@/lib/analysis/insights";
 import { isSessionType, type SessionType } from "@/lib/analysis/session-type";
@@ -477,6 +477,8 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
         </p>
       </section>
 
+      <EfficiencyCard sp={sp} />
+
       <section id="calendario" className="card scroll-mt-6 p-5">
         <div className="flex items-baseline justify-between">
           <div className="eyebrow">Constancia · 12 meses</div>
@@ -542,5 +544,60 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
         </table>
       </section>
     </>
+  );
+}
+
+/** Eficiencia aeróbica: ritmo en Z2 de cada carrera (últimos 6 meses) y su tendencia. */
+async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | undefined> }) {
+  const all = sp.ef === "todos";
+  const { points, trend, band, changeS, bands, nowMs } = await getEfficiency(all ? null : "rodaje");
+  const link = (v: string | null) => {
+    const q = new URLSearchParams();
+    for (const [k, x] of Object.entries(sp)) if (typeof x === "string") q.set(k, x);
+    if (v === null) q.delete("ef");
+    else q.set("ef", v);
+    const qs = q.toString();
+    return `/analisis${qs ? `?${qs}` : ""}#eficiencia`;
+  };
+  const chip = (active: boolean) =>
+    `inline-flex min-h-[34px] items-center rounded-full px-3 text-[12px] font-semibold ${active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"}`;
+  const ch = changeS === null ? null : Math.round(changeS);
+  return (
+    <section id="eficiencia" className="card scroll-mt-6 p-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="eyebrow">Eficiencia aeróbica · 6 meses</div>
+        <span className="text-[11px] text-fg-2">
+          Z2 {band[0]}–{band[1]} ppm
+        </span>
+      </div>
+      <div className="mt-3 flex gap-1.5" role="group" aria-label="Tipo de sesión">
+        <Link href={link(null)} scroll={false} aria-current={!all ? "true" : undefined} className={chip(!all)}>
+          Rodaje
+        </Link>
+        <Link href={link("todos")} scroll={false} aria-current={all ? "true" : undefined} className={chip(all)}>
+          Todas
+        </Link>
+      </div>
+      {ch !== null && (
+        <p className="mt-3 text-[14px]">
+          {ch === 0 ? (
+            "Tendencia estable: mismo ritmo al mismo pulso."
+          ) : (
+            <>
+              Tendencia: <b className={ch < 0 ? "text-lime-text" : ""}>{Math.abs(ch)} s/km {ch < 0 ? "más rápido" : "más lento"}</b> al mismo pulso
+              que hace 6 meses.
+            </>
+          )}
+        </p>
+      )}
+      <div className="mt-3">
+        <PaceTrend key={all ? "todos" : "rodaje"} points={points} trend={trend} bands={bands} nowMs={nowMs} />
+      </div>
+      <p className="mt-2 text-[12px] leading-relaxed text-fg-2">
+        Cada punto es el ritmo medio de una carrera mientras tu pulso estuvo en Z2 (al menos 5 minutos en Z2; sin pausas ni muestras inválidas). Más
+        arriba = más rápido al mismo pulso = más eficiente. {points.length} {points.length === 1 ? "carrera" : "carreras"}
+        {all ? "" : " de Rodaje"}.
+      </p>
+    </section>
   );
 }

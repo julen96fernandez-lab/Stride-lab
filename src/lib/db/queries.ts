@@ -9,6 +9,8 @@ import type { SeriesMetric } from "./schema";
 import { effectiveType, ensureClassified, getTypeSettings, getZones } from "@/lib/analysis/session-type-db";
 import { SESSION_TYPES, isSessionType, type SessionType } from "@/lib/analysis/session-type";
 import { buildStream, splitViews, type SplitView } from "@/lib/analysis/run-stream";
+import { analyzeIntervals, type IntervalAnalysis, type StepTiming } from "@/lib/analysis/intervals";
+import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { ensureTrack } from "@/lib/analysis/track-db";
 
 const TZ = "Europe/Madrid";
@@ -210,7 +212,15 @@ export async function getRun(id: string) {
   const route = routeRows[0] ?? null;
   const nb = neighbours.rows[0] as { prev: string | null; next: string | null };
   const track = route ? await ensureTrack(d, run, route.blobUrl) : null;
-  const explorer = buildExplorer({ run, series, track, splits, zones });
+  const type = run.sessionTypeManual ?? run.sessionTypeAuto;
+  // Series: solo en carreras de tipo Series, con los pasos de intervalo y sus horas.
+  const intervals: IntervalAnalysis | null =
+    type === "series"
+      ? analyzeIntervals((run.raw as { intervalEvents?: StepTiming[] } | null)?.intervalEvents ?? null, series.distance, series.hr)
+      : null;
+  const explorer = { ...buildExplorer({ run, series, track, splits, zones }), intervals };
+  // Desacople aeróbico: solo en Rodaje / Tirada larga, con pulso y ritmo estable.
+  const decoupling: DecouplingCheck = decouplingEligible({ type, hasHr: !!series.hr && series.hr.t.length > 1, splits });
   return {
     run,
     route: route
@@ -220,6 +230,7 @@ export async function getRun(id: string) {
     hr: series.hr ?? null,
     power: series.power ?? null,
     durability,
+    decoupling,
     zones,
     explorer,
     prevId: nb.prev,
@@ -244,6 +255,8 @@ export interface Explorer {
   avgPace: number | null;
   splits: SplitView[];
   zoneLimits: number[];
+  /** Análisis de series (solo carreras de tipo Series); null en el resto */
+  intervals?: IntervalAnalysis | null;
 }
 
 const r1 = (x: number | null) => (x === null ? null : Math.round(x * 10) / 10);
@@ -418,7 +431,7 @@ export async function getGoalsSettings() {
 // ─── Evolución del ritmo, calendario y comparación de años ───────────────────
 
 import { bandsInYear, periodInjuryRanges } from "@/lib/analysis/injuries";
-import { calendarDays, pacePoints, smoothTrend, yearToDate, type PaceRange } from "@/lib/analysis/insights";
+import { calendarDays, pacePoints, smoothTrend, yearToDate, type PacePoint, type PaceRange } from "@/lib/analysis/insights";
 
 export async function getInsights(range: PaceRange, paceType: SessionType | null) {
   const runs = await runsForPeriods();
@@ -438,6 +451,54 @@ export async function getInsights(range: PaceRange, paceType: SessionType | null
     ytd,
     ytdNoInjury: yearToDate(runs.filter((r) => !r.inInjury)),
     injuries,
+  };
+}
+
+// ─── Eficiencia aeróbica: ritmo en Z2 por carrera ────────────────────────────
+
+/** Ritmo en Z2 de cada carrera de los últimos 6 meses (y su tendencia, sin lesiones). */
+export async function getEfficiency(onlyType: SessionType | null) {
+  await ensureClassified(db());
+  const nowMs = Date.now();
+  const from = new Date(nowMs - 182 * 86_400_000);
+  const [rows, zones, injuries] = await Promise.all([
+    db()
+      .select({
+        id: s.runs.id,
+        startAt: s.runs.startAt,
+        distanceM: s.runs.distanceM,
+        pace: s.runs.efZ2PaceSPerKm,
+        seconds: s.runs.efZ2Seconds,
+        avgHr: s.runs.avgHr,
+        type: effectiveType,
+        inInjury: s.runs.inInjury,
+      })
+      .from(s.runs)
+      .where(and(valid, sql`${s.runs.efZ2PaceSPerKm} IS NOT NULL`, sql`${s.runs.startAt} >= ${from}`))
+      .orderBy(asc(s.runs.startAt)),
+    getZones(db()),
+    listInjuries(db()),
+  ]);
+  const points: PacePoint[] = rows
+    .filter((r) => !onlyType || r.type === onlyType)
+    .map((r) => ({
+      id: r.id,
+      t: r.startAt.getTime(),
+      pace: r.pace!,
+      km: (r.distanceM ?? 0) / 1000,
+      avgHr: r.avgHr,
+      type: r.type,
+      inInjury: r.inInjury,
+    }));
+  const trend = smoothTrend(points.filter((p) => !p.inInjury));
+  return {
+    points,
+    trend,
+    band: z2Band(zones.limits),
+    // Cambio de la tendencia del primer al último punto (negativo = más rápido al mismo pulso).
+    changeS: trend.length >= 2 ? trend[trend.length - 1].pace - trend[0].pace : null,
+    bands: injuries.map((i) => ({ startDate: i.startDate, endDate: i.endDate })),
+    nowMs,
   };
 }
 

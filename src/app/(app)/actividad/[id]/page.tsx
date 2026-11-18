@@ -11,6 +11,7 @@ import { ZonesCard } from "@/components/ui/ZonesCard";
 import { LoadBadge } from "@/components/ui/Load";
 import { isSessionType } from "@/lib/analysis/session-type";
 import type { Durability } from "@/lib/analysis/durability";
+import { decouplingLabel, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { getRun } from "@/lib/db/queries";
 import { DASH, cap, date, dec, duration, int, pace } from "@/lib/format";
 
@@ -39,7 +40,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getRun(id);
   if (!data) notFound();
-  const { run, route, durability, zones, explorer, prevId, nextId } = data;
+  const { run, route, durability, decoupling, zones, explorer, prevId, nextId } = data;
 
   return (
     <div className="stagger flex flex-col gap-4">
@@ -97,7 +98,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
       <RunExplorer data={explorer} route={route} />
 
       {/* Durabilidad */}
-      <DurabilityCard d={durability} />
+      <DurabilityCard d={durability} check={decoupling} />
 
       {/* Tiempo en zonas y carga */}
       <ZonesCard seconds={run.hrZoneSeconds} load={run.trainingLoad} zones={zones} />
@@ -137,7 +138,7 @@ function Big({ label, value, unit }: { label: string; value: string; unit?: stri
   );
 }
 
-function DurabilityCard({ d }: { d: Durability | null }) {
+function DurabilityCard({ d, check }: { d: Durability | null; check: DecouplingCheck }) {
   if (!d) {
     return (
       <Card>
@@ -148,12 +149,25 @@ function DurabilityCard({ d }: { d: Durability | null }) {
   }
   const delta = Math.round(d.paceDeltaS);
   const deltaText = delta === 0 ? "Mismo ritmo" : delta > 0 ? `+${delta} s/km más lenta` : `${-delta} s/km más rápida`;
+  // El desacople solo se muestra en Rodaje / Tirada larga con pulso y ritmo estable.
+  const showDec = check.ok && d.decouplingPct !== null;
   return (
     <Card>
       <div className="flex items-baseline justify-between">
-        <div className="eyebrow">Durabilidad</div>
+        <div className="eyebrow">{showDec ? "Desacople aeróbico" : "Durabilidad"}</div>
         <span className="text-[11px] text-fg-2">1.ª mitad frente a 2.ª</span>
       </div>
+      {showDec && (
+        <div className="mt-3">
+          <div className="flex items-baseline gap-2">
+            <span className={`num text-[40px] ${d.decouplingPct! <= 5 ? "text-lime-text" : ""}`}>
+              {`${d.decouplingPct! > 0 ? "+" : d.decouplingPct! < 0 ? "−" : ""}${dec(Math.abs(d.decouplingPct!))}`}
+            </span>
+            <span className="text-[15px] text-fg-2">%</span>
+          </div>
+          <p className="mt-1 text-[14px] leading-snug">{decouplingLabel(d.decouplingPct!)}</p>
+        </div>
+      )}
       <div className="mt-4 grid grid-cols-2 gap-3">
         {[d.first, d.second].map((h, i) => (
           <div key={i} className="rounded-2xl border border-line bg-inset p-3.5">
@@ -166,21 +180,14 @@ function DurabilityCard({ d }: { d: Durability | null }) {
           </div>
         ))}
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-3">
-        <div>
-          <dt className="eyebrow">Ritmo 2.ª mitad</dt>
-          <dd className="mt-1.5 text-[15px] font-semibold">{deltaText}</dd>
-        </div>
-        <div>
-          <dt className="eyebrow">Desacople FC/ritmo</dt>
-          <dd className={`num mt-1.5 text-[22px] ${d.decouplingPct === null ? "text-fg-3" : d.decouplingPct > 5 ? "" : "text-lime-text"}`}>
-            {d.decouplingPct === null ? DASH : `${d.decouplingPct > 0 ? "+" : ""}${dec(d.decouplingPct)} %`}
-          </dd>
-        </div>
+      <dl className="mt-4">
+        <dt className="eyebrow">Ritmo 2.ª mitad</dt>
+        <dd className="mt-1.5 text-[15px] font-semibold">{deltaText}</dd>
       </dl>
       <p className="mt-3 text-[12px] leading-relaxed text-fg-2">
-        Desacople: cuánto empeora la relación velocidad/pulso en la segunda mitad. Por debajo de ~5 % suele considerarse buena
-        resistencia aeróbica.
+        {showDec
+          ? "Desacople: cuánto empeora la relación velocidad/pulso de la primera a la segunda mitad. Si el pulso sube para mantener el mismo ritmo, el % sube. Por debajo de ~5 % suele indicar buena resistencia aeróbica a ese ritmo."
+          : `Sin desacople: ${check.ok ? "falta el pulso de alguna mitad." : check.reason}`}
       </p>
     </Card>
   );

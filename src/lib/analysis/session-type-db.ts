@@ -2,6 +2,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import { applyInjuryFlags } from "./injuries-db";
+import { recomputeEfficiency } from "./efficiency-db";
 import { recomputeEfforts } from "./efforts-db";
 import { DEFAULT_ZONES, timeInZones, trainingLoad, validZones, type HrZones } from "./hr-zones";
 import { DEFAULT_TYPE_SETTINGS, classifySessionTypes, type SessionType, type TypeSettings } from "./session-type";
@@ -54,6 +55,8 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
   // Los mejores esfuerzos no dependen de lesiones ni zonas: se pueden saltar al guardar una lesión.
   if (opts.efforts !== false) await recomputeEfforts(db);
   const [settings, zones] = await Promise.all([getTypeSettings(db), getZones(db)]);
+  // Ritmo en Z2 (eficiencia aeróbica): depende de las zonas, por eso va aquí.
+  if (opts.efforts !== false) await recomputeEfficiency(db, zones);
   const rows = await db
     .select({
       id: s.runs.id,
@@ -112,7 +115,7 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
  * que se abra una pantalla, todo se recalcula una vez.
  * 3 = Series por rutas de paso con repetición + tipos por zona de FC + carga.
  */
-const CLASSIFIER_VERSION = "8"; // 8 = muestras largas con hueco corto (detrás de muestras finas) o a más de 7 m/s parten los tramos de los récords
+const CLASSIFIER_VERSION = "9"; // 9 = ritmo en Z2 por carrera (eficiencia aeróbica)
 const VERSION_KEY = "classifier_version";
 
 /** Recalcula si las reglas cambiaron o si hay carreras válidas sin tipo automático. */

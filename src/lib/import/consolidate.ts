@@ -66,6 +66,12 @@ async function mergePair(db: Db, a: Run, b: Run): Promise<Run> {
   const rawB = (b.raw ?? {}) as Record<string, unknown>;
   const mergedFrom = [...((rawA.mergedFrom as string[]) ?? [a.sourceKey]), b.sourceKey];
   const intervalSteps = [...new Set([...((rawA.intervalSteps as string[]) ?? []), ...((rawB.intervalSteps as string[]) ?? [])])].sort();
+  // Pasos de b al reloj de a (las claves repetidas se quedan con la primera aparición).
+  type Ev = { key: string; startS: number; durationS: number };
+  const evA = (rawA.intervalEvents as Ev[] | undefined) ?? [];
+  const evB = ((rawB.intervalEvents as Ev[] | undefined) ?? []).map((e) => ({ ...e, startS: e.startS + offset }));
+  const keysA = new Set(evA.map((e) => e.key));
+  const intervalEvents = [...evA, ...evB.filter((e) => !keysA.has(e.key))];
 
   const values = {
     endAt: b.endAt,
@@ -84,7 +90,7 @@ async function mergePair(db: Db, a: Run, b: Run): Promise<Run> {
     elevationGainM: add(a.elevationGainM, b.elevationGainM),
     activeEnergyKcal: add(a.activeEnergyKcal, b.activeEnergyKcal),
     routeFile: a.routeFile ?? b.routeFile,
-    raw: { ...rawA, intervalSteps, mergedFrom, mergedParts: [rawA.attributes, rawB.attributes] },
+    raw: { ...rawA, intervalSteps, intervalEvents, mergedFrom, mergedParts: [rawA.attributes, rawB.attributes] },
     updatedAt: new Date(),
   };
 

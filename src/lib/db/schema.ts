@@ -116,6 +116,9 @@ export const runs = pgTable(
     trainingLoad: real("training_load"),
     /** Dentro de un periodo de lesión: cuenta en km totales, no en medias de ritmo ni comparaciones. */
     inInjury: boolean("in_injury").notNull().default(false),
+    /** Ritmo medio (s/km) en los instantes con pulso en Z2, si hubo ≥ 5 min (ver efficiency.ts). */
+    efZ2PaceSPerKm: real("ef_z2_pace_s_per_km"),
+    efZ2Seconds: real("ef_z2_seconds"),
     shoeId: uuid("shoe_id").references(() => shoes.id, { onDelete: "set null" }),
     importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     /** Metadatos y estadísticas originales, para trazabilidad. */
