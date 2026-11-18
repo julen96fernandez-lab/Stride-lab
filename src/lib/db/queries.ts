@@ -13,6 +13,7 @@ import { analyzeIntervals, type IntervalAnalysis, type StepTiming } from "@/lib/
 import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { ensureTrack } from "@/lib/analysis/track-db";
 import { memoOnce } from "@/lib/cache/memo";
+import { getFeeling } from "@/lib/feelings/feelings-db";
 import { getShiftAnchor } from "@/lib/plan/shifts-db";
 
 const TZ = "Europe/Madrid";
@@ -215,7 +216,7 @@ export async function getRun(id: string, ctx: Ctx = makeCtx()) {
   const d = db();
   await ctx.classified();
   // Todo en una sola ronda: la carrera, su ruta, parciales, series, pista, vecinas y zonas.
-  const [runRows, routeRows, splits, seriesRows, trackRows, neighbours, zones] = await Promise.all([
+  const [runRows, routeRows, splits, seriesRows, trackRows, neighbours, zones, feeling] = await Promise.all([
     d.select().from(s.runs).where(eq(s.runs.id, id)).limit(1),
     d.select().from(s.runRoutes).where(eq(s.runRoutes.runId, id)).limit(1),
     d.select().from(s.runSplits).where(eq(s.runSplits.runId, id)).orderBy(asc(s.runSplits.idx)),
@@ -226,6 +227,7 @@ export async function getRun(id: string, ctx: Ctx = makeCtx()) {
         (SELECT p.id FROM runs p, runs c WHERE c.id = ${id} AND p.status = 'valid' AND p.start_at < c.start_at ORDER BY p.start_at DESC LIMIT 1) AS prev,
         (SELECT n.id FROM runs n, runs c WHERE c.id = ${id} AND n.status = 'valid' AND n.start_at > c.start_at ORDER BY n.start_at ASC LIMIT 1) AS next`),
     ctx.zones(),
+    getFeeling(d, id),
   ]);
   const run = runRows[0];
   if (!run) return null;
@@ -261,6 +263,7 @@ export async function getRun(id: string, ctx: Ctx = makeCtx()) {
     explorer,
     prevId: nb.prev,
     nextId: nb.next,
+    feeling,
   };
 }
 

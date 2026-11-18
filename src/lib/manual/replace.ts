@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import { matchManualRuns } from "./manual";
+import { moveFeeling } from "@/lib/feelings/feelings-db";
 
 /**
  * Al importar el zip: cada manual con pareja en el zip (mismo día, inicio a < 30 min y
@@ -37,8 +38,10 @@ export async function replaceManualRuns(db: Db): Promise<number> {
           updatedAt: new Date(),
         })
         .where(eq(s.runs.id, zId));
-      await tx.delete(s.runs).where(eq(s.runs.id, mId));
     });
+    // La sensación de la manual pasa a la del zip (antes de borrar la manual: borrarla la arrastra).
+    await moveFeeling(db, mId, zId);
+    await db.delete(s.runs).where(eq(s.runs.id, mId));
   }
   return pairs.size;
 }

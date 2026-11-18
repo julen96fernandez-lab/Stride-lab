@@ -78,6 +78,13 @@
       "when": 1795032000000,
       "tag": "0010_plan_weeks",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795033000000,
+      "tag": "0011_run_feelings",
+      "breakpoints": true
     }
   ]
 }

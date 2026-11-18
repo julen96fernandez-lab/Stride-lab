@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -283,6 +284,21 @@ export const planWeeks = pgTable("plan_weeks", {
   downgraded: boolean("downgraded").notNull().default(false),
   /** día previsto antes de reorganizar (null si no se reorganizó) */
   rescheduledFrom: date("rescheduled_from"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * Sensaciones de cada carrera (valoración 1–5, nota ≤ 500, etiquetas). Tabla aparte: las filas
+ * de `runs` se recalculan al reprocesar, esto no.
+ */
+export const runFeelings = pgTable("run_feelings", {
+  runId: uuid("run_id")
+    .primaryKey()
+    .references(() => runs.id, { onDelete: "cascade" }),
+  rating: smallint("rating"),
+  note: text("note"),
+  tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

@@ -8,6 +8,7 @@ import { CountUp } from "@/components/ui/CountUp";
 import { Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/RunRow";
 import { TypePicker } from "@/components/ui/TypePicker";
+import { FeelingsCard } from "@/components/feelings/FeelingsCard";
 import { ZonesCard } from "@/components/ui/ZonesCard";
 import { LoadBadge } from "@/components/ui/Load";
 import { isSessionType } from "@/lib/analysis/session-type";
@@ -43,7 +44,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = /^[0-9a-f-]{36}$/i.test(id) ? await runScreen(id, cacheDay()) : null;
   if (!data) notFound();
-  const { run, route, durability, decoupling, zones, explorer, prevId, nextId } = data;
+  const { run, route, durability, decoupling, zones, explorer, prevId, nextId, feeling } = data;
 
   return (
     <div className="stagger flex flex-col gap-4">
@@ -99,6 +100,9 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
           manualType={isSessionType(run.sessionTypeManual) ? run.sessionTypeManual : null}
         />
       )}
+
+      {/* Sensaciones: se guardan al tocar (tabla aparte, no se pierden al reprocesar) */}
+      {run.status === "valid" && <FeelingsCard key={run.id} runId={run.id} initial={feeling} />}
 
       {/* Mapa, gráficos sincronizados y parciales */}
       {!route && (

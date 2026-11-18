@@ -379,6 +379,19 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
 - `ensureClassified` comparte una sola comprobación entre consultas simultáneas (antes dos
   recálculos a la vez chocaban en `run_efforts`) y no repite la comprobación en 5 min.
 
+## Sensaciones por carrera
+
+- Tabla `run_feelings` (migración 0011): una fila por carrera (`run_id` con borrado en cascada),
+  valoración 1–5 (1 fatal … 5 genial), nota ≤ 500 y etiquetas (piernas pesadas, calor, sueño
+  malo, molestia, buen día, viento, estómago). Aparte de `runs`: reprocesar o subir el zip
+  actualiza `runs` por `source_key` y el id no cambia, así que no se pierde; si el zip sustituye
+  una manual, la sensación pasa a la del zip (`moveFeeling`). Vacía = se borra.
+- `lib/feelings/feelings.ts` (validación, con pruebas) y `feelings-db.ts`; acciones en
+  `actividad/feeling-actions.ts` (invalidan la caché).
+- Detalle: bloque «Sensaciones» bajo «Tipo de sesión». Valoración y etiquetas se guardan al
+  tocar; la nota al salir del campo o tras 1,2 s sin escribir; toast en cada guardado; borrar con
+  doble toque. Objetivos de 44 px.
+
 ## Plan
 
 Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 semanas.
@@ -771,6 +784,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Sensaciones, paso 1: tabla run_feelings y bloque en el detalle (guardar, editar,
+  borrar; sobrevive a Reprocesar y a la sustitución por el zip). Migración 0011.
 - 2026‑11‑18 — Plan, paso 4: plan de cada semana guardado, previsto frente a realizado y botón
   «Reorganizar». Migración 0010.
 - 2026‑11‑18 — Plan, paso 3: una sesión por semana con día y motivo según el turno, la carga, la
