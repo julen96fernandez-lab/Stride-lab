@@ -404,6 +404,15 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
 - **Pintado**: los gráficos se inicializan al acercarse a la pantalla (IntersectionObserver en
   `EChart`); tarjetas lejanas con `content-visibility: auto`; Carga y forma viaja en columnas.
 - **Scroll de Análisis**: los chips ya no usan `scrollIntoView` (movía la página abajo del todo).
+- **Tiempos medidos** (`/api/diag/perf`, datos reales, en la función de Vercel):
+
+  | Pantalla | Antes (iad1) | Después (fra1, sin caché) | Con caché |
+  |---|---|---|---|
+  | Inicio | 0,8–1,3 s | 0,35–0,39 s | ≈0 ms |
+  | Análisis | 1,0–1,1 s | 0,63–0,66 s | ≈0 ms |
+  | Detalle | ~0,5 s | 0,06–0,07 s | ≈0 ms |
+  | Actividad | 0,2–0,4 s | 0,02–0,04 s | ≈0 ms |
+  | Perfil | — | ~0,01 s | ≈0 ms |
 - **Diagnóstico**: `/api/diag/perf` (con sesión) mide en la región de Vercel ms, consultas y
   rondas por pantalla: `?modo=antes` (cada pieza por su cuenta) y sin modo (sin caché y con caché).
 
