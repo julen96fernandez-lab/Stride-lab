@@ -1,5 +1,7 @@
 "use client";
 
+import { Spinner } from "@/components/ui/SubmitButton";
+import { toast } from "@/components/ui/Toaster";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Pill } from "@/components/ui/primitives";
 import { bytes, date, duration, int, km, pace } from "@/lib/format";
@@ -148,13 +150,19 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
           failures = 0;
           const data = (await res.json()) as Resp;
           apply(data);
-          if (data.import.status === "done") break;
+          if (data.import.status === "done") {
+            toast.success("Importación terminada.");
+            break;
+          }
           if (data.import.status === "failed") throw new Error(data.import.error ?? "La importación ha fallado");
           // Otra invocación tiene la reserva: espera antes de volver a pedir.
           if (data.import.status === "processing") await new Promise((r) => setTimeout(r, 5000));
         }
       } catch (e) {
-        if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : String(e));
+        if (!ctrl.signal.aborted) {
+          setError(e instanceof Error ? e.message : String(e));
+          toast.error("La importación se ha detenido. Mira el detalle abajo.");
+        }
       } finally {
         clearInterval(poll);
         if (abortRef.current === ctrl) {
@@ -195,6 +203,7 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
       } catch (e) {
         if (ctrl.signal.aborted) return;
         setError(e instanceof Error ? e.message : String(e));
+        toast.error("No se pudo crear la importación.");
         setMode("idle");
         void refreshZips();
       }
@@ -463,12 +472,23 @@ export function ImportFlow({ initial, initialCheck }: { initial: ImportView | nu
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
-                    z.importId && z.importStatus !== "done" ? void process(z.importId) : void register(z.pathname, null, z.size)
-                  }
-                  className="min-h-[44px] flex-none rounded-xl bg-lime px-4 text-[14px] font-semibold text-lime-ink active:scale-[0.98]"
+                  disabled={mode !== "idle"}
+                  aria-busy={(mode !== "idle" && lastReg?.pathname === z.pathname) || undefined}
+                  onClick={() => {
+                    setLastReg({ pathname: z.pathname, fileName: null, size: z.size });
+                    if (z.importId && z.importStatus !== "done") void process(z.importId);
+                    else void register(z.pathname, null, z.size);
+                  }}
+                  className="flex min-h-[44px] flex-none items-center gap-2 rounded-xl bg-lime px-4 text-[14px] font-semibold text-lime-ink"
                 >
-                  {z.importStatus === "done" ? "Reprocesar" : z.importId ? "Continuar" : "Usar este zip"}
+                  {mode !== "idle" && lastReg?.pathname === z.pathname && <Spinner size={14} />}
+                  {mode !== "idle" && lastReg?.pathname === z.pathname
+                    ? "Procesando…"
+                    : z.importStatus === "done"
+                      ? "Reprocesar"
+                      : z.importId
+                        ? "Continuar"
+                        : "Usar este zip"}
                 </button>
               </li>
             ))}
@@ -499,7 +519,7 @@ function phaseDetail(imp: ImportView): string {
 
 function FilePicker({ label, onPick }: { label: string; onPick: (f: File | undefined) => void }) {
   return (
-    <label className="relative mt-5 inline-flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-lime px-5 text-[16px] font-semibold text-lime-ink shadow-[0_8px_30px_-8px_rgba(200,242,58,0.55)] transition active:scale-[0.98]">
+    <label className="relative mt-5 inline-flex min-h-[52px] w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-lime px-5 text-[16px] font-semibold text-lime-ink shadow-[0_8px_30px_-8px_rgba(200,242,58,0.55)] transition">
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 16V4m0 0-5 5m5-5 5 5M5 20h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -522,7 +542,7 @@ function ActionButton({ onClick, label }: { onClick: () => void; label: string }
     <button
       type="button"
       onClick={onClick}
-      className="relative mt-4 min-h-[52px] w-full rounded-2xl bg-lime text-[16px] font-semibold text-lime-ink transition active:scale-[0.98]"
+      className="relative mt-4 min-h-[52px] w-full rounded-2xl bg-lime text-[16px] font-semibold text-lime-ink transition"
     >
       {label}
     </button>

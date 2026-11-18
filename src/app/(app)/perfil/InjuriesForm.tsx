@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton, Spinner } from "@/components/ui/SubmitButton";
+import { toast, useActionToast } from "@/components/ui/Toaster";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { deleteInjuryAction, saveInjuryAction, type InjuryState } from "./injury-actions";
 
@@ -57,7 +59,7 @@ export function InjuriesForm({ injuries, today }: { injuries: InjuryRow[]; today
                   <button
                     type="button"
                     onClick={() => setEditing(i.id)}
-                    className="min-h-[40px] flex-none rounded-full border border-line-strong px-3.5 text-[13px] font-semibold text-fg-2"
+                    className="min-h-[44px] flex-none rounded-full border border-line-strong px-3.5 text-[13px] font-semibold text-fg-2"
                   >
                     Editar
                   </button>
@@ -74,7 +76,7 @@ export function InjuriesForm({ injuries, today }: { injuries: InjuryRow[]; today
         <button
           type="button"
           onClick={() => setEditing("new")}
-          className="min-h-[48px] w-full rounded-2xl border border-dashed border-line-strong text-[15px] font-semibold text-fg-2 active:scale-[0.98]"
+          className="min-h-[48px] w-full rounded-2xl border border-dashed border-line-strong text-[15px] font-semibold text-fg-2"
         >
           + Añadir periodo
         </button>
@@ -85,6 +87,7 @@ export function InjuriesForm({ injuries, today }: { injuries: InjuryRow[]; today
 
 function InjuryEditor({ injury, today, onDone }: { injury?: InjuryRow; today: string; onDone: () => void }) {
   const [state, action, pending] = useActionState<InjuryState, FormData>(saveInjuryAction, {});
+  useActionToast(state);
   const [open, setOpen] = useState(injury ? injury.endDate === null : true);
   const [confirm, setConfirm] = useState(false);
   const [deleting, startDelete] = useTransition();
@@ -109,7 +112,7 @@ function InjuryEditor({ injury, today, onDone }: { injury?: InjuryRow; today: st
           )}
         </label>
       </div>
-      <label className="flex min-h-[36px] items-center gap-2 text-[13px]">
+      <label className="flex min-h-[44px] items-center gap-2 text-[13px]">
         <input type="checkbox" checked={open} onChange={(e) => setOpen(e.target.checked)} className="h-4 w-4 accent-[var(--lime)]" />
         Sigue abierto (sin fecha de fin)
       </label>
@@ -123,13 +126,9 @@ function InjuryEditor({ injury, today, onDone }: { injury?: InjuryRow; today: st
         </p>
       )}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={pending || deleting}
-          className="min-h-[44px] flex-1 rounded-xl bg-lime text-[15px] font-semibold text-lime-ink disabled:opacity-60"
-        >
-          {pending ? "Guardando…" : "Guardar"}
-        </button>
+        <SubmitButton pending="Guardando…" disabled={deleting} className="min-h-[44px] flex-1 rounded-xl text-[15px]">
+          Guardar
+        </SubmitButton>
         <button type="button" onClick={onDone} className="min-h-[44px] rounded-xl border border-line-strong px-4 text-[15px] font-semibold text-fg-2">
           Cancelar
         </button>
@@ -141,12 +140,20 @@ function InjuryEditor({ injury, today, onDone }: { injury?: InjuryRow; today: st
           onClick={() => {
             if (!confirm) return setConfirm(true);
             startDelete(async () => {
-              await deleteInjuryAction(injury.id);
-              onDone();
+              try {
+                const r = await deleteInjuryAction(injury.id);
+                if (!r.ok) throw new Error("no borrado");
+                toast.success("Periodo borrado.");
+                onDone();
+              } catch {
+                toast.error("No se pudo borrar el periodo. Inténtalo de nuevo.");
+              }
             });
           }}
-          className={`min-h-[44px] rounded-xl text-[14px] font-semibold ${confirm ? "border border-danger text-danger" : "text-fg-2"}`}
+          aria-busy={deleting || undefined}
+          className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl text-[14px] font-semibold ${confirm ? "border border-danger text-danger" : "text-fg-2"}`}
         >
+          {deleting && <Spinner />}
           {deleting ? "Borrando…" : confirm ? "Toca otra vez para borrar el periodo" : "Borrar periodo"}
         </button>
       )}

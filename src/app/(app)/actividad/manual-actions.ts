@@ -64,7 +64,7 @@ export async function manualRunAction(_prev: ManualState, fd: FormData): Promise
     return { error: e instanceof Error ? e.message : "No se pudo guardar la carrera." };
   }
   refresh();
-  redirect(`/actividad/${saved}`);
+  redirect(`/actividad/${saved}?aviso=${id ? "carrera-actualizada" : "carrera-guardada"}`);
 }
 
 export async function deleteManualAction(id: string): Promise<{ ok: boolean }> {
@@ -72,7 +72,7 @@ export async function deleteManualAction(id: string): Promise<{ ok: boolean }> {
   const ok = await deleteManualRun(db(), id);
   if (ok) {
     refresh();
-    redirect("/actividad");
+    redirect("/actividad?aviso=carrera-borrada");
   }
   return { ok };
 }

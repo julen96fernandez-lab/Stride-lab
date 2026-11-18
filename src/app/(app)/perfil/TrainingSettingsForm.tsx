@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "@/components/ui/SubmitButton";
+import { useActionToast } from "@/components/ui/Toaster";
 import { useActionState, useState } from "react";
 import { saveTrainingSettings, type SettingsState } from "@/app/(app)/actividad/actions";
 import { limitsFrom, type HrZones, type ZoneMethod } from "@/lib/analysis/hr-zones";
@@ -13,7 +15,8 @@ const field =
  * Un solo botón guarda y recalcula todo (zonas, carga y tipos automáticos).
  */
 export function TrainingSettingsForm({ zones, types }: { zones: HrZones; types: TypeSettings }) {
-  const [state, action, pending] = useActionState<SettingsState, FormData>(saveTrainingSettings, {});
+  const [state, action] = useActionState<SettingsState, FormData>(saveTrainingSettings, {});
+  useActionToast(state);
   const [maxHr, setMaxHr] = useState(String(zones.maxHr));
   const [restHr, setRestHr] = useState(String(zones.restHr));
   const [method, setMethod] = useState<ZoneMethod>(zones.method);
@@ -77,7 +80,7 @@ export function TrainingSettingsForm({ zones, types }: { zones: HrZones; types: 
       <button
         type="button"
         onClick={() => recompute()}
-        className="min-h-[44px] rounded-xl border border-line-strong text-[13px] font-semibold text-fg-2 active:scale-[0.98]"
+        className="min-h-[44px] rounded-xl border border-line-strong text-[13px] font-semibold text-fg-2"
       >
         Calcular límites ({method === "reserve" ? "50/60/70/80/90 % de la reserva" : "50/60/70/80/90 % del máximo"})
       </button>
@@ -131,13 +134,9 @@ export function TrainingSettingsForm({ zones, types }: { zones: HrZones; types: 
           Guardado. {state.ok}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-[52px] rounded-2xl bg-lime text-[16px] font-semibold text-lime-ink transition active:scale-[0.98] disabled:opacity-60"
-      >
-        {pending ? "Recalculando…" : "Guardar y recalcular"}
-      </button>
+      <SubmitButton state={state} pending="Recalculando…">
+        Guardar y recalcular
+      </SubmitButton>
       <p className="text-[12px] text-fg-3">Recalcula zonas, carga y tipos automáticos de todas las carreras. Los tipos elegidos a mano no cambian.</p>
     </form>
   );

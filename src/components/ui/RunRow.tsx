@@ -8,7 +8,7 @@ import { DASH, cap, date, duration, int, km, pace } from "@/lib/format";
 /** Fila de carrera para listas (Actividad e Inicio). */
 export function RunRow({ run }: { run: RunListItem }) {
   return (
-    <Link href={`/actividad/${run.id}`} className="flex min-h-[76px] items-center gap-3.5 py-2.5 active:opacity-70">
+    <Link href={`/actividad/${run.id}`} className="flex min-h-[76px] items-center gap-3.5 py-2.5">
       <RouteThumb shape={run.route} size={58} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-[12px] text-fg-2">

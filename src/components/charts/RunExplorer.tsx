@@ -1,5 +1,7 @@
 "use client";
 
+import { Segmented } from "@/components/ui/Segmented";
+import { Switch } from "@/components/ui/Switch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Explorer } from "@/lib/db/queries";
 import type { RouteShape } from "@/lib/db/queries";
@@ -532,41 +534,19 @@ export function RunExplorer({
         <section className="card p-4" aria-label="Gráficos de la carrera">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {hasKm ? (
-              <div className="flex rounded-full border border-line-strong p-0.5 text-[12px] font-semibold" role="group" aria-label="Eje horizontal">
-                {(
-                  [
-                    ["dist", "Distancia"],
-                    ["time", "Tiempo"],
-                  ] as const
-                ).map(([k, label]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    aria-pressed={axis === k}
-                    onClick={() => setAxis(k)}
-                    className={`min-h-[34px] rounded-full px-3 transition-colors ${axis === k ? "bg-lime text-lime-ink" : "text-fg-2"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                label="Eje horizontal"
+                value={axis}
+                onChange={(k) => setAxis(k as typeof axis)}
+                items={[
+                  { key: "dist", label: "Distancia" },
+                  { key: "time", label: "Tiempo" },
+                ]}
+              />
             ) : (
               <span />
             )}
-            {data.gap && (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={showGap}
-                onClick={() => setShowGap((v) => !v)}
-                className="flex min-h-[34px] items-center gap-2 text-[12px] font-semibold text-fg-2"
-              >
-                <span className={`relative h-5 w-9 rounded-full transition ${showGap ? "bg-lime" : "bg-ov-2"}`}>
-                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--fg)] transition-all ${showGap ? "left-[18px]" : "left-0.5"}`} />
-                </span>
-                Ajustado por pendiente
-              </button>
-            )}
+            {data.gap && <Switch checked={showGap} onChange={setShowGap} label="Ajustado por pendiente" />}
           </div>
           {/* Franja fija con el instante señalado: no tapa los gráficos (solo el punto brilla encima). */}
           <div
@@ -786,7 +766,7 @@ function SplitsTable({ splits, sel, onSel }: { splits: Explorer["splits"]; sel: 
                 onClick={() => onSel(active ? null : s.idx)}
                 aria-pressed={active}
                 aria-label={`Kilómetro ${s.idx}${s.fastest ? ", el más rápido" : ""}${s.slowest ? ", el más lento" : ""}`}
-                className={`grid min-h-[38px] w-full ${cols} items-center gap-x-2 rounded-xl text-left ${active ? "bg-ov-2 ring-1 ring-[var(--line-strong)]" : ""}`}
+                className={`grid min-h-[44px] w-full ${cols} items-center gap-x-2 rounded-xl text-left ${active ? "bg-ov-2 ring-1 ring-[var(--line-strong)]" : ""}`}
               >
                 <span className="num pl-1 text-[13px] text-fg-2">{s.partial ? kmStr(s.distanceM / 1000) : s.idx}</span>
                 <span className="num text-[13px]">{clock(s.durationS)}</span>

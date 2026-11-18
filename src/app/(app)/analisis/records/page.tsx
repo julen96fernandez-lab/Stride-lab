@@ -50,7 +50,7 @@ async function Records({ searchParams }: { searchParams: Promise<Record<string, 
                 href={active ? "/analisis/records" : `/analisis/records?d=${r.key}#evolucion`}
                 scroll={false}
                 aria-current={active ? "true" : undefined}
-                className={`card flex min-h-[76px] items-center gap-4 p-4 active:opacity-80 ${active ? "border-lime" : ""}`}
+                className={`card flex min-h-[76px] items-center gap-4 p-4 ${active ? "border-lime" : ""}`}
               >
                 <div className="w-[92px] flex-none">
                   <div className="font-display text-[16px] leading-tight font-bold">{r.label}</div>

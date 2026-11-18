@@ -1,5 +1,6 @@
 "use client";
 
+import { Segmented } from "./Segmented";
 import { useSyncExternalStore } from "react";
 
 type Choice = "system" | "light" | "dark";
@@ -47,20 +48,16 @@ export function ThemePicker() {
   return (
     <div className="card p-5">
       <div className="eyebrow">Apariencia</div>
-      <div className="mt-3 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tema">
-        {OPTIONS.map((o) => {
-          const active = current === o.v;
-          return (
-            <button
-              key={o.v}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => apply(o.v)}
-              className={`flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl border text-[14px] font-semibold transition active:scale-[0.98] ${
-                active ? "border-lime bg-lime text-lime-ink" : "border-line-strong text-fg"
-              }`}
-            >
+      <div className="mt-3">
+        <Segmented
+          stretch
+          label="Tema"
+          value={current}
+          onChange={(k) => apply(k as Choice)}
+          items={OPTIONS.map((o) => ({
+            key: o.v,
+            label: (
+              <>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                 {o.v === "light" ? (
                   <>
@@ -76,10 +73,11 @@ export function ThemePicker() {
                   </>
                 )}
               </svg>
-              {o.label}
-            </button>
-          );
-        })}
+                {o.label}
+              </>
+            ),
+          }))}
+        />
       </div>
       <p className="mt-3 text-[12px] text-fg-2">«Sistema» sigue el modo claro u oscuro del iPhone.</p>
     </div>

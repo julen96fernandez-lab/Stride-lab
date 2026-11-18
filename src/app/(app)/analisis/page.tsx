@@ -6,6 +6,7 @@ import { SessionIcon } from "@/components/ui/SessionType";
 import { TypeBreakdown } from "@/components/ui/TypeBreakdown";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
+import { Segmented } from "@/components/ui/Segmented";
 import { DEFAULT_HR_BAND, MIN_DISTANCE_M, parseBand } from "@/lib/analysis/pace-at-hr";
 import { getAnalysis, getEfficiency, getInsights, getPeriodsView } from "@/lib/db/queries";
 import { ConsistencyCalendar, PaceTrend, YearCumulative } from "@/components/charts/InsightCharts";
@@ -31,7 +32,7 @@ export default function AnalysisPage({ searchParams }: PageProps<"/analisis">) {
       <div className="mt-4">
         <PageHeader title="Análisis" subtitle="Tu evolución, no solo tus kilómetros." />
       </div>
-      <Link href="/analisis/records" className="card flex min-h-[64px] items-center gap-3 px-4 py-3 active:opacity-80">
+      <Link href="/analisis/records" className="card flex min-h-[64px] items-center gap-3 px-4 py-3">
         <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-lime text-lime-ink" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 24 24">
             <path d="M8 4h8v5a4 4 0 0 1-8 0V4Zm4 9v4m-4 3h8M8 6H5v1a3 3 0 0 0 3 3m8-4h3v1a3 3 0 0 1-3 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -117,24 +118,17 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
           Carreras de {MIN_DISTANCE_M / 1000} km o más, sin sesiones especiales, con FC media entre {band[0]} y {band[1]} ppm.
           Cuanto más larga la barra, más rápido a ese pulso.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Franja de pulso">
-          {BANDS.map(([lo, hi]) => {
-            const active = lo === band[0] && hi === band[1];
-            const href = lo === DEFAULT_HR_BAND[0] && hi === DEFAULT_HR_BAND[1] ? "/analisis" : `/analisis?fc=${lo}-${hi}`;
-            return (
-              <Link
-                key={lo}
-                href={href}
-                scroll={false}
-                aria-current={active ? "true" : undefined}
-                className={`inline-flex min-h-[36px] items-center rounded-full px-3 text-[13px] font-semibold ${
-                  active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"
-                }`}
-              >
-                {lo}–{hi}
-              </Link>
-            );
-          })}
+        <div className="mt-4">
+          <Segmented
+            variant="chips"
+            label="Franja de pulso"
+            value={`${band[0]}-${band[1]}`}
+            items={BANDS.map(([lo, hi]) => ({
+              key: `${lo}-${hi}`,
+              label: `${lo}–${hi}`,
+              href: lo === DEFAULT_HR_BAND[0] && hi === DEFAULT_HR_BAND[1] ? "/analisis" : `/analisis?fc=${lo}-${hi}`,
+            }))}
+          />
         </div>
         <ul className="mt-5 flex flex-col gap-2.5">
           {a.paceAtHr.map((y) => {
@@ -211,27 +205,14 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
       <section id="tipos" className="card scroll-mt-6 p-5">
         <div className="flex items-baseline justify-between gap-3">
           <div className="eyebrow">Km por tipo</div>
-          <div className="flex gap-1.5" role="group" aria-label="Periodo">
-            {[
-              { k: "12m", label: "12 meses", href: `/analisis?${keepFc}#tipos`.replace("?#", "#") },
-              { k: "todo", label: "Todo", href: `/analisis?${keepFc}periodo=todo#tipos` },
-            ].map((o) => {
-              const active = (o.k === "todo") === allTime;
-              return (
-                <Link
-                  key={o.k}
-                  href={o.href}
-                  scroll={false}
-                  aria-current={active ? "true" : undefined}
-                  className={`inline-flex min-h-[32px] items-center rounded-full px-2.5 text-[12px] font-semibold ${
-                    active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"
-                  }`}
-                >
-                  {o.label}
-                </Link>
-              );
-            })}
-          </div>
+          <Segmented
+            label="Periodo"
+            value={allTime ? "todo" : "12m"}
+            items={[
+              { key: "12m", label: "12 meses", href: `/analisis?${keepFc}#tipos`.replace("?#", "#") },
+              { key: "todo", label: "Todo", href: `/analisis?${keepFc}periodo=todo#tipos` },
+            ]}
+          />
         </div>
         <TypeBreakdown data={allTime ? a.byTypeAll : a.byType12} />
         <div className="mt-6 eyebrow">Por año</div>
@@ -292,37 +273,26 @@ async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 
   const { periods, comparison, goalKm, injuries, injuryRanges } = await getPeriodsView(unit, weeks);
   const href = (u: PeriodUnit, w: number = weeks) =>
     `/analisis?${keep}vista=${encodeURIComponent(UNIT_PARAM[u])}${u === "week" && w === 26 ? "&semanas=26" : ""}#volumen`;
-  const chip = (active: boolean) =>
-    `inline-flex min-h-[36px] flex-1 items-center justify-center rounded-full text-[13px] font-semibold ${
-      active ? "bg-lime text-lime-ink" : "text-fg-2"
-    }`;
   const c = comparison;
   return (
     <section id="volumen" className="card scroll-mt-6 p-5">
       <div className="flex items-baseline justify-between">
         <div className="eyebrow">Volumen</div>
         {unit === "week" && (
-          <div className="flex gap-1.5 text-[12px]" role="group" aria-label="Semanas">
-            {[12, 26].map((w) => (
-              <Link
-                key={w}
-                href={href("week", w)}
-                scroll={false}
-                aria-current={weeks === w ? "true" : undefined}
-                className={`rounded-full px-2.5 py-1 font-semibold ${weeks === w ? "bg-ov-2 text-fg" : "text-fg-2"}`}
-              >
-                {w} sem.
-              </Link>
-            ))}
-          </div>
+          <Segmented
+            label="Semanas"
+            value={unit === "week" ? String(weeks) : null}
+            items={[12, 26].map((w) => ({ key: String(w), label: `${w} sem.`, href: href("week", w) }))}
+          />
         )}
       </div>
-      <div className="mt-3 flex rounded-full border border-line-strong p-1" role="group" aria-label="Periodo">
-        {(["week", "month", "year"] as const).map((u) => (
-          <Link key={u} href={href(u)} scroll={false} aria-current={unit === u ? "true" : undefined} className={chip(unit === u)}>
-            {UNIT_LABEL[u]}
-          </Link>
-        ))}
+      <div className="mt-3">
+        <Segmented
+          stretch
+          label="Periodo"
+          value={unit}
+          items={(["week", "month", "year"] as const).map((u) => ({ key: u, label: UNIT_LABEL[u], href: href(u) }))}
+        />
       </div>
 
       {c && (
@@ -404,10 +374,6 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
     const qs = q.toString();
     return `/analisis${qs ? `?${qs}` : ""}#${anchor}`;
   };
-  const chip = (active: boolean) =>
-    `inline-flex min-h-[34px] flex-none items-center gap-1 rounded-full px-3 text-[12px] font-semibold ${
-      active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"
-    }`;
   // La tabla compara sin las carreras en periodos de lesión.
   const c = ytdNoInjury.current;
   const p = ytdNoInjury.previous;
@@ -440,34 +406,34 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
     <>
       <section id="ritmo" className="card scroll-mt-6 p-5">
         <div className="eyebrow">Evolución del ritmo</div>
-        <div className="-mx-5 mt-3 overflow-x-auto px-5 [scrollbar-width:none]">
-          <div className="flex w-max gap-1.5" role="group" aria-label="Rango">
-            {RANGES.map(([r, label]) => (
-              <Link key={r} href={link({ rango: r === "6m" ? null : r }, "ritmo")} scroll={false} aria-current={r === range ? "true" : undefined} className={chip(r === range)}>
-                {label}
-              </Link>
-            ))}
-          </div>
+        <div className="mt-3">
+          <Segmented
+            variant="chips"
+            label="Rango"
+            value={range}
+            items={RANGES.map(([r, label]) => ({ key: r, label, href: link({ rango: r === "6m" ? null : r }, "ritmo") }))}
+          />
         </div>
-        <div className="-mx-5 mt-2 overflow-x-auto px-5 [scrollbar-width:none]">
-          <div className="flex w-max gap-1.5" role="group" aria-label="Tipo de sesión">
-            {PACE_TYPES.map((t) => (
-              <Link
-                key={t ?? "todos"}
-                href={link({ rtipo: t }, "ritmo")}
-                scroll={false}
-                aria-current={t === paceType ? "true" : undefined}
-                className={chip(t === paceType)}
-              >
-                {t && (
-                  <span className="flex" style={{ color: t === paceType ? undefined : TYPE_META[t].color }}>
-                    <SessionIcon type={t} size={13} />
-                  </span>
-                )}
-                {t ? TYPE_META[t].label : "Todos"}
-              </Link>
-            ))}
-          </div>
+        <div className="mt-2">
+          <Segmented
+            variant="chips"
+            label="Tipo de sesión"
+            value={paceType ?? "todos"}
+            items={PACE_TYPES.map((t) => ({
+              key: t ?? "todos",
+              href: link({ rtipo: t }, "ritmo"),
+              label: (
+                <>
+                  {t && (
+                    <span className="flex" style={{ color: t === paceType ? undefined : TYPE_META[t].color }}>
+                      <SessionIcon type={t} size={13} />
+                    </span>
+                  )}
+                  {t ? TYPE_META[t].label : "Todos"}
+                </>
+              ),
+            }))}
+          />
         </div>
         <div className="mt-3">
           <PaceTrend points={points} trend={trend} bands={bands} nowMs={nowMs} />
@@ -482,24 +448,14 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
       <section id="calendario" className="card scroll-mt-6 p-5">
         <div className="flex items-baseline justify-between">
           <div className="eyebrow">Constancia · 12 meses</div>
-          <div className="flex gap-1.5" role="group" aria-label="Intensidad según">
-            {(
-              [
-                ["km", "Km"],
-                ["load", "Carga"],
-              ] as const
-            ).map(([m, label]) => (
-              <Link
-                key={m}
-                href={link({ cal: m === "load" ? "carga" : null }, "calendario")}
-                scroll={false}
-                aria-current={m === calMetric ? "true" : undefined}
-                className={chip(m === calMetric)}
-              >
-                {label}
-              </Link>
-            ))}
-          </div>
+          <Segmented
+            label="Intensidad según"
+            value={calMetric}
+            items={[
+              { key: "km", label: "Km", href: link({ cal: null }, "calendario") },
+              { key: "load", label: "Carga", href: link({ cal: "carga" }, "calendario") },
+            ]}
+          />
         </div>
         <div className="mt-4">
           <ConsistencyCalendar key={calMetric} days={calendar} metric={calMetric} bands={bands} />
@@ -559,8 +515,6 @@ async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | u
     const qs = q.toString();
     return `/analisis${qs ? `?${qs}` : ""}#eficiencia`;
   };
-  const chip = (active: boolean) =>
-    `inline-flex min-h-[34px] items-center rounded-full px-3 text-[12px] font-semibold ${active ? "bg-lime text-lime-ink" : "border border-line-strong text-fg-2"}`;
   const ch = changeS === null ? null : Math.round(changeS);
   return (
     <section id="eficiencia" className="card scroll-mt-6 p-5">
@@ -570,13 +524,15 @@ async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | u
           Z2 {band[0]}–{band[1]} ppm
         </span>
       </div>
-      <div className="mt-3 flex gap-1.5" role="group" aria-label="Tipo de sesión">
-        <Link href={link(null)} scroll={false} aria-current={!all ? "true" : undefined} className={chip(!all)}>
-          Rodaje
-        </Link>
-        <Link href={link("todos")} scroll={false} aria-current={all ? "true" : undefined} className={chip(all)}>
-          Todas
-        </Link>
+      <div className="mt-3">
+        <Segmented
+          label="Tipo de sesión"
+          value={all ? "todos" : "rodaje"}
+          items={[
+            { key: "rodaje", label: "Rodaje", href: link(null) },
+            { key: "todos", label: "Todas", href: link("todos") },
+          ]}
+        />
       </div>
       {ch !== null && (
         <p className="mt-3 text-[14px]">

@@ -352,6 +352,34 @@ Inicio (km por mes, VO₂), Análisis (Volumen semana/mes/año/por tipo, ritmo p
 evolución del ritmo, eficiencia, año frente a año, km por año y tipo, VO₂), Récords, barras de
 series y el detalle de carrera.
 
+## Botones y toques (una sola definición)
+
+Todo el comportamiento táctil vive en `globals.css` (bloque «Interacción») y en cuatro piezas
+de `src/components/ui/`; ninguna pantalla define su propio pulsado (una prueba lo vigila).
+- Pulsado inmediato: escala 0,97 + brillo (más claro de noche, algo más oscuro de día),
+  120 ms, `touch-action: manipulation`, sin resaltado gris de iOS. Los enlaces dentro de un
+  texto no se encogen.
+- Foco visible solo con teclado (contorno + halo lima); desactivado al 45 % y sin color;
+  `aria-busy` con cursor de espera. «Reducir movimiento» quita escalas y animaciones.
+- `Segmented`: selector con indicador lima que se desliza a la opción elegida (cápsula o
+  fila de chips desplazable). Lo usan Semana/Mes/Año, 12/26 sem., Total/Por tipo, 12 meses/Todo,
+  franjas de pulso, rangos y tipos de ritmo, Km/Carga, Rodaje/Todas, filtros de Actividad,
+  Distancia/Tiempo del detalle y el tema. Con `href` navega sin saltar arriba.
+- `Switch`: interruptor con el botón que se desliza y se estira al pulsar (GAP del detalle).
+- `SubmitButton`: durante la acción se desactiva y muestra un spinner y el texto de espera
+  (solo gira el botón pulsado si hay varios); al terminar, ✓ o ✕ durante 1,6 s.
+- `Toaster` + `useActionToast`: aviso breve arriba (éxito 2,6 s, error 6 s, máx. 3, el mismo
+  no se apila). Cuando la acción redirige (guardar o borrar una carrera) el aviso viaja como
+  `?aviso=` y `FlashToast` lo muestra y limpia la URL. Lógica pura en `lib/ui/feedback.ts`.
+- Acciones largas cubiertas: Guardar objetivos, Guardar y recalcular (zonas y tipos),
+  periodos de lesión (guardar y borrar), carrera manual (Ver resumen, Guardar, Borrar), tipo
+  de sesión, Reprocesar/Continuar del importador (spinner y aviso al terminar o fallar), Entrar.
+- Objetivos de toque ≥ 44 px (selectores, casillas, filas de parciales y series, enlaces de
+  las tarjetas de Inicio). Excepción a propósito: las celdas del calendario de constancia
+  (16 px, solo informativas).
+- Transición entre pantallas con `ViewTransition` de React (fundido de 180 ms); la barra
+  inferior queda fija (`view-transition-name: tabbar`).
+
 ## Diseño (tokens)
 
 | Token | Valor |
@@ -609,6 +637,12 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Botones y toques en toda la app: pulsado inmediato y foco visible definidos una
+  vez, selectores con indicador deslizante, interruptor animado, botones con spinner y ✓/✕,
+  avisos breves (también tras redirigir), objetivos de 44 px y transición suave entre pantallas.
+- 2026‑11‑18 — Ritmo sin huecos: el GPS rellena los tramos sin distancia del reloj; sin GPS,
+  el ritmo del parcial o la muestra cercana en escalón. Solo las pausas reales quedan como
+  punteado fino. Parciales sin datos fiables con ritmo del GPS o estimado (≈).
 - 2026‑11‑18 — Inicio rediseñado: Hoy (recomendación provisional), semana día a día, mes con
   el mismo tramo, última carrera, y abajo 28 días, tipos, récords, eficiencia y VO₂; botón «+»
   y banda de modo lesión.

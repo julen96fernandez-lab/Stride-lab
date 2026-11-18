@@ -1,3 +1,4 @@
+import { Spinner } from "@/components/ui/SubmitButton";
 const inputClass =
   "h-14 rounded-2xl border border-line-strong bg-inset px-4 text-[17px] text-fg outline-none placeholder:text-fg-3 focus:border-lime";
 
@@ -63,8 +64,10 @@ export function SubmitButton({ pending, label, pendingLabel }: { pending: boolea
     <button
       type="submit"
       disabled={pending}
-      className="h-14 rounded-2xl bg-lime text-[16px] font-semibold text-lime-ink transition active:scale-[0.98] disabled:opacity-60"
+      aria-busy={pending || undefined}
+      className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-lime text-[16px] font-semibold text-lime-ink"
     >
+      {pending && <Spinner />}
       {pending ? pendingLabel : label}
     </button>
   );

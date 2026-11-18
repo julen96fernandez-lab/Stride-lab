@@ -51,7 +51,7 @@ export default function ProfilePage() {
       <form action={logout}>
         <button
           type="submit"
-          className="min-h-[48px] w-full rounded-2xl border border-line-strong text-[15px] font-semibold text-fg-2 transition active:scale-[0.98]"
+          className="min-h-[48px] w-full rounded-2xl border border-line-strong text-[15px] font-semibold text-fg-2 transition"
         >
           Cerrar sesión
         </button>

@@ -24,7 +24,7 @@ export default function ImportPage() {
         Perfil
       </Link>
       <PageHeader title="Importar" subtitle="Tu export de Apple Health." />
-      <Link href="/actividad/nueva" className="card flex min-h-[64px] items-center gap-3 px-4 py-3 active:opacity-80">
+      <Link href="/actividad/nueva" className="card flex min-h-[64px] items-center gap-3 px-4 py-3">
         <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-lime text-[20px] font-bold text-lime-ink" aria-hidden="true">
           +
         </span>

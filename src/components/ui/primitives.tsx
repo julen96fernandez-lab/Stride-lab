@@ -72,7 +72,7 @@ export function ButtonLink({
   variant?: "primary" | "ghost";
 }) {
   const base =
-    "inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-5 text-[15px] font-semibold transition active:scale-[0.98]";
+    "inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-5 text-[15px] font-semibold transition";
   const styles =
     variant === "primary"
       ? "bg-lime text-lime-ink shadow-[0_8px_30px_-8px_rgba(200,242,58,0.55)]"

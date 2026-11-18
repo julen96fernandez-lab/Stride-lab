@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <div className="app-backdrop" aria-hidden="true" />
         {children}
+        <Toaster />
         <ServiceWorker />
       </body>
     </html>

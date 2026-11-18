@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { Segmented } from "@/components/ui/Segmented";
 import { connection } from "next/server";
 import { ButtonLink, Card, PageHeader } from "@/components/ui/primitives";
 import { RunRow } from "@/components/ui/RunRow";
@@ -20,7 +21,7 @@ export default function ActivityPage({ searchParams }: PageProps<"/actividad">) 
           aside={
             <Link
               href="/actividad/nueva"
-              className="inline-flex min-h-[44px] flex-none items-center gap-1.5 rounded-full bg-lime px-4 text-[14px] font-semibold text-lime-ink active:scale-[0.98]"
+              className="inline-flex min-h-[44px] flex-none items-center gap-1.5 rounded-full bg-lime px-4 text-[14px] font-semibold text-lime-ink"
             >
               <span aria-hidden="true" className="text-[18px] leading-none">+</span> Añadir carrera
             </Link>
@@ -66,38 +67,42 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
     else groups.push({ key: k, runs: [r] });
   }
 
-  const chip = (active: boolean) =>
-    `flex min-h-[40px] flex-none items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition ${
-      active ? "border-lime bg-lime text-lime-ink shadow-[0_0_16px_rgba(200,242,58,0.35)]" : "border-line-strong bg-ov-1 text-fg"
-    }`;
-
   return (
     <div className="flex flex-col gap-4">
       {/* Filtros por tipo */}
-      <nav aria-label="Filtrar por tipo" className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
-        <div className="flex w-max gap-2 pb-1">
-          <Link href="/actividad" scroll={false} aria-current={!filter ? "true" : undefined} className={chip(!filter)}>
-            Todas <span className="opacity-70">{total}</span>
-          </Link>
-          {SESSION_TYPES.map((t) => {
-            const c = counts.find((x) => x.type === t)!;
-            const active = filter === t;
-            return (
-              <Link
-                key={t}
-                href={`/actividad?tipo=${t}`}
-                scroll={false}
-                aria-current={active ? "true" : undefined}
-                className={`${chip(active)} ${c.runs === 0 && !active ? "opacity-45" : ""}`}
-              >
-                <span style={{ color: active ? undefined : TYPE_META[t].color }} className="flex">
-                  <SessionIcon type={t} size={15} />
-                </span>
-                {TYPE_META[t].label} <span className="opacity-70">{c.runs}</span>
-              </Link>
-            );
-          })}
-        </div>
+      <nav aria-label="Filtrar por tipo">
+        <Segmented
+          variant="chips"
+          label="Filtrar por tipo"
+          value={filter ?? "todas"}
+          items={[
+            {
+              key: "todas",
+              href: "/actividad",
+              label: (
+                <>
+                  Todas <span className="opacity-70">{total}</span>
+                </>
+              ),
+            },
+            ...SESSION_TYPES.map((t) => {
+              const c = counts.find((x) => x.type === t)!;
+              const active = filter === t;
+              return {
+                key: t,
+                href: `/actividad?tipo=${t}`,
+                label: (
+                  <span className={`flex items-center gap-1.5 ${c.runs === 0 && !active ? "opacity-45" : ""}`}>
+                    <span style={{ color: active ? undefined : TYPE_META[t].color }} className="flex">
+                      <SessionIcon type={t} size={15} />
+                    </span>
+                    {TYPE_META[t].label} <span className="opacity-70">{c.runs}</span>
+                  </span>
+                ),
+              };
+            }),
+          ]}
+        />
       </nav>
 
       <p className="text-[13px] text-fg-2">

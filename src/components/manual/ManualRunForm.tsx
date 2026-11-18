@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "@/components/ui/SubmitButton";
+import { useActionToast } from "@/components/ui/Toaster";
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { manualRunAction, type ManualState } from "@/app/(app)/actividad/manual-actions";
@@ -23,7 +25,8 @@ const when = (d: Date | string) =>
 
 /** Formulario de carrera manual (nueva o edición). */
 export function ManualRunForm({ initial, id, existingFile }: { initial: ManualValues; id?: string; existingFile?: string | null }) {
-  const [state, action, pending] = useActionState<ManualState, FormData>(manualRunAction, {});
+  const [state, action] = useActionState<ManualState, FormData>(manualRunAction, {});
+  useActionToast(state);
   const [v, setV] = useState<ManualValues>(initial);
   const [fileInfo, setFileInfo] = useState<string | null>(null);
   const [fileErr, setFileErr] = useState<string | null>(null);
@@ -102,7 +105,7 @@ export function ManualRunForm({ initial, id, existingFile }: { initial: ManualVa
           </p>
         )}
         {existingFile && !fileInfo && (
-          <label className="flex min-h-[36px] items-center gap-2 text-[13px]">
+          <label className="flex min-h-[44px] items-center gap-2 text-[13px]">
             <input type="checkbox" name="removeFile" className="h-4 w-4 accent-[var(--lime)]" /> Quitar los datos de {existingFile}
           </label>
         )}
@@ -155,7 +158,7 @@ export function ManualRunForm({ initial, id, existingFile }: { initial: ManualVa
           </div>
         </fieldset>
         {err.duration && <Err>{err.duration}</Err>}
-        <label className="flex min-h-[40px] items-center gap-2.5 text-[15px]">
+        <label className="flex min-h-[44px] items-center gap-2.5 text-[15px]">
           <input type="checkbox" name="isIndoor" checked={v.isIndoor} onChange={set("isIndoor")} className="h-5 w-5 accent-[var(--lime)]" />
           Cinta / indoor
         </label>
@@ -223,7 +226,7 @@ export function ManualRunForm({ initial, id, existingFile }: { initial: ManualVa
                 ))}
               </ul>
               {state.needsConfirm && (
-                <label className="mt-3 flex min-h-[40px] items-center gap-2.5 text-[14px]">
+                <label className="mt-3 flex min-h-[44px] items-center gap-2.5 text-[14px]">
                   <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="h-5 w-5 accent-[var(--lime)]" />
                   Es otra carrera: guardarla igualmente
                 </label>
@@ -240,24 +243,12 @@ export function ManualRunForm({ initial, id, existingFile }: { initial: ManualVa
       )}
 
       <div className="sticky bottom-[96px] z-10 grid grid-cols-2 gap-2">
-        <button
-          type="submit"
-          name="intent"
-          value="preview"
-          disabled={pending}
-          className="min-h-[52px] rounded-2xl border border-line-strong bg-[var(--card)] text-[16px] font-semibold text-fg disabled:opacity-60"
-        >
+        <SubmitButton name="intent" value="preview" variant="ghost" pending="Calculando…">
           Ver resumen
-        </button>
-        <button
-          type="submit"
-          name="intent"
-          value="save"
-          disabled={pending || (!!state.needsConfirm && !confirm)}
-          className="min-h-[52px] rounded-2xl bg-lime text-[16px] font-semibold text-lime-ink disabled:opacity-60"
-        >
-          {pending ? "Calculando…" : id ? "Guardar cambios" : "Guardar"}
-        </button>
+        </SubmitButton>
+        <SubmitButton name="intent" value="save" pending="Guardando…" disabled={!!state.needsConfirm && !confirm}>
+          {id ? "Guardar cambios" : "Guardar"}
+        </SubmitButton>
       </div>
     </form>
   );

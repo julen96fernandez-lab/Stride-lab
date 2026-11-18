@@ -1,5 +1,7 @@
 "use client";
 
+import { SubmitButton } from "@/components/ui/SubmitButton";
+import { useActionToast } from "@/components/ui/Toaster";
 import { useActionState, useState } from "react";
 import { saveGoalsAction, type GoalsState } from "@/app/(app)/actividad/actions";
 import type { Goals } from "@/lib/analysis/periods";
@@ -15,7 +17,8 @@ const ROWS = [
 
 /** Objetivos de km: cada uno opcional (vacío = sin objetivo) y se puede pausar. */
 export function GoalsForm({ goals, suggested }: { goals: Goals; suggested: { week: number; month: number; year: number } }) {
-  const [state, action, pending] = useActionState<GoalsState, FormData>(saveGoalsAction, {});
+  const [state, action] = useActionState<GoalsState, FormData>(saveGoalsAction, {});
+  useActionToast(state);
   const [vals, setVals] = useState({
     week: goals.week.km?.toString().replace(".", ",") ?? "",
     month: goals.month.km?.toString().replace(".", ",") ?? "",
@@ -52,11 +55,11 @@ export function GoalsForm({ goals, suggested }: { goals: Goals; suggested: { wee
             <button
               type="button"
               onClick={() => setVals((v) => ({ ...v, [k]: String(suggested[k]) }))}
-              className="min-h-[36px] text-left underline-offset-2 hover:underline"
+              className="min-h-[44px] text-left underline-offset-2 hover:underline"
             >
               Sugerido: <b className="text-fg">{suggested[k]} km</b> ({hint}) · usar
             </button>
-            <label className="flex min-h-[36px] items-center gap-2">
+            <label className="flex min-h-[44px] items-center gap-2">
               <input type="checkbox" name={`${k}Paused`} defaultChecked={goals[k].paused} className="h-4 w-4 accent-[var(--lime)]" />
               Pausar
             </label>
@@ -68,18 +71,9 @@ export function GoalsForm({ goals, suggested }: { goals: Goals; suggested: { wee
           {state.error}
         </p>
       )}
-      {state.ok && (
-        <p role="status" className="text-[14px]">
-          {state.ok}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="min-h-[52px] rounded-2xl bg-lime text-[16px] font-semibold text-lime-ink transition active:scale-[0.98] disabled:opacity-60"
-      >
-        {pending ? "Guardando…" : "Guardar objetivos"}
-      </button>
+      <SubmitButton state={state} pending="Guardando…">
+        Guardar objetivos
+      </SubmitButton>
     </form>
   );
 }

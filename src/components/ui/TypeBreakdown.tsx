@@ -44,7 +44,7 @@ export function TypeBreakdown({ data, linkToFilter = true }: { data: KmByType[];
           return (
             <li key={d.type}>
               {linkToFilter ? (
-                <Link href={`/actividad?tipo=${d.type}`} className="block active:opacity-70">
+                <Link href={`/actividad?tipo=${d.type}`} className="block">
                   {row}
                 </Link>
               ) : (

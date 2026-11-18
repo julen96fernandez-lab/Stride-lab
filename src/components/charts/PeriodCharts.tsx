@@ -1,5 +1,6 @@
 "use client";
 
+import { Segmented } from "@/components/ui/Segmented";
 import { useMemo, useState } from "react";
 import type { Period, PeriodUnit } from "@/lib/analysis/periods";
 import { movingAverage } from "@/lib/analysis/insights";
@@ -175,22 +176,15 @@ export function PeriodCharts({
     <div>
       {stackable && (
         <div className="mb-2 flex justify-end">
-          <div className="flex rounded-full border border-line-strong p-0.5 text-[12px] font-semibold" role="group" aria-label="Vista de barras">
-            {[
-              [false, "Total"],
-              [true, "Por tipo"],
-            ].map(([v, label]) => (
-              <button
-                key={String(v)}
-                type="button"
-                aria-pressed={byType === v}
-                onClick={() => setByType(v as boolean)}
-                className={`min-h-[32px] rounded-full px-3 ${byType === v ? "bg-lime text-lime-ink" : "text-fg-2"}`}
-              >
-                {label as string}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label="Vista de barras"
+            value={byType ? "tipo" : "total"}
+            onChange={(k) => setByType(k === "tipo")}
+            items={[
+              { key: "total", label: "Total" },
+              { key: "tipo", label: "Por tipo" },
+            ]}
+          />
         </div>
       )}
       <EChart

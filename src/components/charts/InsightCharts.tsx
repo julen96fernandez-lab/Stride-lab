@@ -106,7 +106,7 @@ export function PaceTrend({
       {sel && (
         <Link
           href={`/actividad/${sel.id}`}
-          className="mt-3 flex min-h-[56px] items-center gap-3 rounded-2xl border border-line bg-inset px-3.5 py-2.5 active:opacity-70"
+          className="mt-3 flex min-h-[56px] items-center gap-3 rounded-2xl border border-line bg-inset px-3.5 py-2.5"
         >
           {isSessionType(sel.type) && (
             <span className="flex" style={{ color: typeColor(sel.type) }}>
@@ -233,7 +233,7 @@ export function ConsistencyCalendar({ days, metric, bands = [] }: { days: Calend
               <ul className="mt-2 flex flex-col gap-1.5">
                 {s.runs.map((r) => (
                   <li key={r.id}>
-                    <Link href={`/actividad/${r.id}`} className="flex min-h-[44px] items-center gap-2.5 active:opacity-70">
+                    <Link href={`/actividad/${r.id}`} className="flex min-h-[44px] items-center gap-2.5">
                       {isSessionType(r.type) && (
                         <span className="flex" style={{ color: typeColor(r.type) }}>
                           <SessionIcon type={r.type} size={16} />

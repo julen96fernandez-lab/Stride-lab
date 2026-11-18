@@ -36,7 +36,7 @@ export default function HomePage() {
       <Link
         href="/actividad/nueva"
         aria-label="Añadir carrera"
-        className="fixed right-4 z-30 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-lime text-lime-ink shadow-[0_10px_30px_-8px_rgba(200,242,58,0.55)] transition active:scale-95"
+        className="fixed right-4 z-30 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-lime text-lime-ink shadow-[0_10px_30px_-8px_rgba(200,242,58,0.55)]"
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 104px)" }}
       >
         <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
@@ -140,9 +140,9 @@ async function HomeData() {
 
       {/* 2) Semana */}
       <section className="card p-5" aria-label="Esta semana">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-center justify-between">
           <div className="eyebrow">Esta semana</div>
-          <Link href="/analisis?vista=semana#volumen" className="text-[12px] text-fg-2">
+          <Link href="/analisis?vista=semana#volumen" className="-my-3 -mr-2 inline-flex min-h-[44px] items-center px-2 text-[12px] text-fg-2">
             Volumen
           </Link>
         </div>
@@ -281,9 +281,9 @@ async function HomeData() {
       </div>
 
       <Card>
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-center justify-between">
           <div className="eyebrow">Km por tipo · 12 meses</div>
-          <Link href="/analisis#tipos" className="text-[12px] text-fg-2">
+          <Link href="/analisis#tipos" className="-my-3 -mr-2 inline-flex min-h-[44px] items-center px-2 text-[12px] text-fg-2">
             Ver historial
           </Link>
         </div>

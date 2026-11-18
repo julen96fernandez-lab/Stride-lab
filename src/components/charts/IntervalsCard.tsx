@@ -123,7 +123,7 @@ export function IntervalsCard({ analysis, sel, onSel }: { analysis: IntervalAnal
                 onClick={() => onSel(active ? null : k)}
                 aria-pressed={active}
                 aria-label={`${KIND[r.kind]}${r.rep ? ` ${r.rep}` : ""}`}
-                className={`grid min-h-[40px] w-full grid-cols-[34px_1fr_44px_40px_52px] items-center gap-x-2 rounded-xl px-1 text-left ${
+                className={`grid min-h-[44px] w-full grid-cols-[34px_1fr_44px_40px_52px] items-center gap-x-2 rounded-xl px-1 text-left ${
                   active ? "bg-ov-2 ring-1 ring-[var(--line-strong)]" : ""
                 } ${isWork ? "" : "text-fg-2"}`}
               >

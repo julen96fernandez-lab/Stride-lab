@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "./Toaster";
+import { Spinner } from "./SubmitButton";
 import { useEffect, useOptimistic, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setRunType } from "@/app/(app)/actividad/actions";
@@ -36,7 +38,10 @@ export function TypePicker({
     start(async () => {
       setManual(t === "auto" ? null : t);
       const res = await setRunType(runId, t);
-      if (res.ok) router.refresh(); // km por tipo, filtros y listas se recalculan en el servidor
+      if (res.ok) {
+        router.refresh(); // km por tipo, filtros y listas se recalculan en el servidor
+        toast.success(t === "auto" ? "Tipo automático restaurado." : `Tipo: ${TYPE_META[t].label}.`);
+      } else toast.error("No se pudo cambiar el tipo.");
     });
   };
 
@@ -65,7 +70,7 @@ export function TypePicker({
         onClick={open}
         aria-haspopup="dialog"
         aria-label={`Tipo: ${m ? m.label : "sin tipo"}${manual ? " (elegido a mano)" : ""}. Tocar para cambiar`}
-        className="mt-3 flex min-h-[52px] w-full items-center gap-3 rounded-2xl border px-3.5 text-left transition active:scale-[0.99]"
+        className="mt-3 flex min-h-[52px] w-full items-center gap-3 rounded-2xl border px-3.5 text-left transition"
         style={
           m
             ? { borderColor: `color-mix(in srgb, ${m.color} 45%, transparent)`, background: `color-mix(in srgb, ${m.color} 12%, transparent)` }
@@ -79,7 +84,7 @@ export function TypePicker({
         )}
         <span className="flex-1 text-[16px] font-semibold">{m ? m.label : "Sin tipo"}</span>
         {manual && <ManualMark />}
-        <span className="text-[13px] font-semibold text-fg-2">Cambiar</span>
+        {pending ? <Spinner /> : <span className="text-[13px] font-semibold text-fg-2">Cambiar</span>}
         <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" className="text-fg-3">
           <path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
@@ -126,7 +131,7 @@ export function TypePicker({
                     role="radio"
                     aria-checked={active}
                     onClick={() => choose(t)}
-                    className={`flex min-h-[52px] w-full items-center gap-3 rounded-2xl border px-3.5 text-left text-[15px] font-semibold transition active:scale-[0.99] ${
+                    className={`flex min-h-[52px] w-full items-center gap-3 rounded-2xl border px-3.5 text-left text-[15px] font-semibold transition ${
                       active ? "border-lime bg-lime text-lime-ink" : "border-line bg-ov-1 text-fg"
                     }`}
                   >
