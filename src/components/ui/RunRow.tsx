@@ -4,6 +4,7 @@ import type { RunListItem } from "@/lib/db/queries";
 import { TypeTag } from "./SessionType";
 import { LoadBadge } from "./Load";
 import { DASH, cap, date, duration, int, km, pace } from "@/lib/format";
+import { RATING_COLOR, RATING_LABEL } from "@/lib/feelings/feelings";
 
 /** Fila de carrera para listas (Actividad e Inicio). */
 export function RunRow({ run }: { run: RunListItem }) {
@@ -15,6 +16,7 @@ export function RunRow({ run }: { run: RunListItem }) {
           <span>{cap(date(run.startAt, { weekday: "short", day: "numeric", month: "short" }))}</span>
           {run.isSpecial && <Tag>Especial</Tag>}
           {run.source === "strava" && <Tag>Strava</Tag>}
+          {run.hasFeeling && <FeelingMark rating={run.feelRating} />}
         </div>
         <div className="mt-1 flex items-baseline gap-1">
           <span className="num text-[24px]">{km(run.distanceM)}</span>
@@ -47,6 +49,22 @@ export function Tag({ children, tone = "muted" }: { children: React.ReactNode; t
       }`}
     >
       {children}
+    </span>
+  );
+}
+
+/** Indicador de sensación: punto con la valoración (o un lápiz si solo hay nota o etiquetas). */
+function FeelingMark({ rating }: { rating: number | null }) {
+  const c = rating ? RATING_COLOR[rating] : "var(--fg-2)";
+  return (
+    <span
+      className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold"
+      style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
+      aria-label={rating ? `Sensación ${rating} de 5: ${RATING_LABEL[rating]}` : "Con nota"}
+      title={rating ? `Sensación: ${RATING_LABEL[rating]}` : "Con nota"}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} aria-hidden="true" />
+      {rating ?? "✎"}
     </span>
   );
 }

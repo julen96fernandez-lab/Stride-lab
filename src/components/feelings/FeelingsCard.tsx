@@ -4,16 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Spinner } from "@/components/ui/SubmitButton";
 import { toast } from "@/components/ui/Toaster";
 import { deleteFeelingAction, saveFeelingAction } from "@/app/(app)/actividad/feeling-actions";
-import { FEELING_TAGS, NOTE_MAX, RATING_LABEL, TAG_KEYS, type Feeling, type FeelingTag } from "@/lib/feelings/feelings";
-
-/** Color de cada valoración (de rojo a lima), el mismo en Actividad y Análisis. */
-export const RATING_COLOR: Record<number, string> = {
-  1: "var(--load-high)",
-  2: "var(--load-mod)",
-  3: "var(--fg-2)",
-  4: "var(--t-rodaje)",
-  5: "var(--chart-line)",
-};
+import { FEELING_TAGS, NOTE_MAX, RATING_COLOR, RATING_LABEL, TAG_KEYS, type Feeling, type FeelingTag } from "@/lib/feelings/feelings";
 
 /**
  * Sensaciones de la carrera. Valoración y etiquetas se guardan al tocarlas; la nota, al salir

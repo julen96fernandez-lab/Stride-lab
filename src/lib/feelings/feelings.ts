@@ -18,6 +18,15 @@ export const TAG_KEYS = Object.keys(FEELING_TAGS) as FeelingTag[];
 export const RATING_LABEL: Record<number, string> = { 1: "Fatal", 2: "Mal", 3: "Normal", 4: "Bien", 5: "Genial" };
 export const NOTE_MAX = 500;
 
+/** Color de cada valoración (de rojo a lima): el mismo en el detalle, Actividad y Análisis. */
+export const RATING_COLOR: Record<number, string> = {
+  1: "var(--load-high)",
+  2: "var(--load-mod)",
+  3: "var(--fg-2)",
+  4: "var(--t-rodaje)",
+  5: "var(--chart-line)",
+};
+
 export interface Feeling {
   rating: number | null;
   note: string | null;

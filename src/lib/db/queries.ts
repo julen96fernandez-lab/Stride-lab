@@ -90,6 +90,9 @@ export interface RunListItem {
   typeManual: boolean;
   trainingLoad: number | null;
   loadEstimated: boolean;
+  /** sensación: valoración (si la hay) y si hay alguna (valoración, nota o etiquetas) */
+  feelRating: number | null;
+  hasFeeling: boolean;
 }
 
 function listColumns() {
@@ -108,6 +111,8 @@ function listColumns() {
     typeManual: sql<boolean>`${s.runs.sessionTypeManual} IS NOT NULL`,
     trainingLoad: s.runs.trainingLoad,
     loadEstimated: s.runs.loadEstimated,
+    feelRating: s.runFeelings.rating,
+    hasFeeling: sql<boolean>`${s.runFeelings.runId} IS NOT NULL`,
   };
 }
 
@@ -162,6 +167,7 @@ export async function getHome(ctx: Ctx = makeCtx()) {
       .select(listColumns())
       .from(s.runs)
       .leftJoin(s.runRoutes, eq(s.runRoutes.runId, s.runs.id))
+      .leftJoin(s.runFeelings, eq(s.runFeelings.runId, s.runs.id))
       .where(valid)
       .orderBy(desc(s.runs.startAt))
       .limit(1),
@@ -199,6 +205,7 @@ export async function listRuns(filter: SessionType | null, ctx: Ctx = makeCtx())
       .select(listColumns())
       .from(s.runs)
       .leftJoin(s.runRoutes, eq(s.runRoutes.runId, s.runs.id))
+      .leftJoin(s.runFeelings, eq(s.runFeelings.runId, s.runs.id))
       .where(filter ? and(valid, sql`${effectiveType} = ${filter}`) : valid)
       .orderBy(desc(s.runs.startAt)),
     d.execute(sql`SELECT status, count(*)::int AS n FROM runs WHERE status <> 'valid' GROUP BY status`),

@@ -44,9 +44,10 @@ const monthKey = (d: Date) =>
 async function RunList({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await connection();
   const sp = await searchParams;
-  const initial = isSessionType(sp.tipo) ? sp.tipo : "todas";
+  const initial = isSessionType(sp.tipo) || sp.tipo === "con_nota" ? (sp.tipo as string) : "todas";
   const { items, counts, hiddenDuplicates, hiddenInvalid } = await activityScreen(cacheDay());
   const total = counts.reduce((a, c) => a + c.runs, 0);
+  const withFeeling = items.filter((r) => r.hasFeeling);
 
   if (total === 0) {
     return (
@@ -80,6 +81,14 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
                   </>
                 ),
               },
+              {
+                key: "con_nota",
+                label: (
+                  <span className={`flex items-center gap-1.5 ${withFeeling.length === 0 ? "opacity-45" : ""}`}>
+                    <span aria-hidden="true">✎</span> Con nota <span className="opacity-70">{withFeeling.length}</span>
+                  </span>
+                ),
+              },
               ...SESSION_TYPES.map((t) => {
                 const c = counts.find((x) => x.type === t)!;
                 return {
@@ -97,6 +106,9 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
             ]}
           />
         </nav>
+        <ChoicePanel when={{ tipo: "con_nota" }}>
+          <FilteredRuns items={withFeeling} filter={null} label="con sensación" hidden={0} hiddenDuplicates={0} hiddenInvalid={0} />
+        </ChoicePanel>
         {(["todas", ...SESSION_TYPES] as const).map((f) => (
           <ChoicePanel key={f} when={{ tipo: f }}>
             <FilteredRuns
@@ -116,12 +128,15 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
 function FilteredRuns({
   items,
   filter,
+  label,
   hidden,
   hiddenDuplicates,
   hiddenInvalid,
 }: {
   items: RunListItem[];
   filter: SessionType | null;
+  /** texto para filtros que no son un tipo («con sensación») */
+  label?: string;
   hidden: number;
   hiddenDuplicates: number;
   hiddenInvalid: number;
@@ -141,13 +156,15 @@ function FilteredRuns({
               items.reduce((a, r) => a + (r.distanceM ?? 0), 0),
               0,
             )} km`
-          : `${items.length} carreras`}
+          : `${items.length} ${items.length === 1 ? "carrera" : "carreras"}${label ? ` ${label}` : ""}`}
         {hidden > 0 && ` · ocultas: ${hiddenDuplicates} duplicadas de Strava y ${hiddenInvalid} de menos de 0,5 km`}
       </p>
 
       {items.length === 0 && (
         <Card>
-          <p className="text-[14px] text-fg-2">Ninguna carrera de este tipo todavía.</p>
+          <p className="text-[14px] text-fg-2">
+            {label ? "Ninguna carrera con sensación todavía: añádela en el detalle de una carrera." : "Ninguna carrera de este tipo todavía."}
+          </p>
         </Card>
       )}
 

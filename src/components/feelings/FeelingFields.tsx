@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FEELING_TAGS, NOTE_MAX, RATING_LABEL, TAG_KEYS, type Feeling, type FeelingTag } from "@/lib/feelings/feelings";
-import { RATING_COLOR } from "./FeelingsCard";
+import { FEELING_TAGS, NOTE_MAX, RATING_COLOR, RATING_LABEL, TAG_KEYS, type Feeling, type FeelingTag } from "@/lib/feelings/feelings";
 
 /**
  * Sensación dentro de un formulario (carrera manual): se envía con él en los campos feelRating,
