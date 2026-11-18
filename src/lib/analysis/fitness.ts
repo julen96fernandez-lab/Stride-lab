@@ -8,7 +8,7 @@
  * - Crónica (forma física): media ponderada exponencial de 28 días,
  *   c = c + α·(carga − c), α = 1 − e^(−1/28). Empieza en 0 el primer día con historial.
  * - Forma = crónica − aguda. Ratio = aguda / crónica (sin ratio si la crónica es casi 0).
- * - Aviso semanal: sube > 30 % sobre la anterior Y supera la media de las 8 semanas previas.
+ * - Carga semanal: cada semana frente a la media de las 8 anteriores (sin avisos de subida).
  * - Estados del ratio: < 0,8 Descansado · 0,8–1,3 En forma · 1,3–1,5 Cargado · > 1,5 Sobrecargado.
  * - Los periodos de lesión no se excluyen: su carga es real.
  */
@@ -20,8 +20,6 @@ export const CHRONIC_ALPHA = 1 - Math.exp(-1 / CHRONIC_DAYS);
 /** Por debajo de esta crónica (carga/día) el ratio no tiene sentido (dividir entre casi nada). */
 export const MIN_CHRONIC = 5;
 export const RATIO_BANDS = { rested: 0.8, high: 1.3, risk: 1.5 } as const;
-/** Subida semanal que merece aviso. */
-export const WEEKLY_RISE = 0.3;
 export const AVG_WEEKS = 8;
 
 export type LoadState = "descansado" | "en_forma" | "cargado" | "sobrecargado";
@@ -148,18 +146,19 @@ export interface WeekLoad {
   approx: boolean;
   /** media de las 8 semanas anteriores (null si hay menos de 8) */
   avg8: number | null;
-  /** carga con la que se compara: la semana anterior entera o, en la semana en curso, sus mismos días */
-  prevLoad: number | null;
-  /** subida respecto a prevLoad (0,35 = +35 %); el aviso exige además superar avg8 */
-  rise: number | null;
-  alert: boolean;
+  /** diferencia con avg8 (0,35 = 35 % por encima; null sin media) */
+  vsAvg: number | null;
   /** semana en curso (sin terminar) */
   partial: boolean;
 }
 
 const mondayOf = (day: number) => day - ((new Date(day * 86_400_000).getUTCDay() + 6) % 7);
 
-/** Semanas de lunes a domingo con su carga, media de las 8 anteriores y aviso de subida > 30 %. */
+/**
+ * Semanas de lunes a domingo con su carga y la media de las 8 anteriores. Sin avisos de subida
+ * sobre la semana previa: con ~1 carrera por semana, cualquier semana con carrera tras una sin
+ * ella «sube» muchísimo; la referencia es la media de 8 semanas.
+ */
 export function weeklyLoads(days: readonly DayLoad[], today: number): WeekLoad[] {
   if (!days.length) return [];
   const byDay = new Map(days.map((d) => [d.day, d]));
@@ -179,10 +178,6 @@ export function weeklyLoads(days: readonly DayLoad[], today: number): WeekLoad[]
   for (let m = firstMon; m <= today; m += 7) {
     const partial = m + 6 > today;
     const w = sum(m, Math.min(m + 6, today));
-    const prevFull = m - 7 >= firstMon ? sum(m - 7, m - 1).load : null;
-    // En la semana en curso se compara con los mismos días de la anterior (sin avisos falsos a mitad de semana).
-    const prevLoad = m - 7 < firstMon ? null : partial ? sum(m - 7, m - 7 + (today - m)).load : prevFull;
-    const rise = prevLoad !== null && prevLoad > 0 ? Math.round((w.load / prevLoad - 1) * 1e6) / 1e6 : null;
     const prev8 = out.slice(-AVG_WEEKS);
     const avg8 = prev8.length === AVG_WEEKS ? prev8.reduce((a, x) => a + x.load, 0) / AVG_WEEKS : null;
     out.push({
@@ -191,11 +186,7 @@ export function weeklyLoads(days: readonly DayLoad[], today: number): WeekLoad[]
       load: w.load,
       approx: w.approx,
       avg8,
-      prevLoad,
-      rise,
-      // Con 2 carreras por semana, tras una semana floja casi cualquiera sube un 30 %: solo se
-      // avisa si además supera la media de las 8 semanas previas.
-      alert: rise !== null && rise > WEEKLY_RISE && avg8 !== null && w.load > avg8,
+      vsAvg: avg8 !== null && avg8 > 0 ? Math.round((w.load / avg8 - 1) * 1e6) / 1e6 : null,
       partial,
     });
   }

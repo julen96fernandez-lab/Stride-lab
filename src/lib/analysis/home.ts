@@ -63,39 +63,16 @@ export interface FitnessForToday {
 }
 
 /**
- * Recomendación: primero las reglas de siempre; después el ratio aguda/crónica las hace más
- * prudentes (nunca menos): ≥ 1,3 → como mucho suave (> 1,5 descanso solo si además hay dos días
- * seguidos corriendo; la lesión abierta ya manda descanso); «calidad» solo con ratio < 1,3.
- * Sin 28 días de historial no se usa el ratio y se dice.
+ * Recomendación: solo las reglas de siempre. El ratio aguda/crónica no cambia la
+ * recomendación; con ratio > 1,3 (y 28 días de historial) añade un aviso informativo.
  */
 export function recommendToday(input: { runs: readonly RunForToday[]; openInjury: boolean; now?: Date; fitness?: FitnessForToday | null }): TodayAdvice {
   const base = baseAdvice(input);
   const f = input.fitness;
-  if (!f || input.openInjury) return base;
-  const mk = (kind: TodayKind, reason: string): TodayAdvice => ({ kind, label: TODAY_LABEL[kind], reason });
-  if (!f.enough || f.ratio === null) {
-    return base.kind === "descanso" ? base : { ...base, reason: `${base.reason} (Aún sin historial suficiente para el ratio de carga.)` };
-  }
-  const r = fmtRatio(f.ratio);
-  if (f.ratio > RATIO_BANDS.risk) {
-    // Con pocas carreras por semana el ratio se dispara con una sola semana buena: por sí solo
-    // deja como mucho un rodaje suave; descanso por carga solo con dos días seguidos corriendo
-    // (la lesión abierta ya manda descanso antes).
-    const today = localDay(input.now ?? new Date());
-    const ran = new Set(input.runs.map((x) => localDay(x.startAt)));
-    if (ran.has(today - 1) && ran.has(today - 2)) {
-      return base.kind === "descanso" ? { ...base, reason: `${base.reason} Además, carga muy alta: ratio ${r}.` } : mk("descanso", `Carga muy alta (ratio ${r}) y dos días seguidos corriendo: hoy, descanso.`);
-    }
-    if (base.kind === "descanso" || base.kind === "suave") return { ...base, reason: `${base.reason} Carga muy alta esta semana: ratio ${r}.` };
-    return mk("suave", `Carga muy alta esta semana: ratio ${r}. Como mucho, un rodaje suave.`);
-  }
-  if (f.ratio >= RATIO_BANDS.high) {
-    if (base.kind === "libre" || base.kind === "calidad") return mk("suave", `Carga alta esta semana: ratio ${r}. Mejor un rodaje suave.`);
-    return { ...base, reason: `${base.reason} Carga alta esta semana: ratio ${r}.` };
-  }
-  if (base.kind === "calidad") return { ...base, reason: `${base.reason} Carga controlada: ratio ${r}.` };
-  if (base.kind === "libre" && f.ratio < RATIO_BANDS.rested && f.form > 0) return { ...base, reason: `${base.reason} Vienes descansado: ratio ${r}.` };
-  return base;
+  // Con ~1 carrera por semana la aguda de 7 días es una carrera o cero y el ratio oscila mucho:
+  // no decide nada, solo avisa cuando pasa de 1,3.
+  if (!f || !f.enough || f.ratio === null || f.ratio <= RATIO_BANDS.high) return base;
+  return { ...base, reason: `${base.reason} Aviso: carga alta esta semana (ratio ${fmtRatio(f.ratio)}).` };
 }
 
 function baseAdvice(input: { runs: readonly RunForToday[]; openInjury: boolean; now?: Date }): TodayAdvice {

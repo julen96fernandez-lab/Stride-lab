@@ -369,14 +369,13 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
 - **≈**: una cifra lleva ≈ si en sus 28 días hay cargas estimadas o sin dato, o si hay menos de
   28 días de historial (en calentamiento). Se muestran cuántas carreras están medidas, estimadas
   y sin dato.
-- **Carga semanal**: lunes a domingo frente a la media de las 8 anteriores; aviso si sube > 30 %
-  sobre la anterior (la semana en curso, frente a los mismos días de la anterior) **y** supera la
-  media de las 8 semanas previas (con ~2 carreras/semana, el 30 % solo saltaba 15 veces al año).
-- **Hoy**: tras las reglas de siempre, el ratio solo endurece: ≥ 1,3 como mucho rodaje suave
-  (también > 1,5, porque con ~2 carreras/semana una sola semana buena lo dispara); descanso por
-  carga solo con ratio > 1,5 y dos días seguidos corriendo (la lesión abierta ya manda descanso).
-  Calidad solo con < 1,3. Sin 28 días de historial no se usa y se dice. Análisis muestra el
-  estado tal cual.
+- **Carga semanal**: lunes a domingo frente a la media de las 8 semanas anteriores (sin avisos de
+  subida sobre la semana previa: con ~1 carrera por semana no dicen nada).
+- **Hoy**: solo las reglas de siempre (lesión abierta, haber corrido hoy, competición ayer, tres
+  días seguidos, series o tirada larga ayer…). El ratio no cambia la recomendación: con ratio > 1,3
+  (y 28 días de historial) añade el aviso «carga alta esta semana». Análisis muestra el estado tal
+  cual, con la nota fija «Con pocas carreras por semana el ratio oscila mucho; fíjate en la
+  tendencia de la crónica».
 - `ensureClassified` comparte una sola comprobación entre consultas simultáneas (antes dos
   recálculos a la vez chocaban en `run_efforts`) y no repite la comprobación en 5 min.
 
@@ -695,8 +694,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 - 2026‑11‑18 — Rendimiento: funciones en fra1, consultas en paralelo y sin repetir, caché por
   pantalla con invalidación, selectores en el cliente (cero peticiones), precarga y caché de
-  pestañas, esqueletos, scroll arriba al entrar en una pestaña. Carga: aviso semanal solo si
-  además supera la media de 8 semanas; en Hoy, ratio > 1,5 → como mucho suave.
+  pestañas, esqueletos, scroll arriba al entrar en una pestaña. Carga: semana frente a la media de
+  8 semanas sin avisos de subida; en Hoy el ratio solo informa (aviso con > 1,3).
 - 2026‑11‑18 — Carga y forma: carga por carrera medida/estimada (≈)/sin dato, aguda, crónica,
   forma y ratio con estados, carga semanal con aviso de subida, tarjeta en Inicio y «Hoy» con
   el ratio. Reglas versión 10.

@@ -174,6 +174,9 @@ export function FitnessCard({ view }: { view: FitnessView }) {
         ))}
         <span>· Línea discontinua: forma (eje derecho).</span>
       </div>
+      <p className="mt-2 rounded-xl border border-line bg-inset px-3 py-2 text-[12px] leading-snug text-fg-2">
+        Con pocas carreras por semana el ratio oscila mucho; fíjate en la tendencia de la crónica.
+      </p>
 
       {picked && (
         <div className="mt-3 rounded-2xl border border-line-strong bg-inset p-3.5" aria-live="polite">
@@ -236,11 +239,10 @@ export function FitnessCard({ view }: { view: FitnessView }) {
   );
 }
 
-/** Carga por semana frente a la media de las 8 anteriores, con aviso de subida > 30 %. */
+/** Carga por semana frente a la media de las 8 anteriores. */
 function WeeklyLoad({ view, days }: { view: FitnessView; days: number }) {
   const weeks = useMemo(() => view.weeks.slice(-Math.ceil(days / 7)), [view.weeks, days]);
   const [sel, setSel] = useState<number | null>(null);
-  const alerts = weeks.filter((w) => w.alert);
   const last = weeks.at(-1);
   const option = useMemo(
     () => ({
@@ -253,7 +255,7 @@ function WeeklyLoad({ view, days }: { view: FitnessView; days: number }) {
             tipHead(`Semana del ${dayLabel(w.start)}${w.partial ? " (en curso)" : ""}`) +
             tipRow(`${ap(w.approx)}${n0(w.load)}`, "Carga") +
             (w.avg8 !== null ? tipRow(n0(w.avg8), "Media 8 sem.", ACUTE) : "") +
-            (w.rise !== null ? tipRow(`${w.rise > 0 ? "+" : ""}${Math.round(w.rise * 100)} %`, w.partial ? "vs mismos días" : "vs anterior") : "")
+            (w.vsAvg !== null && !w.partial ? tipRow(`${w.vsAvg > 0 ? "+" : ""}${Math.round(w.vsAvg * 100)} %`, "vs media") : "")
           );
         },
       }),
@@ -264,7 +266,7 @@ function WeeklyLoad({ view, days }: { view: FitnessView; days: number }) {
       yAxis: valueAxis({ min: 0 }),
       series: [
         {
-          ...barSeries({ data: weeks.map((w, i) => ({ value: Math.round(w.load), itemStyle: barItem({ color: w.alert ? "var(--load-high)" : undefined, current: w.partial && !w.alert, selected: sel === i }) })) }),
+          ...barSeries({ data: weeks.map((w, i) => ({ value: Math.round(w.load), itemStyle: barItem({ current: w.partial, selected: sel === i }) })) }),
         },
         lineSeries({ data: weeks.map((w) => (w.avg8 === null ? null : Math.round(w.avg8))), color: ACUTE, dashed: true, width: 1.5, name: "Media 8 semanas" }),
       ],
@@ -290,19 +292,19 @@ function WeeklyLoad({ view, days }: { view: FitnessView; days: number }) {
         </div>
       )}
       <p className="mt-2 text-[12px] text-fg-2">
-        Barras: carga de lunes a domingo. Discontinua: media de las 8 semanas anteriores. En rojo, las semanas que suben más de un 30 % sobre la anterior
-        y además superan la media de las 8 previas (la semana en curso se compara con los mismos días de la anterior).
+        Barras: carga de lunes a domingo (en lima, la semana en curso). Discontinua: media de las 8 semanas anteriores, la referencia con la que
+        comparar cada semana.
       </p>
-      {alerts.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-1 text-[12px]">
-          {alerts.slice(-4).reverse().map((w) => (
-            <li key={w.start} className="flex items-center gap-2">
-              <span className="h-2 w-2 flex-none rounded-full bg-[var(--load-high)]" />
-              Semana del {dayLabel(w.start)}: {ap(w.approx)}
-              {n0(w.load)} frente a {n0(w.prevLoad!)} (+{Math.round(w.rise! * 100)} %){w.partial ? ", en curso" : ""}.
-            </li>
-          ))}
-        </ul>
+      {last && last.avg8 !== null && (
+        <p className="mt-1 text-[12px] text-fg-2">
+          Semana pasada:{" "}
+          {(() => {
+            const prev = weeks.at(-2);
+            if (!prev || prev.vsAvg === null) return "sin media para comparar.";
+            const pct = Math.round(prev.vsAvg * 100);
+            return `${ap(prev.approx)}${n0(prev.load)}, ${pct === 0 ? "igual que" : `${Math.abs(pct)} % ${pct > 0 ? "por encima de" : "por debajo de"}`} la media de 8 semanas (${n0(prev.avg8!)}).`;
+          })()}
+        </p>
       )}
     </div>
   );

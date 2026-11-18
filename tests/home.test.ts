@@ -80,53 +80,33 @@ describe("recomendación de hoy", () => {
   });
 });
 
-describe("recomendación de hoy con el ratio de carga", () => {
+describe("recomendación de hoy con el ratio de carga (solo informativo)", () => {
   const calidad = { runs: [run(2, "rodaje", 90), ...base], openInjury: false, now: NOW };
   const libre = { runs: [run(3, "rodaje"), run(4, "tempo"), ...base], openInjury: false, now: NOW };
   const fit = (ratio: number | null, enough = true, form = 0) => ({ ratio, form, chronic: 20, enough });
 
-  it("ratio > 1,5 por sí solo → como mucho rodaje suave, con el motivo", () => {
+  it("el ratio nunca cambia la recomendación", () => {
+    for (const r of [0.4, 1.0, 1.4, 1.8, 2.5]) {
+      expect(recommendToday({ ...calidad, fitness: fit(r) }).kind).toBe("calidad");
+      expect(recommendToday({ ...libre, fitness: fit(r) }).kind).toBe("libre");
+    }
+  });
+  it("con ratio > 1,3 añade el aviso «carga alta esta semana»", () => {
     const r = recommendToday({ ...calidad, fitness: fit(1.62) });
-    expect(r.kind).toBe("suave");
-    expect(r.reason).toMatch(/Carga muy alta esta semana: ratio 1,62/);
-    expect(recommendToday({ ...libre, fitness: fit(2.1) }).kind).toBe("suave");
+    expect(r.reason).toMatch(/carga alta esta semana \(ratio 1,62\)/);
+    expect(recommendToday({ ...calidad, fitness: fit(1.3) }).reason).not.toMatch(/carga alta/);
+    expect(recommendToday({ ...calidad, fitness: fit(1.31) }).reason).toMatch(/carga alta/);
   });
-  it("ratio > 1,5 y dos días seguidos corriendo → descanso", () => {
-    const seguidos = { runs: [run(1, "rodaje", 60), run(2, "rodaje", 60), ...base.slice(1)], openInjury: false, now: NOW };
-    const r = recommendToday({ ...seguidos, fitness: fit(1.7) });
-    expect(r.kind).toBe("descanso");
-    expect(r.reason).toMatch(/dos días seguidos/);
-    // con ratio normal, los mismos dos días no fuerzan descanso
-    expect(recommendToday({ ...seguidos, fitness: fit(1.0) }).kind).not.toBe("descanso");
+  it("sin 28 días de historial o sin ratio: sin aviso", () => {
+    expect(recommendToday({ ...calidad, fitness: fit(1.8, false) }).reason).not.toMatch(/carga alta/);
+    expect(recommendToday({ ...calidad, fitness: fit(null) }).reason).not.toMatch(/carga alta/);
   });
-  it("ratio 1,3–1,5 → como mucho suave", () => {
-    const r = recommendToday({ ...calidad, fitness: fit(1.4) });
-    expect(r).toMatchObject({ kind: "suave" });
-    expect(r.reason).toMatch(/Carga alta esta semana: ratio 1,40/);
-    expect(recommendToday({ ...libre, fitness: fit(1.3) }).kind).toBe("suave");
-  });
-  it("el ratio nunca hace la recomendación menos prudente", () => {
+  it("el descanso sigue saliendo solo de las reglas de siempre", () => {
     const comp = { runs: [run(1, "competicion", 120), ...base], openInjury: false, now: NOW };
     expect(recommendToday({ ...comp, fitness: fit(0.5) }).kind).toBe("descanso");
-    const r = recommendToday({ ...comp, fitness: fit(1.7) });
-    expect(r.kind).toBe("descanso");
-    expect(r.reason).toMatch(/ratio 1,70/);
-  });
-  it("calidad solo con ratio < 1,3, y lo dice", () => {
-    const r = recommendToday({ ...calidad, fitness: fit(1.1) });
-    expect(r.kind).toBe("calidad");
-    expect(r.reason).toMatch(/ratio 1,10/);
-  });
-  it("libre y descansado: lo menciona", () => {
-    expect(recommendToday({ ...libre, fitness: fit(0.6, true, 8) }).reason).toMatch(/Vienes descansado: ratio 0,60/);
-  });
-  it("sin 28 días de historial no usa el ratio y lo dice", () => {
-    const r = recommendToday({ ...calidad, fitness: fit(1.8, false) });
-    expect(r.kind).toBe("calidad");
-    expect(r.reason).toMatch(/sin historial suficiente/);
-  });
-  it("con lesión abierta manda la lesión", () => {
-    expect(recommendToday({ ...calidad, openInjury: true, fitness: fit(0.5) }).reason).toMatch(/lesión/);
+    const seguidos = { runs: [run(1, "rodaje", 60), run(2, "rodaje", 60), ...base.slice(1)], openInjury: false, now: NOW };
+    expect(recommendToday({ ...seguidos, fitness: fit(2.0) }).kind).not.toBe("descanso");
+    expect(recommendToday({ ...calidad, openInjury: true, fitness: fit(0.5) }).kind).toBe("descanso");
   });
 });
 

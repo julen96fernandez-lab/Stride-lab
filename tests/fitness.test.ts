@@ -140,55 +140,34 @@ describe("fitnessSeries (aguda, crónica, forma, ratio)", () => {
   });
 });
 
-describe("weeklyLoads (carga semanal y subida > 30 %)", () => {
+describe("weeklyLoads (carga semanal frente a la media de 8 semanas)", () => {
   // 2026-03-02 es lunes
   const mon = localDay(at("2026-03-02"));
-  const byWeek = (weeks: number[][]) => {
-    const flat = weeks.flat();
-    return days(flat, mon);
-  };
-  it("suma de lunes a domingo y aviso si sube más de un 30 % sobre la anterior", () => {
+  const byWeek = (weeks: number[][]) => days(weeks.flat(), mon);
+  const flat = (l: number) => [l, 0, 0, 0, 0, 0, 0];
+  it("suma de lunes a domingo", () => {
     const w = weeklyLoads(byWeek([[100, 0, 0, 0, 0, 0, 0], [100, 0, 0, 30, 0, 0, 0], [100, 0, 0, 0, 0, 0, 30]]), mon + 20);
     expect(w.map((x) => x.load)).toEqual([100, 130, 130]);
-    expect(w[0]).toMatchObject({ start: "2026-03-02", prevLoad: null, alert: false });
-    expect(w[1].rise).toBeCloseTo(0.3);
-    expect(w[1].alert).toBe(false); // justo un 30 %: sin aviso
-    expect(w[2].alert).toBe(false);
+    expect(w[0].start).toBe("2026-03-02");
+    expect(w.at(-1)!.partial).toBe(false);
   });
-  it("avisa con más del 30 % solo si además supera la media de las 8 semanas previas", () => {
-    // 8 semanas de 100, una floja de 40 y luego 120: +200 % y por encima de la media (≈ 92,5) → aviso
-    const flat = (l: number) => [l, 0, 0, 0, 0, 0, 0];
-    const w = weeklyLoads(byWeek([...Array(8).fill(flat(100)), flat(40), flat(120)]), mon + 69);
-    expect(w[9].avg8).toBeCloseTo((7 * 100 + 40) / 8);
-    expect(w[9].alert).toBe(true);
-    // tras la semana floja, volver a 80: +100 % pero por debajo de la media → sin aviso
-    const w2 = weeklyLoads(byWeek([...Array(8).fill(flat(100)), flat(40), flat(80)]), mon + 69);
-    expect(w2[9].rise).toBeCloseTo(1);
-    expect(w2[9].alert).toBe(false);
-  });
-  it("sin 8 semanas previas no hay media y no se avisa", () => {
-    const w = weeklyLoads(byWeek([[100, 0, 0, 0, 0, 0, 0], [200, 0, 0, 0, 0, 0, 0]]), mon + 13);
-    expect(w[1].rise).toBeCloseTo(1);
-    expect(w[1].alert).toBe(false);
-  });
-  it("semana en curso: compara con los mismos días de la anterior", () => {
-    // semana pasada: 50 el lunes y 200 el sábado; esta: 60 el lunes, hoy miércoles
-    const w = weeklyLoads(byWeek([[50, 0, 0, 0, 0, 200, 0], [60, 0, 0]]), mon + 9);
-    const cur = w.at(-1)!;
-    expect(cur.partial).toBe(true);
-    expect(cur.prevLoad).toBe(50);
-    expect(cur.rise).toBeCloseTo(0.2);
-    expect(cur.alert).toBe(false);
-  });
-  it("tras una semana sin carga no hay porcentaje (no se divide entre 0)", () => {
-    const w = weeklyLoads(byWeek([[10, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0], [80, 0, 0, 0, 0, 0, 0]]), mon + 20);
-    expect(w[2]).toMatchObject({ rise: null, alert: false });
-  });
-  it("media de las 8 semanas anteriores (null si hay menos)", () => {
-    const weeks = Array.from({ length: 9 }, (_, i) => [10 * (i + 1), 0, 0, 0, 0, 0, 0]);
+  it("media de las 8 semanas anteriores (null si hay menos) y diferencia con ella", () => {
+    const weeks = Array.from({ length: 9 }, (_, i) => flat(10 * (i + 1)));
     const w = weeklyLoads(byWeek(weeks), mon + 62);
     expect(w[7].avg8).toBeNull();
-    expect(w[8].avg8).toBeCloseTo((10 + 20 + 30 + 40 + 50 + 60 + 70 + 80) / 8);
+    expect(w[7].vsAvg).toBeNull();
+    const avg = (10 + 20 + 30 + 40 + 50 + 60 + 70 + 80) / 8;
+    expect(w[8].avg8).toBeCloseTo(avg);
+    expect(w[8].vsAvg).toBeCloseTo(90 / avg - 1);
+  });
+  it("1 carrera por semana: semana con carrera tras una sin ella no genera ningún aviso", () => {
+    const w = weeklyLoads(byWeek([...Array(8).fill(flat(100)), flat(0), flat(150)]), mon + 69);
+    expect(w[9]).not.toHaveProperty("alert");
+    expect(w[9].vsAvg).toBeCloseTo(150 / ((7 * 100 + 0) / 8) - 1);
+  });
+  it("semana en curso marcada como parcial", () => {
+    const w = weeklyLoads(byWeek([[50, 0, 0, 0, 0, 200, 0], [60, 0, 0]]), mon + 9);
+    expect(w.at(-1)).toMatchObject({ partial: true, load: 60 });
   });
 });
 
