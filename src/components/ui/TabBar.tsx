@@ -82,10 +82,10 @@ export function TabBar() {
   return (
     <nav
       aria-label="Navegación principal"
-      className="tabbar fixed inset-x-0 bottom-0 z-40 flex justify-center px-3"
+      className="tabbar fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 [transform:translateZ(0)]"
       style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}
     >
-      <ul className="flex w-full max-w-[420px] items-stretch rounded-[30px] border border-line-strong bg-glass p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-150">
+      <ul className="tabbar-surface flex w-full max-w-[420px] items-stretch rounded-[30px] border border-line-strong p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-150">
         {TABS.map((tab) => {
           const active = tab.match(shownPath);
           return (
@@ -104,10 +104,10 @@ export function TabBar() {
                   setPressed({ href: tab.href, from: pathname });
                 }}
                 aria-current={active ? "page" : undefined}
-                className="flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-[24px] transition-colors"
+                className="flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-[24px]"
               >
                 <span
-                  className={`flex h-[30px] w-[52px] items-center justify-center rounded-full transition-all duration-150 ${
+                  className={`flex h-[30px] w-[52px] items-center justify-center rounded-full ${
                     active ? "bg-lime text-lime-ink shadow-[0_0_18px_rgba(200,242,58,0.45)]" : "text-fg-3"
                   }`}
                 >

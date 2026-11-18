@@ -409,6 +409,14 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
 
 ## Botones y toques (una sola definición)
 
+- **Cambio de pestaña**: sin View Transitions (sus capturas dejaban en iPhone un fotograma negro
+  y otro blanco). Fondo del tema en `html`, `body` y detrás de `main` desde el primer fotograma;
+  cada pantalla entra con un fundido de opacidad de 120 ms desde 0,55 (sin desplazamiento ni
+  escala) y las tarjetas ya no «suben» al entrar. `loading.tsx` en cada pestaña: el esqueleto
+  sale en el mismo fotograma del cambio. Barra inferior fija, sin transiciones, casi opaca
+  (`.tabbar-surface`, 94 % del color de tarjeta) y espacio inferior = alto de la barra + zona
+  segura + 48 px.
+
 Todo el comportamiento táctil vive en `globals.css` (bloque «Interacción») y en cuatro piezas
 de `src/components/ui/`; ninguna pantalla define su propio pulsado (una prueba lo vigila).
 - Pulsado inmediato: escala 0,97 + brillo (más claro de noche, algo más oscuro de día),
@@ -692,6 +700,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Cambio de pestaña sin fotogramas negros ni blancos ni tirones: fuera View
+  Transitions, fundido de 120 ms solo de opacidad, esqueleto inmediato (loading.tsx), barra fija
+  y casi opaca, más espacio inferior.
 - 2026‑11‑18 — Rendimiento: funciones en fra1, consultas en paralelo y sin repetir, caché por
   pantalla con invalidación, selectores en el cliente (cero peticiones), precarga y caché de
   pestañas, esqueletos, scroll arriba al entrar en una pestaña. Carga: semana frente a la media de

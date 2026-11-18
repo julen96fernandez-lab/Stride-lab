@@ -175,14 +175,15 @@
 }
 
 html {
-  background: var(--bg);
+  /* El fondo del tema desde el primer fotograma (también detrás de cualquier cambio de pantalla). */
+  background-color: var(--bg);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
   min-height: 100dvh;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "ss01";
@@ -247,35 +248,34 @@ body {
   line-height: 1;
 }
 
-/* Entrada escalonada de tarjetas */
-@keyframes rise {
+/* Cambio de pantalla: solo un fundido corto (120 ms), sin desplazamiento ni escala, y nunca
+   desde transparente del todo (el primer fotograma ya enseña la pantalla). El esqueleto
+   (.no-fade) aparece tal cual, en el mismo fotograma del toque. Las tarjetas no se animan
+   por separado (.stagger ya no mueve nada). */
+@keyframes page-fade {
   from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.985);
+    opacity: 0.55;
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
-.stagger > * {
-  animation: rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+.app-main {
+  background-color: var(--bg-main, transparent);
 }
-.stagger > *:nth-child(1) { animation-delay: 0.02s; }
-.stagger > *:nth-child(2) { animation-delay: 0.08s; }
-.stagger > *:nth-child(3) { animation-delay: 0.14s; }
-.stagger > *:nth-child(4) { animation-delay: 0.2s; }
-.stagger > *:nth-child(5) { animation-delay: 0.26s; }
-.stagger > *:nth-child(6) { animation-delay: 0.32s; }
-.stagger > *:nth-child(n + 7) { animation-delay: 0.38s; }
+.app-main > :not(.no-fade) {
+  animation: page-fade 120ms ease-out both;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .stagger > * { animation: none; }
+  .app-main > * { animation: none; }
 }
 
 /* Safe areas */
 .pt-safe { padding-top: max(16px, env(safe-area-inset-top)); }
-.pb-tabbar { padding-bottom: calc(env(safe-area-inset-bottom) + 112px); }
+/* Espacio inferior: alto de la barra (~70 px + zona segura) y margen, para que lo último nunca
+   quede debajo. */
+.pb-tabbar { padding-bottom: calc(max(10px, env(safe-area-inset-bottom)) + 70px + 48px); }
 
 :focus-visible {
   outline: 2px solid var(--lime);
@@ -400,17 +400,10 @@ body {
   animation: toast-in 220ms var(--ease-out);
 }
 
-/* Transición suave entre pantallas (View Transitions; sin soporte, no pasa nada). */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 180ms;
-  animation-timing-function: var(--ease-out);
-}
-::view-transition-group(*) {
-  animation-duration: 200ms;
-}
-.tabbar {
-  view-transition-name: tabbar;
+/* Barra inferior: fija, sin animarse con el cambio de pantalla y casi opaca (no se
+   transparentan los chips ni los gráficos que pasan por debajo). */
+.tabbar-surface {
+  background-color: color-mix(in srgb, var(--card) 94%, transparent);
 }
 
 /* Tarjetas fuera de pantalla: el navegador no las maqueta ni pinta hasta acercarse (abrir
@@ -451,10 +444,5 @@ body {
   }
   .spin {
     animation-duration: 2s;
-  }
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
   }
 }

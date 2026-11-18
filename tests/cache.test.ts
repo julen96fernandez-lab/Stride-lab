@@ -101,3 +101,35 @@ describe("pestañas", () => {
     expect(read("src/components/ui/Segmented.tsx")).not.toMatch(/\.scrollIntoView\(/);
   });
 });
+
+describe("cambio de pestaña sin fotogramas vacíos ni tirones", () => {
+  const css = read("src/app/globals.css");
+  it("sin View Transitions (capturas de pantalla que dejaban un fotograma negro y otro blanco)", () => {
+    expect(css).not.toMatch(/view-transition/);
+    expect(read("src/app/(app)/layout.tsx")).not.toMatch(/ViewTransition/);
+  });
+  it("fondo del tema en html y body desde el primer fotograma", () => {
+    expect(css).toMatch(/html \{[^}]*background-color: var\(--bg\)/);
+    expect(css).toMatch(/body \{[^}]*background-color: var\(--bg\)/);
+  });
+  it("fundido de ≤ 150 ms solo de opacidad (sin desplazamiento ni escala), nunca desde transparente", () => {
+    const kf = /@keyframes page-fade \{([\s\S]*?)\n\}/.exec(css)![1];
+    expect(kf).not.toMatch(/transform|translate|scale/);
+    const from = Number(/from \{\s*opacity: ([\d.]+)/.exec(kf)![1]);
+    expect(from).toBeGreaterThan(0.3);
+    const ms = Number(/animation: page-fade (\d+)ms/.exec(css)![1]);
+    expect(ms).toBeLessThanOrEqual(150);
+    expect(css).not.toMatch(/@keyframes rise/);
+  });
+  it("barra fija, sin animarse y casi opaca", () => {
+    const bar = read("src/components/ui/TabBar.tsx");
+    expect(bar).not.toMatch(/transition/);
+    const pct = Number(/\.tabbar-surface \{\s*background-color: color-mix\(in srgb, var\(--card\) (\d+)%/.exec(css)![1]);
+    expect(pct).toBeGreaterThanOrEqual(90);
+  });
+  it("cada pestaña tiene esqueleto inmediato (loading.tsx) sin fundido", () => {
+    for (const d of ["", "/actividad", "/analisis", "/perfil", "/actividad/[id]"]) {
+      expect(read(`src/app/(app)${d}/loading.tsx`)).toContain("no-fade");
+    }
+  });
+});
