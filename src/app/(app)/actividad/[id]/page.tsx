@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { RunExplorer } from "@/components/charts/RunExplorer";
+import { ManualActions } from "@/components/manual/ManualActions";
 import { CountUp } from "@/components/ui/CountUp";
 import { Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/RunRow";
@@ -53,13 +54,22 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
           </span>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <Tag>{run.source === "apple_watch" ? "Apple Watch" : run.source === "strava" ? "Strava" : (run.sourceName ?? "Otra fuente")}</Tag>
+          <Tag tone={run.source === "manual" ? "lime" : undefined}>
+            {run.source === "manual" ? "Manual" : run.source === "apple_watch" ? "Apple Watch" : run.source === "strava" ? "Strava" : (run.sourceName ?? "Otra fuente")}
+          </Tag>
           {run.isIndoor && <Tag>Indoor</Tag>}
           {run.isSpecial && <Tag tone="lime">Sesión especial</Tag>}
-          <LoadBadge load={run.trainingLoad} />
+          <LoadBadge load={run.trainingLoad} estimated={run.loadEstimated} />
           {run.status !== "valid" && <Tag>{run.status === "duplicate" ? "Duplicada" : "No válida"}</Tag>}
         </div>
       </header>
+
+      {run.note && (
+        <p className="-mt-1 rounded-2xl border border-line bg-inset px-4 py-3 text-[14px] leading-relaxed">
+          <span className="mr-1.5 text-[11px] font-semibold tracking-[0.06em] text-fg-2 uppercase">Nota</span>
+          {run.note}
+        </p>
+      )}
 
       {/* Números principales */}
       <section className="card card-hero p-5">
@@ -101,10 +111,12 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
       <DurabilityCard d={durability} check={decoupling} />
 
       {/* Tiempo en zonas y carga */}
-      <ZonesCard seconds={run.hrZoneSeconds} load={run.trainingLoad} zones={zones} />
+      <ZonesCard seconds={run.hrZoneSeconds} load={run.trainingLoad} zones={zones} estimated={run.loadEstimated} />
 
       {/* Métricas */}
       <Metrics run={run} />
+
+      {run.source === "manual" && <ManualActions id={run.id} />}
 
       <nav className="grid grid-cols-2 gap-3" aria-label="Otras carreras">
         {prevId ? (

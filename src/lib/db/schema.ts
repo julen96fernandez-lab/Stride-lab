@@ -66,7 +66,7 @@ export const shoes = pgTable("shoes", {
   createdAt: createdAt(),
 });
 
-export type RunSource = "apple_watch" | "strava" | "other";
+export type RunSource = "apple_watch" | "strava" | "other" | "manual";
 export type RunStatus = "valid" | "invalid" | "duplicate";
 
 export const runs = pgTable(
@@ -119,6 +119,10 @@ export const runs = pgTable(
     /** Ritmo medio (s/km) en los instantes con pulso en Z2, si hubo ≥ 5 min (ver efficiency.ts). */
     efZ2PaceSPerKm: real("ef_z2_pace_s_per_km"),
     efZ2Seconds: real("ef_z2_seconds"),
+    /** Nota libre (carreras añadidas a mano; se conserva si el zip la sustituye). */
+    note: text("note"),
+    /** La carga se estimó solo con el pulso medio (carrera manual sin muestras de pulso). */
+    loadEstimated: boolean("load_estimated").notNull().default(false),
     shoeId: uuid("shoe_id").references(() => shoes.id, { onDelete: "set null" }),
     importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
     /** Metadatos y estadísticas originales, para trazabilidad. */

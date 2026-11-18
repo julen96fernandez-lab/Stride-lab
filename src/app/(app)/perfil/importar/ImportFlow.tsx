@@ -574,6 +574,7 @@ function Counters({ imp }: { imp: ImportView }) {
     ["Duplicadas (Strava)", s.runsDuplicate],
     ["No válidas (< 0,5 km)", s.runsInvalid],
     ["Sesiones especiales", s.runsSpecial],
+    ["Carreras manuales sustituidas por el zip", imp.status === "done" ? (s.manualReplaced ?? 0) : s.manualReplaced],
     ["Rutas GPX enlazadas", (s.routesLinked ?? 0) + (s.routesTimeLinked ?? 0) || undefined],
     ["Lecturas de VO₂ máx.", s.vo2Readings],
     ["Muestras del reloj (FC, potencia, distancia)", s.samples],

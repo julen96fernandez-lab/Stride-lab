@@ -4,8 +4,8 @@ import * as s from "@/lib/db/schema";
 import { applyInjuryFlags } from "./injuries-db";
 import { recomputeEfficiency } from "./efficiency-db";
 import { recomputeEfforts } from "./efforts-db";
-import { DEFAULT_ZONES, timeInZones, trainingLoad, validZones, type HrZones } from "./hr-zones";
-import { DEFAULT_TYPE_SETTINGS, classifySessionTypes, type SessionType, type TypeSettings } from "./session-type";
+import { DEFAULT_ZONES, estimatedLoad, timeInZones, trainingLoad, validZones, type HrZones } from "./hr-zones";
+import { DEFAULT_TYPE_SETTINGS, classifySessionTypes, type RunForType, type SessionType, type TypeSettings } from "./session-type";
 
 const SETTINGS_KEY = "session_type_settings";
 const ZONES_KEY = "hr_zones";
@@ -69,6 +69,8 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
       elevationGainM: s.runs.elevationGainM,
       intervalSteps: sql<string[] | null>`${s.runs.raw}->'intervalSteps'`,
       inInjury: s.runs.inInjury,
+      durationS: s.runs.durationS,
+      loadEstimated: s.runs.loadEstimated,
     })
     .from(s.runs)
     .where(eq(s.runs.status, "valid"));
@@ -89,7 +91,14 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
       const z = zoneSecs.get(i);
       return z ? `{${z.map((x) => Math.round(x)).join(",")}}` : null;
     });
-    const loads = ids.map((i) => trainingLoad(zoneSecs.get(i) ?? null));
+    // Sin muestras de pulso, una carrera manual conserva su carga estimada (con las zonas actuales).
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const loads = ids.map((i) => {
+      const z = zoneSecs.get(i);
+      if (z) return trainingLoad(z);
+      const r = byId.get(i)!;
+      return r.loadEstimated ? estimatedLoad(r.avgHr, r.durationS, zones.limits) : null;
+    });
     await db.execute(sql`
       UPDATE runs SET
         session_type_auto = x.t,
@@ -108,6 +117,31 @@ export async function reclassifyAll(db: Db, opts: { efforts?: boolean } = {}): P
   // Las no válidas no llevan tipo automático.
   await db.execute(sql`UPDATE runs SET session_type_auto = NULL, session_type_reason = NULL WHERE status <> 'valid' AND session_type_auto IS NOT NULL`);
   return ids.length;
+}
+
+/**
+ * Tipo automático de una sola carrera (nueva o editada) con las mismas reglas, zonas y media
+ * de referencia de 12 meses que el resto, sin tocar las demás.
+ */
+export async function classifyCandidate(db: Db, candidate: RunForType): Promise<{ type: SessionType; reason: string }> {
+  const [settings, zones] = await Promise.all([getTypeSettings(db), getZones(db)]);
+  const rows = await db
+    .select({
+      id: s.runs.id,
+      startAt: s.runs.startAt,
+      distanceM: s.runs.distanceM,
+      avgPaceSPerKm: s.runs.avgPaceSPerKm,
+      avgHr: s.runs.avgHr,
+      isIndoor: s.runs.isIndoor,
+      isSpecial: s.runs.isSpecial,
+      elevationGainM: s.runs.elevationGainM,
+      intervalSteps: sql<string[] | null>`${s.runs.raw}->'intervalSteps'`,
+      inInjury: s.runs.inInjury,
+    })
+    .from(s.runs)
+    .where(eq(s.runs.status, "valid"));
+  const all = [...rows.filter((r) => r.id !== candidate.id), candidate];
+  return classifySessionTypes(all, settings, zones).get(candidate.id)!;
 }
 
 /**

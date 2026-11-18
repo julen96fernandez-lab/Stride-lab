@@ -3,7 +3,7 @@
  *  - Distancia pendiente → suma de las muestras de distancia del reloj.
  *  - Entrenamientos de la misma fuente separados por < 2 min → una sola sesión.
  */
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import type { SeriesMetric } from "@/lib/db/schema";
@@ -38,7 +38,12 @@ const add = (a: number | null, b: number | null) => (a === null && b === null ? 
 
 /** Une pares de entrenamientos de la misma fuente separados por menos de MERGE_GAP_S. Devuelve los ids que absorbieron a otro. */
 export async function mergeConsecutive(db: Db): Promise<string[]> {
-  const runs = await db.select().from(s.runs).where(isNotNull(s.runs.sourceName)).orderBy(asc(s.runs.sourceName), asc(s.runs.startAt));
+  // Las carreras manuales no se unen nunca (no son del reloj).
+  const runs = await db
+    .select()
+    .from(s.runs)
+    .where(and(isNotNull(s.runs.sourceName), ne(s.runs.source, "manual")))
+    .orderBy(asc(s.runs.sourceName), asc(s.runs.startAt));
   const merged: string[] = [];
   let i = 0;
   while (i < runs.length - 1) {

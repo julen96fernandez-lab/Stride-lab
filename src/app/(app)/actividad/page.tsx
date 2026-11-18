@@ -14,7 +14,18 @@ export default function ActivityPage({ searchParams }: PageProps<"/actividad">) 
   return (
     <div className="flex flex-col gap-4">
       <div className="mt-4">
-        <PageHeader title="Actividad" subtitle="Todas tus carreras válidas." />
+        <PageHeader
+          title="Actividad"
+          subtitle="Todas tus carreras válidas."
+          aside={
+            <Link
+              href="/actividad/nueva"
+              className="inline-flex min-h-[44px] flex-none items-center gap-1.5 rounded-full bg-lime px-4 text-[14px] font-semibold text-lime-ink active:scale-[0.98]"
+            >
+              <span aria-hidden="true" className="text-[18px] leading-none">+</span> Añadir carrera
+            </Link>
+          }
+        />
       </div>
       <Suspense fallback={<div className="card h-[480px] animate-pulse" aria-hidden="true" />}>
         <RunList searchParams={searchParams} />

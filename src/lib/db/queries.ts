@@ -553,3 +553,37 @@ export async function getInjuriesView() {
   const today = new Date(localDay(new Date()) * 86_400_000).toISOString().slice(0, 10);
   return { injuries: injuries.map((i) => ({ id: i.id, startDate: i.startDate, endDate: i.endDate, note: i.note, runs: n.get(i.id) ?? 0 })), today };
 }
+
+// ─── Carreras manuales: edición ─────────────────────────────────────────────
+
+/** Valores del formulario para editar una carrera manual (null si no existe o no es manual). */
+export async function getManualForEdit(id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const r = (await db().select().from(s.runs).where(eq(s.runs.id, id)).limit(1))[0];
+  if (!r || r.source !== "manual") return null;
+  const { dateToMadrid } = await import("@/lib/manual/manual");
+  const { date, time } = dateToMadrid(r.startAt);
+  const d = Math.round(r.durationS);
+  const n = (v: number | null, digits = 0) => (v === null ? "" : (Math.round(v * 10 ** digits) / 10 ** digits).toString().replace(".", ","));
+  return {
+    id: r.id,
+    existingFile: r.routeFile,
+    values: {
+      date,
+      time,
+      distanceKm: r.distanceM === null ? "" : (r.distanceM / 1000).toString().replace(".", ","),
+      h: String(Math.floor(d / 3600)),
+      m: String(Math.floor((d % 3600) / 60)),
+      s: String(d % 60),
+      avgHr: n(r.avgHr),
+      maxHr: n(r.maxHr),
+      elevationGainM: n(r.elevationGainM),
+      cadenceSpm: n(r.cadenceSpm),
+      avgPowerW: n(r.avgPowerW),
+      temperatureC: n(r.temperatureC, 1),
+      sessionType: r.sessionTypeManual ?? "auto",
+      note: r.note ?? "",
+      isIndoor: !!r.isIndoor,
+    },
+  };
+}

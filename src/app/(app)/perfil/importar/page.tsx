@@ -24,6 +24,15 @@ export default function ImportPage() {
         Perfil
       </Link>
       <PageHeader title="Importar" subtitle="Tu export de Apple Health." />
+      <Link href="/actividad/nueva" className="card flex min-h-[64px] items-center gap-3 px-4 py-3 active:opacity-80">
+        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-lime text-[20px] font-bold text-lime-ink" aria-hidden="true">
+          +
+        </span>
+        <span className="flex-1">
+          <span className="block font-display text-[16px] font-bold">Añadir carrera</span>
+          <span className="block text-[12px] text-fg-2">A mano o con un .gpx, .tcx o .fit, sin reimportar el zip</span>
+        </span>
+      </Link>
       <Suspense fallback={<div className="card h-[260px]" aria-hidden="true" />}>
         <Flow />
       </Suspense>

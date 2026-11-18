@@ -116,6 +116,32 @@ Cálculos en `src/lib/analysis/insights.ts` (y `kmByType` en `periods.ts`), con 
   completo, discontinuo) y tabla del 1 de enero hasta hoy frente al mismo tramo del año
   pasado: km, horas, desnivel, carreras y ritmo medio (sin especiales).
 
+## Carreras añadidas a mano
+
+Botón «Añadir carrera» en Actividad y en Perfil → Importar (`/actividad/nueva`; edición en
+`/actividad/[id]/editar`, solo origen `manual`). Formulario para el iPhone: fecha y hora,
+distancia y duración (h:min:s) obligatorias; pulso medio/máximo, desnivel, cadencia, potencia,
+temperatura, tipo (automático por defecto), nota y «Cinta / indoor» opcionales. «Ver resumen»
+muestra ritmo, tipo que saldría, carga y sesión especial, y avisa de carreras a ≤ 30 min (hay
+que marcar «guardarla igualmente»). Errores campo a campo en español.
+- Archivo opcional .gpx/.tcx/.fit (`src/lib/import/activity-file.ts`, sin dependencias; el
+  FIT se decodifica a mano: mensajes record y session, marcas de tiempo comprimidas, campos
+  de desarrollador). Se lee en el móvil para rellenar el formulario y en el servidor para
+  guardar: series (distancia por intervalos, pulso, potencia) en el mismo formato que el zip,
+  ruta (GPX en Blob), pista con altitud, parciales, zonas, carga, récords y ritmo en Z2. Límite
+  4 MB (Vercel).
+- Sin archivo: ni series, ni gráficos, ni tiempo en zonas. Con pulso medio, carga **estimada**
+  (todo el tiempo en la zona del pulso medio), marcada «≈ estimada»; `reclassifyAll` la
+  conserva y la reestima si cambian las zonas.
+- Al guardar se recalcula solo esa carrera (`src/lib/manual/manual-db.ts`): tipo con
+  `classifyCandidate` (mismas reglas, zonas y media de 12 meses), zonas, carga, récords, Z2 y
+  lesiones. Objetivos y gráficos se calculan al vuelo.
+- Import del zip: en la fase final, antes de deduplicar, `replaceManualRuns` sustituye cada
+  manual con pareja (mismo día de Madrid, inicio a < 30 min, distancia ±5 %; primero contra
+  el Apple Watch y luego contra otras fuentes). La del zip conserva tipo manual, nota y calzado
+  de la manual. Las manuales nunca se marcan como duplicadas ni se unen con otras. El resumen
+  del import muestra «Carreras manuales sustituidas por el zip».
+
 ## Series y eficiencia aeróbica
 
 **Series** (`src/lib/analysis/intervals.ts`, sección en el detalle de carreras de tipo Series):
@@ -518,6 +544,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Carreras añadidas a mano (con .gpx/.tcx/.fit opcional), edición y borrado,
+  sustitución por el zip conservando tipo, nota y calzado. Migración 0008.
 - 2026‑11‑18 — Series (repeticiones y recuperaciones desde los pasos del reloj; hace falta
   Reprocesar para las carreras ya importadas), desacople solo con ritmo estable y eficiencia
   aeróbica en Z2 con su tendencia en Análisis. Reglas versión 9, migración 0007.

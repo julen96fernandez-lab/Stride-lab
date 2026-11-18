@@ -69,3 +69,14 @@ export const LOAD_LEVELS = { moderate: 120, high: 250 } as const;
 export function loadLevel(load: number): "low" | "moderate" | "high" {
   return load >= LOAD_LEVELS.high ? "high" : load >= LOAD_LEVELS.moderate ? "moderate" : "low";
 }
+
+/**
+ * Carga estimada sin muestras de pulso (carrera manual): todo el tiempo en la zona del pulso
+ * medio. Es una aproximación y se marca como estimada.
+ */
+export function estimatedLoad(avgHr: number | null, durationS: number, limits: HrZones["limits"]): number | null {
+  if (avgHr === null || !(durationS > 0)) return null;
+  const secs = [0, 0, 0, 0, 0];
+  secs[zoneOf(avgHr, limits) - 1] = durationS;
+  return trainingLoad(secs);
+}

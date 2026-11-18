@@ -7,12 +7,18 @@ import { Card } from "./primitives";
 const ZONE_NAMES = ["Recuperación", "Aeróbico suave", "Aeróbico", "Umbral", "Máximo"];
 
 /** Tiempo en cada zona de FC (con las muestras de la carrera) y carga. */
-export function ZonesCard({ seconds, load, zones }: { seconds: number[] | null; load: number | null; zones: HrZones }) {
+export function ZonesCard({ seconds, load, zones, estimated = false }: { seconds: number[] | null; load: number | null; zones: HrZones; estimated?: boolean }) {
   if (!seconds || seconds.reduce((a, b) => a + b, 0) <= 0) {
     return (
       <Card>
-        <div className="eyebrow">Zonas de pulso</div>
-        <p className="mt-2 text-[14px] text-fg-2">Sin muestras de pulso en esta carrera.</p>
+        <div className="flex items-center justify-between">
+          <div className="eyebrow">Zonas de pulso</div>
+          <LoadBadge load={load} size="lg" estimated={estimated} />
+        </div>
+        <p className="mt-2 text-[14px] text-fg-2">
+          Sin muestras de pulso en esta carrera: no hay tiempo en zonas.
+          {estimated && load !== null && " La carga está estimada con el pulso medio (todo el tiempo en su zona)."}
+        </p>
       </Card>
     );
   }
@@ -24,7 +30,7 @@ export function ZonesCard({ seconds, load, zones }: { seconds: number[] | null; 
     <Card>
       <div className="flex items-center justify-between">
         <div className="eyebrow">Zonas de pulso</div>
-        <LoadBadge load={load} size="lg" />
+        <LoadBadge load={load} size="lg" estimated={estimated} />
       </div>
       <ul className="mt-4 flex flex-col gap-2.5">
         {seconds.map((sec, i) => {

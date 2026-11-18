@@ -31,7 +31,9 @@ export function classifyRuns(runs: RunForClassify[]): Map<string, Classification
 
   for (const r of sorted) {
     let duplicateOf: string | null = null;
-    if (r.source !== "apple_watch") {
+    // Las manuales no se marcan como duplicadas: si el zip trae la misma carrera, la sustituye
+    // antes (replaceManualRuns); si no hay pareja clara, se quedan las dos.
+    if (r.source !== "apple_watch" && r.source !== "manual") {
       let best: RunForClassify | null = null;
       let bestGap = Infinity;
       for (const w of watches) {

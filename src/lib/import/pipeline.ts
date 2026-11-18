@@ -20,6 +20,7 @@ import type { ImportPhase, SeriesMetric } from "@/lib/db/schema";
 import { classifyRuns } from "./classify";
 import { mergeConsecutive, resolvePendingDistances } from "./consolidate";
 import { reclassifyAll } from "@/lib/analysis/session-type-db";
+import { replaceManualRuns } from "@/lib/manual/replace";
 import { bbox, cumulativeDistance, elevationGainLoss, encodePolyline, parseGpx, simplify, type GpxPoint } from "./gpx";
 import { XmlScanner, type ScanTarget } from "./scanner";
 import { computeSplits, cumulativeFromIntervals, type Series } from "./splits";
@@ -639,7 +640,10 @@ async function phaseFinalize(row: ImportRow, deps: ImportDeps, deadline: number)
       const r = (await db.select({ id: s.runs.id, startAt: s.runs.startAt }).from(s.runs).where(eq(s.runs.id, id)))[0];
       if (r) await writeSplits(db, r, null);
     }
-    await saveState(db, row, { consolidated: true }, {}, { runsMerged: merged.length });
+    // Carreras añadidas a mano que ya trae el zip: las sustituye la del zip (conserva tipo,
+    // nota y calzado). Las que no tienen pareja se quedan.
+    const replaced = await replaceManualRuns(db);
+    await saveState(db, row, { consolidated: true }, {}, { runsMerged: merged.length, manualReplaced: replaced });
   }
 
   // Parciales de las carreras sin GPX (cinta) a partir de la distancia del reloj.
