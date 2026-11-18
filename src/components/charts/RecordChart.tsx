@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 import type { RecordPoint } from "@/lib/analysis/best-efforts";
 import { bandsToMs, type InjuryBand } from "@/lib/analysis/injuries";
 import { injuryMarkArea } from "./injury";
-import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { C, EChart } from "./EChart";
+import { T, baseOption, lineSeries, timeAxis, tipHead, tipRow, tooltip, valueAxis } from "./theme";
 import { timeTicks } from "@/lib/analysis/time-ticks";
 import { regularAxis, TIME_STEPS } from "@/lib/analysis/axis";
 
@@ -49,35 +50,20 @@ export function RecordChart({
     const ticks = timeTicks(x0, nowMs);
     const yAx = regularAxis(t, 4, TIME_STEPS);
     return {
-      grid: { left: 46, right: 10, top: 16, bottom: 24 },
-      tooltip: {
-        ...tooltipBase,
+      ...baseOption({ left: 46, right: 10, top: 16, bottom: 24 }),
+      tooltip: tooltip({
         trigger: "item",
+        pointer: false,
         formatter: (e: { seriesIndex: number; dataIndex: number }) => {
           if (e.seriesIndex !== 0) return "";
           const p = points[e.dataIndex];
-          return `<div style="color:${C.axis};font-size:11px">${fmtDate(p.startAt)}${p.isRecord ? " · récord" : ""}</div><b>${clock(p.timeS)}</b> · ${clock(p.timeS / distanceKm)} /km`;
+          return tipHead(`${fmtDate(p.startAt)}${p.isRecord ? " · récord" : ""}`) + tipRow(clock(p.timeS), `${clock(p.timeS / distanceKm)} /km`);
         },
-      },
-      xAxis: {
-        type: "time",
-        min: x0,
-        max: nowMs,
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        // Marcas regulares (mismo paso de calendario) con fechas en español.
-        axisLabel: { ...axisLabel, customValues: ticks.values, formatter: ticks.label },
-      },
-      yAxis: {
-        type: "value",
-        inverse: true, // más arriba = más rápido
-        min: yAx.min,
-        max: yAx.max,
-        interval: yAx.interval,
-        axisLabel: { ...axisLabel, formatter: (v: number) => clock(v) },
-        splitLine: { lineStyle: { color: C.grid } },
-      },
+      }),
+      // Marcas regulares (mismo paso de calendario) con fechas en español.
+      xAxis: timeAxis({ min: x0, max: nowMs, ticks: ticks.values, format: ticks.label }),
+      // Más arriba = más rápido.
+      yAxis: valueAxis({ min: yAx.min, max: yAx.max, interval: yAx.interval, inverse: true, format: (v) => clock(v) }),
       series: [
         {
           type: "scatter",
@@ -86,23 +72,18 @@ export function RecordChart({
             symbolSize: i === sel ? 13 : p.isRecord ? 10 : 6,
             itemStyle: {
               color: p.isRecord ? (p.startAt.getTime() >= yearAgo ? C.lime : C.text) : C.fg3,
-              borderColor: i === sel ? C.text : C.surface,
+              borderColor: i === sel ? T.text : T.surface,
               borderWidth: i === sel ? 2 : 1,
               opacity: p.isRecord ? 1 : 0.7,
+              shadowBlur: i === sel ? 12 : 0,
+              shadowColor: p.isRecord ? C.lime : C.fg3,
             },
           })),
           markArea: points.length ? injuryMarkArea(bandsToMs(bands, points[0].startAt.getTime(), nowMs, nowMs), points[0].startAt.getTime(), nowMs) : undefined,
           z: 3,
         },
-        {
-          type: "line",
-          step: "end",
-          data: steps,
-          showSymbol: false,
-          silent: true,
-          lineStyle: { color: C.lime, width: 2 },
-          z: 2,
-        },
+        // Escalera del récord vigente, con degradado que se desvanece.
+        { ...lineSeries({ data: steps, step: "end", area: true, areaOrigin: "end", z: 2 }), silent: true },
       ],
     };
   }, [points, bands, sel, yearAgo, distanceKm, nowMs]);

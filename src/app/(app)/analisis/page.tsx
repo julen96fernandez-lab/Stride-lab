@@ -365,7 +365,7 @@ async function PeriodsCard({ unit, weeks, keep }: { unit: PeriodUnit; weeks: 12 
       )}
 
       <div className="mt-4">
-        <PeriodCharts key={`${unit}-${weeks}`} periods={periods} unit={unit} goalKm={goalKm} injuryRanges={injuryRanges} />
+        <PeriodCharts periods={periods} unit={unit} goalKm={goalKm} injuryRanges={injuryRanges} />
       </div>
       <p className="mt-3 text-[12px] text-fg-2">
         Toca una columna para ver su detalle. El periodo actual va en lima{goalKm ? "; la línea discontinua es tu objetivo" : ""}. Las
@@ -470,7 +470,7 @@ async function InsightsCards({ sp }: { sp: Record<string, string | string[] | un
           </div>
         </div>
         <div className="mt-3">
-          <PaceTrend key={`${range}-${paceType}`} points={points} trend={trend} bands={bands} nowMs={nowMs} />
+          <PaceTrend points={points} trend={trend} bands={bands} nowMs={nowMs} />
         </div>
         <p className="mt-2 text-[12px] text-fg-2">
           {points.length} {points.length === 1 ? "carrera" : "carreras"}. Sin sesiones especiales (más de 8:00 /km).
@@ -591,7 +591,7 @@ async function EfficiencyCard({ sp }: { sp: Record<string, string | string[] | u
         </p>
       )}
       <div className="mt-3">
-        <PaceTrend key={all ? "todos" : "rodaje"} points={points} trend={trend} bands={bands} nowMs={nowMs} />
+        <PaceTrend points={points} trend={trend} bands={bands} nowMs={nowMs} />
       </div>
       <p className="mt-2 text-[12px] leading-relaxed text-fg-2">
         Cada punto es el ritmo medio de una carrera mientras tu pulso estuvo en Z2 (al menos 5 minutos en Z2; sin pausas ni muestras inválidas). Más

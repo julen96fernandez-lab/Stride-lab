@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { C, EChart, axisLabel, timeLabel, tooltipBase } from "./EChart";
+import { EChart, timeLabel } from "./EChart";
+import { ChartEmpty } from "./ChartEmpty";
+import { T, baseOption, barItem, barSeries, categoryAxis, lineSeries, tipHead, tipRow, tooltip, valueAxis } from "./theme";
 
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const fmtDay = (iso: string) => {
@@ -9,7 +11,6 @@ const fmtDay = (iso: string) => {
   return `${d} ${MONTHS[m - 1]} ${y}`;
 };
 const dec1 = (v: number) => v.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const paceStr = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
 
 /**
  * Tendencia (VO₂ máx.): línea gruesa con relleno degradado, punto final con halo,
@@ -28,73 +29,31 @@ export function TrendChart({
 }) {
   const option = useMemo(() => {
     const data = points.map((p) => [p.day, p.value]);
-    const last = data[data.length - 1];
     const values = points.map((p) => p.value);
     const min = Math.floor(Math.min(...values) - 1);
     const max = Math.ceil(Math.max(...values) + 1);
+    const last = data[data.length - 1];
     return {
-      grid: { left: zoom ? 34 : 4, right: 12, top: 14, bottom: zoom ? 28 : 6 },
-      tooltip: {
-        ...tooltipBase,
-        trigger: "axis",
-        axisPointer: { type: "line", lineStyle: { color: C.pointer, width: 1 } },
-        formatter: (ps: { value: [string, number] }[]) =>
-          `<div style="color:${C.axis};font-size:11px">${fmtDay(ps[0].value[0])}</div><div style="font-family:'Space Grotesk';font-weight:700;font-size:18px">${dec1(ps[0].value[1])}</div>`,
-      },
+      ...baseOption({ left: zoom ? 34 : 4, right: 12, top: 14, bottom: zoom ? 26 : 6 }),
+      tooltip: tooltip({ formatter: (ps: { value: [string, number] }[]) => tipHead(fmtDay(ps[0].value[0])) + tipRow(dec1(ps[0].value[1])) }),
       xAxis: {
         type: "time",
         show: zoom,
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { show: false },
-        axisLabel: { ...axisLabel, hideOverlap: true, formatter: timeLabel },
+        axisLabel: { ...valueAxis().axisLabel, formatter: timeLabel },
       },
-      yAxis: {
-        type: "value",
-        min,
-        max,
-        show: zoom,
-        splitNumber: 3,
-        axisLabel,
-        splitLine: { lineStyle: { color: C.grid } },
-      },
+      yAxis: valueAxis({ min, max, show: zoom }),
       dataZoom: zoom ? [{ type: "inside", start: 0, end: 100, zoomOnMouseWheel: true, moveOnMouseMove: true }] : [],
       series: [
-        {
-          type: "line",
-          data,
-          smooth: 0.35,
-          showSymbol: false,
-          symbolSize: 8,
-          lineStyle: { width: 2.5, color: C.lime, cap: "round", join: "round" },
-          areaStyle: {
-            color: {
-              type: "linear",
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: C.area },
-                { offset: 1, color: C.area0 },
-              ],
-            },
-          },
-          emphasis: { focus: "none", itemStyle: { color: C.lime, borderColor: C.bg, borderWidth: 2 } },
-        },
-        last && {
-          type: "effectScatter",
-          data: [last],
-          symbolSize: 9,
-          itemStyle: { color: C.lime, shadowBlur: 12, shadowColor: C.lime },
-          rippleEffect: { scale: 3.2, brushType: "fill", period: 3 },
-          tooltip: { show: false },
-          z: 5,
-        },
-      ].filter(Boolean),
+        lineSeries({ data, area: true }),
+        // Último dato real: punto con brillo.
+        { ...lineSeries({ data: last ? [last] : [], points: true }), symbolSize: 8, itemStyle: { color: T.accent, borderColor: T.surface, borderWidth: 2, shadowBlur: 12, shadowColor: "alpha(var(--chart-line),0.6)" }, tooltip: { show: false }, z: 5 },
+      ],
     };
   }, [points, zoom]);
-  if (points.length < 2) return null;
+  if (points.length < 2) return <ChartEmpty message="Aún no hay lecturas suficientes de VO₂ máx. para dibujar la tendencia." height={height} />;
   return <EChart option={option} height={height} label={label} />;
 }
 
@@ -117,124 +76,24 @@ export function BarsChart({
 }) {
   const option = useMemo(
     () => ({
-      grid: { left: 2, right: 2, top: 10, bottom: 22 },
-      tooltip: {
-        ...tooltipBase,
+      ...baseOption({ left: 2, right: 2, top: 10, bottom: 22 }),
+      tooltip: tooltip({
         trigger: "item",
+        pointer: false,
         formatter: (p: { dataIndex: number }) => {
           const b = bars[p.dataIndex];
-          return `<div style="color:${C.axis};font-size:11px">${b.tooltip}</div><div style="font-family:'Space Grotesk';font-weight:700;font-size:18px">${b.value ? `${Math.round(b.value).toLocaleString("es-ES")} ${unit}` : "Sin carreras"}</div>`;
+          return tipHead(b.tooltip) + tipRow(b.value ? `${Math.round(b.value).toLocaleString("es-ES")} ${unit}` : "Sin carreras");
         },
-      },
-      xAxis: {
-        type: "category",
-        data: bars.map((b) => b.label),
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { ...axisLabel, interval: 0 },
-      },
-      yAxis: { type: "value", show: false },
-      series: [
-        {
-          type: "bar",
-          barCategoryGap: "28%",
-          data: bars.map((b, i) => ({
-            value: b.value,
-            itemStyle: {
-              color: i === highlight ? C.lime : C.bar,
-              borderRadius: [6, 6, 3, 3],
-              shadowBlur: i === highlight ? 16 : 0,
-              shadowColor: i === highlight ? C.area : "transparent",
-            },
-          })),
-          emphasis: { itemStyle: { color: C.barHover } },
-        },
-      ],
+      }),
+      xAxis: categoryAxis(bars.map((b) => b.label)),
+      yAxis: valueAxis({ show: false }),
+      series: [barSeries({ data: bars.map((b, i) => ({ value: b.value, itemStyle: barItem({ current: i === highlight }) })) })],
     }),
     [bars, highlight, unit],
   );
+  if (!bars.some((b) => b.value > 0)) return <ChartEmpty message="Sin carreras en este periodo." height={height} kind="bars" />;
   return <EChart option={option} height={height} label={label} />;
 }
-
-/** Serie a lo largo de la carrera (FC o potencia) frente al tiempo. */
-export function RunLineChart({
-  t,
-  v,
-  unit,
-  height = 130,
-  label,
-}: {
-  t: number[];
-  v: number[];
-  unit: string;
-  height?: number;
-  label: string;
-}) {
-  const option = useMemo(() => {
-    // Reduce a ~400 puntos para que el gráfico sea fluido.
-    const step = Math.max(1, Math.floor(t.length / 400));
-    const data: [number, number][] = [];
-    for (let i = 0; i < t.length; i += step) data.push([t[i] / 60, v[i]]);
-    const vals = data.map((d) => d[1]);
-    return {
-      grid: { left: 34, right: 10, top: 10, bottom: 24 },
-      tooltip: {
-        ...tooltipBase,
-        trigger: "axis",
-        axisPointer: { type: "line", lineStyle: { color: C.pointer, width: 1 } },
-        formatter: (ps: { value: [number, number] }[]) => {
-          const [m, val] = ps[0].value;
-          const mm = Math.floor(m);
-          const ss = Math.round((m - mm) * 60);
-          return `<div style="color:${C.axis};font-size:11px">min ${mm}:${String(ss).padStart(2, "0")}</div><div style="font-family:'Space Grotesk';font-weight:700;font-size:18px">${Math.round(val)} ${unit}</div>`;
-        },
-      },
-      xAxis: {
-        type: "value",
-        min: 0,
-        max: Math.ceil(data[data.length - 1]?.[0] ?? 1),
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { ...axisLabel, formatter: (x: number) => `${Math.round(x)}′` },
-      },
-      yAxis: {
-        type: "value",
-        min: Math.floor(Math.min(...vals) / 10) * 10,
-        max: Math.ceil(Math.max(...vals) / 10) * 10,
-        splitNumber: 3,
-        axisLabel,
-        splitLine: { lineStyle: { color: C.grid } },
-      },
-      series: [
-        {
-          type: "line",
-          data,
-          showSymbol: false,
-          smooth: 0.2,
-          lineStyle: { width: 2, color: C.lime },
-          areaStyle: {
-            color: {
-              type: "linear",
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: C.area },
-                { offset: 1, color: C.area0 },
-              ],
-            },
-          },
-        },
-      ],
-    };
-  }, [t, v, unit]);
-  if (t.length < 2) return null;
-  return <EChart option={option} height={height} label={label} />;
-}
-
-export { paceStr };
 
 /**
  * Km por año apilados por tipo de sesión. Orden de tipos fijo (paleta validada),
@@ -251,47 +110,46 @@ export function StackedTypeYears({
   height?: number;
   label: string;
 }) {
-  const option = useMemo(
-    () => ({
-      grid: { left: 2, right: 2, top: 10, bottom: 22 },
-      tooltip: {
-        ...tooltipBase,
-        trigger: "axis",
-        axisPointer: { type: "shadow", shadowStyle: { color: "var(--ov-1)" } },
+  const option = useMemo(() => {
+    // Esquinas redondeadas solo en el segmento de arriba de cada columna.
+    const topIdx = years.map((y) => {
+      let top = -1;
+      types.forEach((t, i) => {
+        if ((y.km[t.key] ?? 0) > 0) top = i;
+      });
+      return top;
+    });
+    return {
+      ...baseOption({ left: 2, right: 2, top: 10, bottom: 22 }),
+      tooltip: tooltip({
+        pointer: false,
         formatter: (ps: { dataIndex: number }[]) => {
           const y = years[ps[0].dataIndex];
           const tot = types.reduce((a, t) => a + (y.km[t.key] ?? 0), 0);
-          if (tot <= 0) return `<div style="color:${C.axis};font-size:11px">${y.year}</div><div>Sin carreras</div>`;
-          const rows = types
-            .filter((t) => (y.km[t.key] ?? 0) > 0)
-            .sort((a, b) => (y.km[b.key] ?? 0) - (y.km[a.key] ?? 0))
-            .map(
-              (t) =>
-                `<div style="display:flex;gap:10px;justify-content:space-between"><span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${t.color};margin-right:6px"></span>${t.label}</span><b>${Math.round(y.km[t.key])} km</b></div>`,
-            )
-            .join("");
-          return `<div style="color:${C.axis};font-size:11px;margin-bottom:4px">${y.year} · ${Math.round(tot)} km</div>${rows}`;
+          if (tot <= 0) return tipHead(String(y.year)) + tipRow("Sin carreras");
+          return (
+            tipHead(`${y.year} · ${Math.round(tot)} km`) +
+            types
+              .filter((t) => (y.km[t.key] ?? 0) > 0)
+              .sort((a, b) => (y.km[b.key] ?? 0) - (y.km[a.key] ?? 0))
+              .map((t) => tipRow(`${Math.round(y.km[t.key])} km`, t.label, t.color))
+              .join("")
+          );
         },
-      },
-      xAxis: {
-        type: "category",
-        data: years.map((y) => String(y.year).slice(2)),
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { ...axisLabel, interval: 0 },
-      },
-      yAxis: { type: "value", show: false },
-      series: types.map((t, i) => ({
-        name: t.label,
-        type: "bar",
-        stack: "km",
-        barCategoryGap: "28%",
-        data: years.map((y) => (y.km[t.key] ? Math.round(y.km[t.key] * 10) / 10 : 0)),
-        itemStyle: { color: t.color, borderColor: C.surface, borderWidth: 1, borderRadius: i === types.length - 1 ? [5, 5, 0, 0] : 0 },
-        emphasis: { focus: "series" },
-      })),
-    }),
-    [years, types],
-  );
+      }),
+      xAxis: categoryAxis(years.map((y) => `'${String(y.year).slice(2)}`)),
+      yAxis: valueAxis({ show: false }),
+      series: types.map((t, i) =>
+        barSeries({
+          name: t.label,
+          stack: "km",
+          data: years.map((y, yi) => ({
+            value: y.km[t.key] ? Math.round(y.km[t.key] * 10) / 10 : 0,
+            itemStyle: { ...barItem({ color: t.color, top: topIdx[yi] === i }), borderColor: "var(--card)", borderWidth: 1 },
+          })),
+        }),
+      ),
+    };
+  }, [years, types]);
   return <EChart option={option} height={height} label={label} />;
 }

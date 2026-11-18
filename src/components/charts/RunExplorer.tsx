@@ -8,7 +8,8 @@ import { zoneOf, type HrZones } from "@/lib/analysis/hr-zones";
 import { regularAxis } from "@/lib/analysis/axis";
 import { RouteMap, type MapApi } from "@/components/map/RouteMap";
 import type { EChartsCoreOption } from "echarts/core";
-import { C, EChart, axisLabel } from "./EChart";
+import { C, EChart } from "./EChart";
+import { ANIMATION, T, axisLabel } from "./theme";
 import { IntervalsCard } from "./IntervalsCard";
 
 /** Márgenes del área de dibujo, iguales en todos los gráficos: así el cursor es una sola línea. */
@@ -82,10 +83,7 @@ export function RunExplorer({
   // ─── Opciones de cada gráfico (mismo estilo en día y noche) ─────────────────
   const base = useCallback(
     (last: boolean) => ({
-      animation: true,
-      animationDuration: 650,
-      animationEasing: "cubicOut",
-      animationDurationUpdate: 220,
+      ...ANIMATION,
       grid: { left: L, right: R, top: TOP, bottom: last ? BOTTOM_LAST : BOTTOM },
       tooltip: { show: false },
       xAxis: {
@@ -114,8 +112,8 @@ export function RunExplorer({
     }),
     [xMin, xMax, axis],
   );
-  const yLabel = { ...axisLabel, fontSize: 10, margin: 6 };
-  const faint = { lineStyle: { color: "alpha(var(--fg),0.07)", width: 1 } };
+  const yLabel = { ...axisLabel, margin: 6 };
+  const faint = { lineStyle: { color: T.grid, width: 1 } };
   const pts = useCallback(
     (vals: (number | null)[]) => {
       const out: (number | string)[][] = [];

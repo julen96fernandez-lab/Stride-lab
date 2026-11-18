@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import type { IntervalAnalysis, IntervalRow } from "@/lib/analysis/intervals";
 import { regularAxis } from "@/lib/analysis/axis";
-import { C, EChart, axisLabel } from "./EChart";
+import { C, EChart } from "./EChart";
+import { axisLabel, baseOption, barItem, barSeries, categoryAxis, refLine, tipHead, tipRow, tooltip, valueAxis } from "./theme";
 
 const paceStr = (s: number | null | undefined) => {
   if (s === null || s === undefined || !Number.isFinite(s)) return "—";
@@ -34,41 +35,23 @@ export function IntervalsCard({ analysis, sel, onSel }: { analysis: IntervalAnal
     const paces = work.map((w) => w.paceSPerKm).filter((p): p is number => p !== null);
     const ax = regularAxis([...paces, analysis.summary.workPaceSPerKm ?? paces[0]], 3);
     return {
-      animation: false,
-      grid: { left: 44, right: 12, top: 18, bottom: 24 },
-      tooltip: { show: false },
-      xAxis: { type: "category", data: work.map((w) => String(w.rep)), axisTick: { show: false }, axisLine: { show: false }, axisLabel },
-      yAxis: {
-        type: "value",
-        min: ax.min,
-        max: ax.max,
-        interval: ax.interval,
-        axisLabel: { ...axisLabel, formatter: (v: number) => paceStr(v) },
-        splitLine: { lineStyle: { color: C.grid } },
-      },
+      ...baseOption({ left: 44, right: 12, top: 18, bottom: 24 }),
+      tooltip: tooltip({
+        pointer: false,
+        formatter: (ps: { dataIndex: number }[]) => {
+          const w = work[ps[0].dataIndex];
+          return tipHead(`Repetición ${w.rep}`) + tipRow(`${paceStr(w.paceSPerKm)} /km`, w.distanceM ? `${Math.round(w.distanceM)} m` : undefined);
+        },
+      }),
+      xAxis: categoryAxis(work.map((w) => String(w.rep))),
+      yAxis: valueAxis({ min: ax.min, max: ax.max, interval: ax.interval, format: (v) => paceStr(v) }),
       series: [
         {
-          type: "bar",
-          barMaxWidth: 34,
-          data: work.map((w) => ({
-            value: w.paceSPerKm ?? "-",
-            itemStyle: {
-              color: sel === `step:${w.key}` ? C.lime : C.bar,
-              borderRadius: [5, 5, 2, 2],
-              borderColor: sel === `step:${w.key}` ? C.text : "transparent",
-              borderWidth: sel === `step:${w.key}` ? 1.5 : 0,
-            },
-          })),
-          label: { show: true, position: "top", color: C.axis, fontFamily: C.font, fontSize: 10, formatter: (p: { value: number }) => paceStr(p.value) },
-          markLine: analysis.summary.workPaceSPerKm
-            ? {
-                silent: true,
-                symbol: "none",
-                lineStyle: { color: C.text, type: [4, 4], width: 1.2 },
-                label: { formatter: `Media ${paceStr(analysis.summary.workPaceSPerKm)}`, color: C.axis, fontFamily: C.font, fontSize: 10, position: "insideEndTop" },
-                data: [{ yAxis: analysis.summary.workPaceSPerKm }],
-              }
-            : undefined,
+          ...barSeries({
+            data: work.map((w) => ({ value: w.paceSPerKm ?? "-", itemStyle: barItem({ current: sel === `step:${w.key}` }) })),
+          }),
+          label: { show: true, position: "top", color: axisLabel.color, fontFamily: C.font, fontSize: 10, formatter: (p: { value: number }) => paceStr(p.value) },
+          markLine: analysis.summary.workPaceSPerKm ? refLine({ value: analysis.summary.workPaceSPerKm, label: `Media ${paceStr(analysis.summary.workPaceSPerKm)}`, side: "start" }) : undefined,
         },
       ],
     };

@@ -6,6 +6,7 @@ import { BarChart, LineChart, ScatterChart, EffectScatterChart } from "echarts/c
 import { DataZoomComponent, GridComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent, VisualMapPiecewiseComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import type { EChartsCoreOption } from "echarts/core";
+import { withIds } from "./theme";
 
 echarts.use([
   LineChart,
@@ -74,7 +75,7 @@ export function EChart({
   label,
   onSelect,
   onItem,
-  merge = false,
+  merge = true,
 }: {
   option: EChartsCoreOption;
   /** Actualizar sin reiniciar el gráfico (sin repetir la animación de entrada). */
@@ -104,8 +105,10 @@ export function EChart({
     const opt = { ...resolveVars(optionRef.current, css) } as Record<string, unknown>;
     if (reduce) opt.animation = false;
     else if (opt.animation === undefined) opt.animation = true;
-    if (mergeRef.current && chart.current?.getOption()) chart.current.setOption(opt, { replaceMerge: ["series", "visualMap"] });
-    else chart.current?.setOption(opt, true);
+    // Primera vez: entera (con animación de entrada). Después, actualización con ids estables:
+    // cambiar de filtro o tocar anima la transición sin repetir la entrada.
+    if (mergeRef.current && chart.current?.getOption()) chart.current.setOption(withIds(opt), { replaceMerge: ["series", "visualMap", "xAxis", "yAxis"] });
+    else chart.current?.setOption(withIds(opt), true);
   };
 
   useEffect(() => {
@@ -160,15 +163,6 @@ export const C = {
   font: "Inter, system-ui, sans-serif",
 };
 
-export const tooltipBase = {
-  backgroundColor: "var(--card)",
-  borderColor: "var(--line-strong)",
-  borderWidth: 1,
-  padding: [8, 12],
-  extraCssText: "border-radius:14px;box-shadow:0 12px 30px -10px rgba(0,0,0,.45);",
-  textStyle: { color: "var(--fg)", fontFamily: C.font, fontSize: 12 },
-  confine: true,
-};
 
 export const axisLabel = { color: C.axis, fontFamily: C.font, fontSize: 11 };
 

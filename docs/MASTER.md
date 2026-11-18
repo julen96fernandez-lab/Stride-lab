@@ -311,6 +311,22 @@ sin GPS.
   lima sobre tarjeta y fondo, tinta sobre lima, peligro) y gráficos ≥ 3:1 (línea, ruta,
   zonas, carga, 8 tipos).
 
+## Estilo común de los gráficos
+
+`src/components/charts/theme.ts` (con pruebas) es la única fuente del estilo de todos los
+gráficos: colores del tema (`var(--x)` y `alpha(var(--x),a)`, que resuelve EChart.tsx en día
+y noche), líneas de 2 px suaves y redondeadas con degradado transparente y punto con brillo
+solo bajo el cursor, barras con esquinas superiores redondeadas, degradado sutil y espacio
+(la actual en acento con brillo), ejes sin líneas con etiquetas de 10 px tenues y sin
+solaparse, rejilla muy tenue, objetivos y medias en línea fina discontinua con la etiqueta a
+un lado, tooltip único (compacto, desenfocado, siempre al lado del dedo) y animación de
+entrada suave. EChart actualiza con ids estables (`withIds`): cambiar de filtro o tocar anima
+la transición sin repetir la entrada; las páginas ya no remontan los gráficos al filtrar.
+`ChartEmpty`: estado vacío o con pocos datos (dibujo discreto y mensaje corto). Lo usan
+Inicio (km por mes, VO₂), Análisis (Volumen semana/mes/año/por tipo, ritmo por periodo,
+evolución del ritmo, eficiencia, año frente a año, km por año y tipo, VO₂), Récords, barras de
+series y el detalle de carrera.
+
 ## Diseño (tokens)
 
 | Token | Valor |
@@ -568,6 +584,9 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Estilo premium común en todos los gráficos (`theme.ts`), sin repetir la
+  animación al filtrar. Detalle del 4‑jul: franja fija, pulso por parcial desde 60 ppm,
+  banda «sin datos» y eje de km con el GPS cuando las muestras se quedan cortas.
 - 2026‑11‑18 — Gráficos del detalle: pulso por zonas (barras por parcial si hay pocas
   muestras), ritmo sin picos y con eje de percentiles, altitud sin cortes y por pendiente,
   cursor con punto brillante y tarjeta flotante. 60 fps con la CPU 4× más lenta.

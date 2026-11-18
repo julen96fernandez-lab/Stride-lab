@@ -5,13 +5,14 @@ import type { Period, PeriodUnit } from "@/lib/analysis/periods";
 import { movingAverage } from "@/lib/analysis/insights";
 import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { SessionIcon } from "@/components/ui/SessionType";
-import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { EChart } from "./EChart";
+import { T, baseOption, barItem, barSeries, categoryAxis, lineSeries, refLine, tipHead, tipRow, tooltip, valueAxis } from "./theme";
 import { injuryAreaItems } from "./injury";
 import { regularAxis } from "@/lib/analysis/axis";
 
 /** Orden fijo de las capas apiladas (la paleta de tipos), más «sin tipo» al final. */
 const STACK = [...SESSION_TYPES, "sin_tipo"] as const;
-const stackColor = (t: string) => (t === "sin_tipo" ? C.bar : TYPE_META[t as keyof typeof TYPE_META].color);
+const stackColor = (t: string) => (t === "sin_tipo" ? T.bar : TYPE_META[t as keyof typeof TYPE_META].color);
 const stackLabel = (t: string) => (t === "sin_tipo" ? "Sin tipo" : TYPE_META[t as keyof typeof TYPE_META].label);
 
 const paceStr = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
@@ -45,7 +46,12 @@ export function PeriodCharts({
   /** Columnas [primera, última] que se solapan con un periodo de lesión. */
   injuryRanges?: [number, number][];
 }) {
-  const [sel, setSel] = useState(periods.length - 1);
+  // Selección ligada a los datos: al cambiar de filtro vuelve al periodo actual sin remontar el
+  // gráfico (así no se repite la animación de entrada).
+  const dataKey = `${unit}:${periods.length}:${periods[0]?.start}`;
+  const [selS, setSelS] = useState({ k: dataKey, i: periods.length - 1 });
+  const sel = selS.k === dataKey ? selS.i : periods.length - 1;
+  const setSel = (i: number) => setSelS({ k: dataKey, i });
   const [byType, setByType] = useState(false);
   const p = periods[Math.min(sel, periods.length - 1)];
   const many = periods.length > 14;
@@ -57,22 +63,7 @@ export function PeriodCharts({
   // ¿Hay una banda de lesión en las últimas columnas? Entonces la etiqueta del objetivo va a la izquierda.
   const bandAtEnd = injuryRanges.some(([, z]) => z >= periods.length - 3);
   const goalLine = useMemo(
-    () =>
-      goalKm
-        ? {
-            symbol: "none",
-            silent: true,
-            lineStyle: { color: C.text, type: [4, 4], width: 1.2, opacity: 0.8 },
-            label: {
-              formatter: `Objetivo ${km1(goalKm)} km`,
-              color: C.axis,
-              fontFamily: C.font,
-              fontSize: 10,
-              position: bandAtEnd ? "insideStartTop" : "insideEndTop",
-            },
-            data: [{ yAxis: goalKm }],
-          }
-        : undefined,
+    () => (goalKm ? refLine({ value: goalKm, label: `Objetivo ${km1(goalKm)} km`, side: bandAtEnd ? "start" : "end" }) : undefined),
     [goalKm, bandAtEnd],
   );
   // Fondo en un eje numérico oculto (columna i = [i − 0,5, i + 0,5]) para cubrir columnas
@@ -86,131 +77,94 @@ export function PeriodCharts({
     return items;
   }, [injuryRanges, byType, unit, periods, sel]);
 
-  const bars = useMemo(
-    () => ({
-      grid: { left: 30, right: 6, top: 14, bottom: 22 },
-      tooltip: { show: false },
+  const bars = useMemo(() => {
+    // Esquinas redondeadas solo en el segmento de arriba de cada columna apilada.
+    const topIdx = periods.map((x) => {
+      let top = -1;
+      typesShown.forEach((t, k) => {
+        if ((x.kmByType[t] ?? 0) > 0) top = k;
+      });
+      return top;
+    });
+    const gap = many ? "24%" : "38%";
+    return {
+      ...baseOption({ left: 30, right: 6, top: 14, bottom: 22 }),
+      tooltip: tooltip({
+        pointer: false,
+        formatter: (ps: { dataIndex: number }[]) => {
+          const x = periods[ps[0].dataIndex];
+          return tipHead(unit === "week" ? `Semana del ${x.label}` : x.label) + tipRow(x.runs ? `${km1(x.km)} km` : "Sin carreras");
+        },
+      }),
       xAxis: [
         {
-        type: "category",
-        data: periods.map((x) => x.label),
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: {
-          ...axisLabel,
-          interval: many ? 3 : unit === "year" ? 0 : 1, // 12 semanas o 12 meses: una etiqueta sí y otra no
-          formatter: (v: string) => (unit === "month" ? v.split(" ")[0] : unit === "year" ? `'${v.slice(2)}` : v),
-        },
+          ...categoryAxis(periods.map((x) => x.label)),
+          axisLabel: {
+            ...categoryAxis([]).axisLabel,
+            interval: many ? 3 : unit === "year" ? 0 : 1, // 12 semanas o 12 meses: una etiqueta sí y otra no
+            formatter: (v: string) => (unit === "month" ? v.split(" ")[0] : unit === "year" ? `'${v.slice(2)}` : v),
+          },
         },
         { type: "value", show: false, min: -0.5, max: periods.length - 0.5 },
       ],
-      yAxis: {
-        type: "value",
-        splitNumber: 3,
-        axisLine: { show: false }, // sin línea vertical (el eje X oculto la pondría en la columna 0)
-        // La línea de objetivo siempre visible, aunque esté por encima de todas las barras.
-        max: goalKm ? Math.ceil(Math.max(goalKm, ...periods.map((x) => x.km)) * 1.12) : undefined,
-        axisLabel,
-        splitLine: { lineStyle: { color: C.grid } },
-      },
+      // La línea de objetivo siempre visible, aunque esté por encima de todas las barras.
+      yAxis: valueAxis({ max: goalKm ? Math.ceil(Math.max(goalKm, ...periods.map((x) => x.km)) * 1.12) : undefined }),
       series: [
         ...(backdrop.length
-          ? [
-              {
-                type: "line",
-                xAxisIndex: 1,
-                data: [],
-                showSymbol: false,
-                silent: true,
-                z: 0,
-                markArea: { silent: true, z: 0, data: backdrop },
-              },
-            ]
+          ? [{ type: "line", xAxisIndex: 1, data: [], showSymbol: false, silent: true, z: 0, markArea: { silent: true, z: 0, data: backdrop } }]
           : []),
         ...(stacked
           ? typesShown.map((t, k) => ({
-              name: stackLabel(t),
-              type: "bar",
-              stack: "km",
-              barCategoryGap: many ? "22%" : "30%",
-              data: periods.map((x) => Math.round((x.kmByType[t] ?? 0) * 10) / 10),
-              itemStyle: {
-                color: stackColor(t),
-                borderColor: C.surface,
-                borderWidth: 1,
-                borderRadius: k === typesShown.length - 1 ? [4, 4, 0, 0] : 0,
-              },
+              ...barSeries({
+                name: stackLabel(t),
+                stack: "km",
+                gap,
+                data: periods.map((x, i) => ({
+                  value: Math.round((x.kmByType[t] ?? 0) * 10) / 10,
+                  itemStyle: { ...barItem({ color: stackColor(t), top: topIdx[i] === k }), borderColor: "var(--card)", borderWidth: 1 },
+                })),
+              }),
               markLine: k === 0 ? goalLine : undefined,
             }))
           : [
               {
-                type: "bar",
-                barCategoryGap: many ? "22%" : "30%",
-                data: periods.map((x, i) => ({
-                  value: Math.round(x.km * 10) / 10,
-                  itemStyle: {
-                    color: x.current ? C.lime : C.bar,
-                    borderRadius: [5, 5, 2, 2],
-                    borderColor: i === sel ? C.text : "transparent",
-                    borderWidth: i === sel ? 1.5 : 0,
-                  },
-                })),
+                ...barSeries({
+                  gap,
+                  data: periods.map((x, i) => ({ value: Math.round(x.km * 10) / 10, itemStyle: barItem({ current: x.current, selected: i === sel }) })),
+                }),
                 markLine: goalLine,
               },
             ]),
         ...(ma
-          ? [
-              {
-                name: "Media móvil 4 semanas",
-                type: "line",
-                data: ma.map((v) => (v === null ? null : Math.round(v * 10) / 10)),
-                connectNulls: false,
-                showSymbol: false,
-                smooth: 0.3,
-                lineStyle: { color: C.text, width: 1.6 },
-                z: 5,
-              },
-            ]
+          ? [{ ...lineSeries({ name: "Media móvil 4 semanas", data: ma.map((v) => (v === null ? null : Math.round(v * 10) / 10)), color: T.text, smooth: 0.3, width: 1.5 }), z: 5 }]
           : []),
       ],
-    }),
-    [periods, sel, goalKm, many, unit, stacked, typesShown, ma, goalLine, backdrop],
-  );
+    };
+  }, [periods, sel, goalKm, many, unit, stacked, typesShown, ma, goalLine, backdrop]);
 
   const paceVals = periods.map((x) => x.paceSPerKm);
   const known = paceVals.filter((v): v is number => v !== null);
   const paceAxis = useMemo(() => regularAxis(known, 3), [known]);
   const pace = useMemo(
     () => ({
-      grid: { left: 30, right: 6, top: 8, bottom: 6 },
-      tooltip: {
-        ...tooltipBase,
-        trigger: "axis",
-        axisPointer: { type: "line", lineStyle: { color: C.pointer } },
+      ...baseOption({ left: 30, right: 6, top: 8, bottom: 6 }),
+      tooltip: tooltip({
         formatter: (ps: { dataIndex: number }[]) => {
           const x = periods[ps[0].dataIndex];
-          return `<div style="color:${C.axis};font-size:11px">${x.label}</div><b>${x.paceSPerKm ? `${paceStr(x.paceSPerKm)} /km` : "Sin ritmo"}</b>`;
+          return tipHead(x.label) + tipRow(x.paceSPerKm ? `${paceStr(x.paceSPerKm)} /km` : "Sin ritmo");
         },
-      },
-      xAxis: { type: "category", data: periods.map((x) => x.label), show: false, boundaryGap: true },
-      yAxis: {
-        type: "value",
-        inverse: true, // más arriba = más rápido
-        min: paceAxis.min,
-        max: paceAxis.max,
-        interval: paceAxis.interval, // marcas regulares cada 15/30 s
-        axisLabel: { ...axisLabel, formatter: (v: number) => paceStr(v) },
-        splitLine: { lineStyle: { color: C.grid } },
-      },
+      }),
+      xAxis: categoryAxis(
+        periods.map((x) => x.label),
+        { show: false },
+      ),
+      // Más arriba = más rápido; marcas regulares cada 15/30 s.
+      yAxis: valueAxis({ min: paceAxis.min, max: paceAxis.max, interval: paceAxis.interval, inverse: true, format: (v) => paceStr(v) }),
       series: [
         {
-          type: "line",
-          data: paceVals,
-          connectNulls: false,
-          symbol: "circle",
-          symbolSize: (_: unknown, ps: { dataIndex: number }) => (ps.dataIndex === sel ? 10 : 7),
-          lineStyle: { width: 2, color: C.lime },
-          itemStyle: { color: C.lime, borderColor: C.surface, borderWidth: 1.5 },
+          // Un punto por periodo con datos reales; el tocado, más grande.
+          ...lineSeries({ data: paceVals, points: true }),
+          symbolSize: (_: unknown, ps: { dataIndex: number }) => (ps.dataIndex === sel ? 10 : 6),
         },
       ],
     }),

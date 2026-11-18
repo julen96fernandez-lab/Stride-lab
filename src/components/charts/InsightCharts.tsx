@@ -6,7 +6,9 @@ import type { CalendarDay, PacePoint } from "@/lib/analysis/insights";
 import { intensityLevels } from "@/lib/analysis/insights";
 import { TYPE_META, isSessionType } from "@/lib/analysis/session-type";
 import { SessionIcon } from "@/components/ui/SessionType";
-import { C, EChart, axisLabel, tooltipBase } from "./EChart";
+import { C, EChart } from "./EChart";
+import { ChartEmpty } from "./ChartEmpty";
+import { T, baseOption, lineSeries, tipHead, tipRow, tooltip, valueAxis, timeAxis, axisLabel } from "./theme";
 import { timeTicks } from "@/lib/analysis/time-ticks";
 import { regularAxis } from "@/lib/analysis/axis";
 import { injuryMarkArea } from "./injury";
@@ -42,7 +44,9 @@ export function PaceTrend({
   bands?: InjuryBand[];
   nowMs: number;
 }) {
-  const [sel, setSel] = useState<PacePoint | null>(points.at(-1) ?? null);
+  const [picked, setSel] = useState<PacePoint | null>(null);
+  // Si el punto elegido ya no está (otro rango o tipo), el último: sin remontar el gráfico.
+  const sel = picked && points.some((p) => p.id === picked.id) ? picked : (points.at(-1) ?? null);
   const option = useMemo(() => {
     const paces = points.map((p) => p.pace);
     const tFirst = points[0]?.t ?? nowMs;
@@ -52,44 +56,31 @@ export function PaceTrend({
     const ticks = timeTicks(x0, x1);
     const yAx = regularAxis(paces, 4);
     return {
-      grid: { left: 36, right: 10, top: 12, bottom: 24 },
-      tooltip: {
-        ...tooltipBase,
+      ...baseOption({ left: 36, right: 10, top: 12, bottom: 24 }),
+      tooltip: tooltip({
         trigger: "item",
+        pointer: false,
         formatter: (e: { seriesIndex: number; dataIndex: number }) => {
           if (e.seriesIndex !== 0) return "";
           const p = points[e.dataIndex];
-          return `<div style="color:${C.axis};font-size:11px">${fmtDate(p.t)} · ${typeName(p.type)}${p.inInjury ? " · lesión" : ""}</div><b>${paceStr(p.pace)} /km</b> · ${km1(p.km)} km`;
+          return tipHead(`${fmtDate(p.t)} · ${typeName(p.type)}${p.inInjury ? " · lesión" : ""}`) + tipRow(`${paceStr(p.pace)} /km`, `${km1(p.km)} km`);
         },
-      },
-      xAxis: {
-        type: "time",
-        min: x0,
-        max: x1,
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: { ...axisLabel, customValues: ticks.values, formatter: ticks.label },
-      },
-      yAxis: {
-        type: "value",
-        inverse: true, // más arriba = más rápido
-        min: yAx.min,
-        max: yAx.max,
-        interval: yAx.interval, // marcas regulares cada 15/30 s
-        axisLabel: { ...axisLabel, formatter: (v: number) => paceStr(v) },
-        splitLine: { lineStyle: { color: C.grid } },
-      },
+      }),
+      xAxis: timeAxis({ min: x0, max: x1, ticks: ticks.values, format: ticks.label }),
+      // Más arriba = más rápido; marcas regulares cada 15/30 s.
+      yAxis: valueAxis({ min: yAx.min, max: yAx.max, interval: yAx.interval, inverse: true, format: (v) => paceStr(v) }),
       series: [
         {
           type: "scatter",
           data: points.map((p) => ({
             value: [p.t, p.pace],
-            symbolSize: p.id === sel?.id ? 13 : 8,
+            symbolSize: p.id === sel?.id ? 12 : 7,
             itemStyle: {
               color: typeColor(p.type),
-              borderColor: p.id === sel?.id ? C.text : C.surface,
+              borderColor: p.id === sel?.id ? T.text : T.surface,
               borderWidth: p.id === sel?.id ? 2 : 1,
+              shadowBlur: p.id === sel?.id ? 12 : 0,
+              shadowColor: typeColor(p.type),
               // En lesión: visibles pero apagados (no cuentan en la tendencia).
               opacity: p.inInjury ? 0.35 : 1,
             },
@@ -99,20 +90,12 @@ export function PaceTrend({
             : undefined,
           z: 3,
         },
-        {
-          type: "line",
-          data: trend.map((x) => [x.t, Math.round(x.pace)]),
-          showSymbol: false,
-          smooth: 0.4,
-          silent: true,
-          lineStyle: { width: 2.5, color: C.lime },
-          z: 4,
-        },
+        { ...lineSeries({ data: trend.map((x) => [x.t, Math.round(x.pace)]), smooth: 0.4, z: 4 }), silent: true },
       ],
     };
   }, [points, trend, sel, bands, nowMs]);
 
-  if (points.length === 0) return <p className="mt-3 text-[14px] text-fg-2">Sin carreras en este periodo con ese tipo.</p>;
+  if (points.length === 0) return <ChartEmpty message="Sin carreras en este periodo con ese tipo." height={150} />;
   return (
     <div>
       <EChart option={option} height={210} label="Ritmo medio de cada carrera y tendencia" onItem={(si, di) => si === 0 && setSel(points[di])} />
@@ -290,19 +273,16 @@ export function YearCumulative({
   const option = useMemo(() => {
     const toPts = (arr: number[], y: number) => arr.map((v, d) => [Date.UTC(2000, 0, 1) + d * 86_400_000, Math.round(v * 10) / 10, y]);
     return {
-      grid: { left: 40, right: 54, top: 12, bottom: 24 },
-      tooltip: {
-        ...tooltipBase,
-        trigger: "axis",
-        axisPointer: { type: "line", lineStyle: { color: C.pointer } },
+      ...baseOption({ left: 40, right: 54, top: 12, bottom: 24 }),
+      tooltip: tooltip({
         formatter: (ps: { value: [number, number]; seriesIndex: number }[]) => {
           const d = new Date(ps[0].value[0]);
-          const head = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
-          return `<div style="color:${C.axis};font-size:11px">${head}</div>${ps
-            .map((p) => `<div>${p.seriesIndex === 0 ? year : year - 1}: <b>${km1(p.value[1])} km</b></div>`)
-            .join("")}`;
+          return (
+            tipHead(`${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`) +
+            ps.map((p) => tipRow(`${km1(p.value[1])} km`, String(p.seriesIndex === 0 ? year : year - 1), p.seriesIndex === 0 ? "var(--chart-line)" : "var(--fg-3)")).join("")
+          );
         },
-      },
+      }),
       xAxis: {
         type: "time",
         min: Date.UTC(2000, 0, 1),
@@ -312,15 +292,11 @@ export function YearCumulative({
         splitLine: { show: false },
         axisLabel: { ...axisLabel, formatter: (v: number) => MONTHS[new Date(v).getUTCMonth()], hideOverlap: true },
       },
-      yAxis: { type: "value", splitNumber: 3, axisLabel, splitLine: { lineStyle: { color: C.grid } } },
+      yAxis: valueAxis(),
       series: [
         {
-          name: String(year),
-          type: "line",
-          data: toPts(current, year),
-          showSymbol: false,
-          lineStyle: { width: 2.5, color: C.lime },
-          endLabel: { show: true, formatter: String(year), color: C.text, fontFamily: C.font, fontSize: 11, fontWeight: 600 },
+          ...lineSeries({ name: String(year), data: toPts(current, year), area: true }),
+          endLabel: { show: true, formatter: String(year), color: T.text, fontFamily: C.font, fontSize: 10, fontWeight: 600 },
           markArea: injuryMarkArea(
             bands.map(([a, z]): [number, number] => [Date.UTC(2000, 0, 1) + a * 86_400_000, Date.UTC(2000, 0, 1) + (z + 1) * 86_400_000]),
             Date.UTC(2000, 0, 1),
@@ -329,12 +305,8 @@ export function YearCumulative({
           z: 3,
         },
         {
-          name: String(year - 1),
-          type: "line",
-          data: toPts(previous, year - 1),
-          showSymbol: false,
-          lineStyle: { width: 2, color: C.fg3, type: [5, 4] },
-          endLabel: { show: true, formatter: String(year - 1), color: C.axis, fontFamily: C.font, fontSize: 11 },
+          ...lineSeries({ name: String(year - 1), data: toPts(previous, year - 1), color: "var(--fg-3)", dashed: true }),
+          endLabel: { show: true, formatter: String(year - 1), color: T.muted, fontFamily: C.font, fontSize: 10 },
           z: 2,
         },
       ],
