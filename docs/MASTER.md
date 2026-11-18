@@ -479,6 +479,12 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
     para no llamar «realista» a un objetivo por encima del rango). Sin predicción, sin etiqueta.
   - Cuenta atrás en Inicio (bajo «Hoy») y en Plan (arriba). `/plan/carrera/nueva` y
     `/plan/carrera/[id]` (ver, editar, borrar).
+- **Paso 2 · Estrategia de ritmos (hecho).** `lib/race/pacing.ts` (con pruebas): uniforme,
+  negativa 2 % o 5 % (segunda mitad ese tanto más rápida) y positiva 2 %, con rampa lineal del
+  ritmo; con perfil, cada km × coste de su pendiente (Minetti, el del ritmo ajustado por
+  pendiente). Los parciales suman exactamente el objetivo (se redondea el acumulado). Tabla por
+  km (ritmo, parcial, acumulado, hora del día con hora de salida), gráfico del ritmo sobre la
+  altitud media de cada km y aviso «guía, no garantía». La estrategia se guarda al elegirla.
 
 
 ## Rendimiento
@@ -811,6 +817,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Competición, paso 2: estrategia de ritmos por km (uniforme, negativas, positiva;
+  ajuste por pendiente con GPX), tabla y gráfico.
 - 2026‑11‑18 — Competición, paso 1: carreras objetivo con tiempo propuesto, realismo, cuenta
   atrás y perfil del GPX. Migración 0013.
 - 2026‑11‑18 — Sensaciones, paso 4: sección en Análisis (media por mes y etiquetas junto a

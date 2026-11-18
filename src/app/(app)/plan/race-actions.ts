@@ -46,3 +46,14 @@ export async function deleteRaceAction(id: string): Promise<{ ok: boolean }> {
   refresh();
   redirect("/plan?aviso=carrera-objetivo-borrada");
 }
+
+/** Estrategia de ritmos elegida (se guarda en segundo plano al cambiarla). */
+export async function setRaceStrategyAction(id: string, strategy: string): Promise<{ ok: boolean }> {
+  const { isStrategy } = await import("@/lib/race/pacing");
+  if (!UUID.test(id) || !isStrategy(strategy)) return { ok: false };
+  const { eq } = await import("drizzle-orm");
+  const s = await import("@/lib/db/schema");
+  await db().update(s.raceGoals).set({ strategy, updatedAt: new Date() }).where(eq(s.raceGoals.id, id));
+  dataChanged();
+  return { ok: true };
+}
