@@ -398,6 +398,10 @@ Lógica pura en `src/lib/analysis/fitness.ts` (con pruebas); vista en Análisis 
   «✎» si solo hay nota o etiquetas; filtro «Con nota» (valoración, texto o etiquetas), en el
   cliente como los demás. Guardar una sensación vacía la caché del cliente: la lista se ve al
   día sin recargar.
+- Análisis, «Sensaciones · 12 meses» (`lib/feelings/stats.ts`, con pruebas): valoración media por
+  mes (huecos sin datos). Con ≥ 8 carreras valoradas: etiquetas que aparecen ≥ 2 veces junto a
+  las peores (1–2) y las mejores (4–5), con «x de n» y su frecuencia en el otro grupo. Con menos,
+  lo dice y no saca nada. Nunca causas: «suele aparecer junto a».
 
 ## Plan
 
@@ -791,6 +795,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Sensaciones, paso 4: sección en Análisis (media por mes y etiquetas junto a
+  peores y mejores, solo con ≥ 8 valoradas).
 - 2026‑11‑18 — Sensaciones, paso 3: indicador en Actividad y filtro «Con nota».
 - 2026‑11‑18 — Sensaciones, paso 2: sensación opcional en el formulario de carrera manual; fuera
   la «Nota» de las manuales (migración 0012).

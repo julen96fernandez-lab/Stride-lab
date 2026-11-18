@@ -829,3 +829,20 @@ export async function getPredictions(ctx: Ctx = makeCtx()) {
   const longestM = r.filter((x) => now - x.at <= 365 * 86_400_000).reduce((m, x) => Math.max(m, x.distanceM ?? 0), 0);
   return { now: predictAt(e, r, now), history: predictionHistory(e, r, now, 24), longestM };
 }
+
+// ─── Sensaciones ─────────────────────────────────────────────────────────────
+
+import { feelingStats } from "@/lib/feelings/stats";
+import type { FeelingTag } from "@/lib/feelings/feelings";
+
+/** Sensaciones de las carreras válidas: media por mes y etiquetas junto a peores y mejores. */
+export async function getFeelingStats(today: string) {
+  const rows = await db()
+    .select({ startAt: s.runs.startAt, rating: s.runFeelings.rating, tags: s.runFeelings.tags })
+    .from(s.runFeelings)
+    .innerJoin(s.runs, and(eq(s.runs.id, s.runFeelings.runId), valid));
+  return feelingStats(
+    rows.map((r) => ({ date: new Date(localDay(r.startAt) * 86_400_000).toISOString().slice(0, 10), rating: r.rating, tags: (r.tags ?? []) as FeelingTag[] })),
+    today,
+  );
+}

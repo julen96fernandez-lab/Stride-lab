@@ -13,6 +13,9 @@ import { AnalysisSkeleton } from "@/components/ui/Skeletons";
 import { cacheDay } from "@/lib/cache/tags";
 import { choicesFromParams } from "@/lib/ui/choice";
 import { FitnessCard } from "@/components/charts/FitnessCharts";
+import { FeelingsChart } from "@/components/charts/FeelingsChart";
+import { FEELING_TAGS } from "@/lib/feelings/feelings";
+import { MIN_RATED, type FeelingStats, type TagLink } from "@/lib/feelings/stats";
 import { PaceTrend, YearCumulative } from "@/components/charts/InsightCharts";
 import { CalendarChoice } from "@/components/charts/CalendarChoice";
 import { PaceEvolution } from "@/components/charts/PaceEvolution";
@@ -69,7 +72,7 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
   const sp = await searchParams;
   // Una sola carga (con caché) con todas las opciones de todos los selectores: cambiar de
   // opción no vuelve al servidor.
-  const { analysis: a, periods, fitness, insights, effRodaje, effAll } = await analysisScreen(cacheDay());
+  const { analysis: a, periods, fitness, insights, effRodaje, effAll, feelings } = await analysisScreen(cacheDay());
   const initial = choicesFromParams({ ...sp, vista: sp.vista === "ano" ? "año" : sp.vista }, CHOICES);
 
   const latest = a.vo2.at(-1) ?? null;
@@ -117,6 +120,9 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
 
       {/* Carga y forma */}
       <FitnessCard view={fitness} />
+
+      {/* Sensaciones */}
+      <FeelingsSection s={feelings} />
 
       {/* Evolución del ritmo, calendario y comparación de años */}
       <InsightsCards data={insights} effRodaje={effRodaje} effAll={effAll} />
@@ -533,6 +539,66 @@ function EfficiencyCard({ data, all }: { data: Efficiency; all: boolean }) {
         arriba = más rápido al mismo pulso = más eficiente. {points.length} {points.length === 1 ? "carrera" : "carreras"}
         {all ? "" : " de Rodaje"}.
       </p>
+    </section>
+  );
+}
+
+/** Sensaciones: valoración media por mes y etiquetas que suelen aparecer junto a peores y mejores. */
+function FeelingsSection({ s }: { s: FeelingStats }) {
+  const links = (title: string, list: TagLink[], n: number, other: string) => (
+    <div className="rounded-2xl border border-line bg-inset p-3.5">
+      <div className="text-[12px] text-fg-2">
+        {title} ({n})
+      </div>
+      {list.length ? (
+        <ul className="mt-1.5 flex flex-col gap-1 text-[13px]">
+          {list.map((l) => (
+            <li key={l.tag}>
+              <b>{FEELING_TAGS[l.tag]}</b>: {l.count} de {l.of}
+              <span className="text-fg-2">
+                {" "}
+                (en las {other}: {l.otherCount} de {l.otherOf})
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1.5 text-[13px] text-fg-2">Ninguna etiqueta se repite lo suficiente.</p>
+      )}
+    </div>
+  );
+  return (
+    <section id="sensaciones" className="card cv-auto scroll-mt-6 p-5">
+      <div className="flex items-baseline justify-between">
+        <div className="eyebrow">Sensaciones · 12 meses</div>
+        <span className="text-[12px] text-fg-2">
+          {s.rated} {s.rated === 1 ? "valorada" : "valoradas"}
+        </span>
+      </div>
+      {s.rated === 0 ? (
+        <p className="mt-3 text-[14px] text-fg-2">Aún no has puesto sensaciones. Añádelas en el detalle de cada carrera (valoración del 1 al 5, etiquetas y nota).</p>
+      ) : (
+        <>
+          <div className="mt-3">
+            <FeelingsChart months={s.months} />
+          </div>
+          <p className="mt-1 text-[12px] text-fg-2">Valoración media por mes: 1 fatal … 5 genial. Meses sin valoraciones, en blanco.</p>
+          {s.enough ? (
+            <div className="mt-4 flex flex-col gap-2">
+              <div className="eyebrow">Suele aparecer junto a…</div>
+              {links("Las peores (1–2)", s.worst, s.worstN, "mejores")}
+              {links("Las mejores (4–5)", s.best, s.bestN, "peores")}
+              <p className="text-[12px] leading-relaxed text-fg-2">
+                Solo etiquetas que se repiten al menos 2 veces. Que aparezcan juntas no quiere decir que una cosa cause la otra.
+              </p>
+            </div>
+          ) : (
+            <p className="mt-4 rounded-2xl border border-line bg-inset px-3.5 py-3 text-[13px] text-fg-2">
+              Con {s.rated} {s.rated === 1 ? "carrera valorada" : "carreras valoradas"} aún es pronto para ver qué se repite: hacen falta al menos {MIN_RATED}.
+            </p>
+          )}
+        </>
+      )}
     </section>
   );
 }

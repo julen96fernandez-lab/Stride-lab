@@ -32,17 +32,17 @@ export async function analysisScreen(day: string) {
   "use cache: remote";
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
-  void day;
   const ctx = q.makeCtx();
-  const [analysis, periods, fitness, insights, effRodaje, effAll] = await Promise.all([
+  const [analysis, periods, fitness, insights, effRodaje, effAll, feelings] = await Promise.all([
     q.getAnalysis(DEFAULT_HR_BAND, ctx),
     q.getPeriodsAll(ctx),
     q.getFitness(ctx),
     q.getInsights("all", null, ctx),
     q.getEfficiency("rodaje", ctx),
     q.getEfficiency(null, ctx),
+    q.getFeelingStats(day),
   ]);
-  return { analysis, periods, fitness, insights, effRodaje, effAll };
+  return { analysis, periods, fitness, insights, effRodaje, effAll, feelings };
 }
 
 export async function runScreen(id: string, day: string) {
