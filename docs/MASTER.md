@@ -397,8 +397,21 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
   fin de semana). Noches → suave o nada. Libre → sesión exigente; la app elige el día, nunca
   calidad el lunes tras noches.
 
+### Paso 2 · Predicción de marcas (hecho)
+- `src/lib/plan/predict.ts` (con pruebas). Fuentes: por distancia (milla, 5K, 10K, media,
+  maratón; nunca 1 km, que las series inflan) el mejor esfuerzo de los últimos 3 meses, si no de
+  6, si no de 12. Riegel `T = t·(D/d)^k`: central k = 1,06; rango con k 1,04–1,10 en todas las
+  fuentes; extrapolación máxima ×4,3. Peso: antigüedad (1 / 0,6 / 0,3) × cercanía de distancia
+  (1 / (1 + 1,5·|ln(D/d)|)).
+- Confianza: **alta** con ≥ 2 fuentes de ≤ 3 meses y una de distancia parecida (≤ ×1,5);
+  **media** con alguna de ≤ 6 meses a ≤ ×2,2; **baja** el resto. Sin fuentes válidas la distancia
+  no se muestra; maratón solo con una tirada de ≥ 30 km en 12 meses.
+- Evolución por meses (24): cada mes con los datos que había a final de mes; meses sin
+  estimación quedan como hueco. Aviso fijo: estimación, no garantía (tramos de entrenamiento).
+- Con datos reales (18‑nov‑2026): 5K ≈22:17 (20:36–24:15), 10K ≈45:55 (44:09–47:39), media
+  ≈1:40:57 (1:39:22–1:48:20), las tres con confianza alta; maratón oculto (máx. 22,9 km).
+
 ### Pendiente
-2. Predicción de marcas (Riegel con rango y confianza; maratón oculto sin tirada ≥ 30 km).
 3. Una sesión por semana con día y motivo. 4. Previsto frente a realizado y reorganizar.
 
 ## Rendimiento
@@ -731,6 +744,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Plan, paso 2: predicción de 5K, 10K, media y maratón con rango, confianza y
+  evolución mensual.
 - 2026‑11‑18 — Plan, paso 1: ciclo de turnos de 5 semanas (Perfil y Plan), migración 0009 con
   el inicio de tardes del 23‑nov‑2026.
 - 2026‑11‑18 — Cambio de pestaña sin fotogramas negros ni blancos ni tirones: fuera View

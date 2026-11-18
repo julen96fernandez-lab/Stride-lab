@@ -752,10 +752,27 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 // ─── Plan ────────────────────────────────────────────────────────────────────
 
 import { shiftWeeks, type ShiftWeek } from "@/lib/plan/shifts";
+import { predictAt, predictionHistory } from "@/lib/plan/predict";
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
 export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
-  const anchor = await ctx.shiftAnchor();
+  const [anchor, predictions] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx)]);
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
-  return { anchor, today, weeks };
+  return { anchor, today, weeks, predictions };
+}
+
+/** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */
+export async function getPredictions(ctx: Ctx = makeCtx()) {
+  const [efforts, runs] = await Promise.all([
+    db()
+      .select({ key: s.runEfforts.key, timeS: s.runEfforts.timeS, startAt: s.runs.startAt, runId: s.runEfforts.runId })
+      .from(s.runEfforts)
+      .innerJoin(s.runs, and(eq(s.runs.id, s.runEfforts.runId), valid)),
+    ctx.runs(),
+  ]);
+  const now = Date.now();
+  const e = efforts.map((x) => ({ key: x.key, timeS: x.timeS, at: x.startAt.getTime(), runId: x.runId }));
+  const r = runs.map((x) => ({ at: x.startAt.getTime(), distanceM: x.distanceM }));
+  const longestM = r.filter((x) => now - x.at <= 365 * 86_400_000).reduce((m, x) => Math.max(m, x.distanceM ?? 0), 0);
+  return { now: predictAt(e, r, now), history: predictionHistory(e, r, now, 24), longestM };
 }

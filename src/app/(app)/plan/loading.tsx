@@ -6,7 +6,7 @@ export default function Loading() {
   return (
     <div className="no-fade flex flex-col gap-4">
       <div className="mt-4">
-        <PageHeader title="Plan" subtitle="Tu ciclo de turnos de 5 semanas." />
+        <PageHeader title="Plan" subtitle="Turnos, marcas estimadas y tu semana." />
       </div>
       <ProfileSkeleton rows={6} />
     </div>
