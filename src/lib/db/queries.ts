@@ -8,7 +8,7 @@ import { durabilityFromSeries, durabilityFromSplits, type Durability } from "@/l
 import type { SeriesMetric } from "./schema";
 import { effectiveType, ensureClassified, getTypeSettings, getZones } from "@/lib/analysis/session-type-db";
 import { SESSION_TYPES, isSessionType, type SessionType } from "@/lib/analysis/session-type";
-import { buildStream, gradeAlong, isHrSparse, splitViews, type SplitView } from "@/lib/analysis/run-stream";
+import { buildStream, gradeAlong, isHrSparse, missingDistance, preferGpsKm, splitViews, trackCumulative, type SplitView } from "@/lib/analysis/run-stream";
 import { analyzeIntervals, type IntervalAnalysis, type StepTiming } from "@/lib/analysis/intervals";
 import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis/efficiency";
 import { ensureTrack } from "@/lib/analysis/track-db";
@@ -259,6 +259,8 @@ export interface Explorer {
   hrRaw: { t: number[]; v: number[] } | null;
   /** Pocas muestras de pulso: se dibuja por parciales */
   hrSparse: boolean;
+  /** De dónde sale el eje de km y qué distancia no registró el reloj (para el aviso) */
+  distanceInfo: { kmFrom: "samples" | "gps" | "none"; samplesM: number | null; gpsM: number | null; totalM: number | null; missing: { stretches: number; gpsM: number; watchM: number } | null };
   /** Pendiente (tanto por uno) en cada instante, para colorear la altitud */
   grade: (number | null)[] | null;
   /** Análisis de series (solo carreras de tipo Series); null en el resto */
@@ -269,13 +271,18 @@ const r1 = (x: number | null) => (x === null ? null : Math.round(x * 10) / 10);
 const r0 = (x: number | null) => (x === null ? null : Math.round(x));
 
 function buildExplorer(a: {
-  run: { durationS: number; avgPaceSPerKm: number | null };
+  run: { durationS: number; avgPaceSPerKm: number | null; distanceM: number | null };
   series: Partial<Record<SeriesMetric, { t: number[]; v: number[] }>>;
   track: Awaited<ReturnType<typeof ensureTrack>>;
   splits: { idx: number; distanceM: number; durationS: number; paceSPerKm: number | null; avgHr: number | null; elevationGainM: number | null; elevationLossM: number | null; basis: string }[];
   zones: { limits: readonly number[] };
 }): Explorer {
   const { run, series, track, splits, zones } = a;
+  // Eje de km: la suma de muestras del reloj, salvo que se quede lejos del total y el GPS no.
+  const samplesM = series.distance ? series.distance.v.reduce((a, b) => a + b, 0) : null;
+  const gpsM = track && track.t.length > 1 ? (trackCumulative(track).at(-1) ?? null) : null;
+  const kmFromGps = preferGpsKm(samplesM, gpsM, run.distanceM);
+  const miss = missingDistance(series.distance, track);
   const st = buildStream({
     durationS: run.durationS,
     distance: series.distance,
@@ -284,6 +291,7 @@ function buildExplorer(a: {
     track,
     zones: zones as never,
     avgPace: run.avgPaceSPerKm,
+    kmFromGps,
   });
   // Los parciales del reloj empiezan en 0; los del GPX, en el primer punto con hora.
   const startS = splits[0]?.basis === "gpx" ? (track?.t[0] ?? 0) : 0;
@@ -304,6 +312,15 @@ function buildExplorer(a: {
     zoneLimits: [...zones.limits],
     hrRaw: series.hr && series.hr.t.length ? { t: series.hr.t.map((x) => Math.round(x)), v: series.hr.v.map((x) => Math.round(x)) } : null,
     hrSparse: isHrSparse(series.hr, run.durationS),
+    distanceInfo: {
+      kmFrom: kmFromGps ? "gps" : samplesM ? "samples" : gpsM ? "gps" : "none",
+      samplesM,
+      gpsM,
+      totalM: run.distanceM,
+      missing: miss.length
+        ? { stretches: miss.length, gpsM: miss.reduce((a, m) => a + m.gpsM, 0), watchM: miss.reduce((a, m) => a + m.watchM, 0) }
+        : null,
+    },
     grade: st.ele
       ? gradeAlong(
           st.km.map((k) => (k === null ? null : k * 1000)),

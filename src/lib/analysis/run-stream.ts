@@ -261,6 +261,8 @@ export function buildStream(input: {
   track?: Track | null;
   zones?: HrZones | null;
   avgPace?: number | null;
+  /** Eje de km con la distancia del GPS (cuando cuadra mejor con el total que las muestras). */
+  kmFromGps?: boolean;
 }): RunStream {
   const { distance, hr, power, track, zones } = input;
   const end = Math.max(
@@ -277,7 +279,7 @@ export function buildStream(input: {
 
   // Distancia acumulada: todas las muestras (también la última km cuenta), interpolada.
   let km: (number | null)[] = t.map(() => null);
-  if (distance && distance.t.length) {
+  if (distance && distance.t.length && !(input.kmFromGps && track && track.t.length > 1)) {
     const order = distance.t.map((_, i) => i).sort((a, b) => distance.t[a] - distance.t[b]);
     const ct: number[] = [0];
     const cd: number[] = [0];
@@ -485,4 +487,81 @@ export function paceAxisRange(paces: readonly (number | null)[], extra: readonly
   let max = Math.ceil((hi + 5) / interval) * interval;
   if (max - min < interval) max = min + interval;
   return { min, max, interval };
+}
+
+// ─── Distancia que el reloj no registró ─────────────────────────────────────
+
+/** Distancia GPS acumulada de la pista (m) en cada punto. */
+export function trackCumulative(track: Track): number[] {
+  const cd = [0];
+  for (let i = 1; i < track.t.length; i++) cd.push(cd[i - 1] + hav(track.lat[i - 1], track.lon[i - 1], track.lat[i], track.lon[i]));
+  return cd;
+}
+
+export interface MissingStretch {
+  t0: number;
+  t1: number;
+  /** metros que marca el GPS en el tramo */
+  gpsM: number;
+  /** metros que registró el reloj */
+  watchM: number;
+}
+
+/**
+ * Tramos en los que el reloj apenas registró distancia (< 1 m/s) pero el GPS marca movimiento
+ * (≥ 40 m más): ahí no hay ritmo fiable y la suma de muestras se queda corta.
+ */
+export function missingDistance(distance: Series | null | undefined, track: Track | null | undefined): MissingStretch[] {
+  if (!distance || !track || track.t.length < 2 || distance.t.length < 2) return [];
+  const cd = trackCumulative(track);
+  const at = (x: number) => interp(track.t, cd, x);
+  const out: MissingStretch[] = [];
+  for (let i = 1; i < distance.t.length; i++) {
+    const t0 = distance.t[i - 1];
+    const t1 = distance.t[i];
+    const gap = t1 - t0;
+    if (gap <= 15) continue;
+    const watchM = distance.v[i];
+    const gpsM = at(t1) - at(t0);
+    if (watchM / gap < MIN_MOVING_MPS * 1.5 && gpsM - watchM >= 40) out.push({ t0, t1, gpsM, watchM });
+  }
+  return out;
+}
+
+/** ¿El eje de km debe salir del GPS? Solo si las muestras se desvían > 2 % del total y el GPS no. */
+export function preferGpsKm(samplesM: number | null, gpsM: number | null, totalM: number | null): boolean {
+  if (!samplesM || !gpsM || !totalM) return false;
+  const off = (x: number) => Math.abs(x - totalM) / totalM;
+  return off(samplesM) > 0.02 && off(gpsM) <= 0.02 && off(gpsM) < off(samplesM);
+}
+
+/** Intervalos de la rejilla sin ritmo dentro de la parte con datos (para la banda «sin datos»). */
+export function noDataRanges(t: readonly number[], pace: readonly (number | null)[], minLen = 2): [number, number][] {
+  const first = pace.findIndex((p) => p !== null);
+  if (first < 0) return [];
+  let last = pace.length - 1;
+  while (last > first && pace[last] === null) last--;
+  const out: [number, number][] = [];
+  let start = -1;
+  for (let i = first; i <= last; i++) {
+    if (pace[i] === null) {
+      if (start < 0) start = i;
+    } else if (start >= 0) {
+      if (i - start >= minLen) out.push([t[start - 1], t[i]]);
+      start = -1;
+    }
+  }
+  return out;
+}
+
+/** Eje de pulso desde 60 ppm (o menos si hace falta) con marcas cada 20 o 40. */
+export function hrAxisFrom60(values: readonly (number | null)[]): { min: number; max: number; interval: number } | null {
+  const v = values.filter((x): x is number => x !== null);
+  if (!v.length) return null;
+  const lo = Math.min(...v);
+  const hi = Math.max(...v);
+  const min = lo >= 60 ? 60 : Math.floor(lo / 20) * 20;
+  const span = hi + 5 - min;
+  const interval = span > 160 ? 40 : 20;
+  return { min, max: Math.ceil((hi + 5) / interval) * interval, interval };
 }

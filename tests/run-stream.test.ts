@@ -5,6 +5,10 @@ import {
   gradeAlong,
   gridStep,
   isCoarse,
+  hrAxisFrom60,
+  missingDistance,
+  noDataRanges,
+  preferGpsKm,
   cleanPace,
   hrCoverage,
   hrSegments,
@@ -306,5 +310,75 @@ describe("limpieza para dibujar", () => {
     const st = buildStream({ durationS: 1000, track });
     const mid = st.ele!.filter((_, i) => st.t[i] > 300 && st.t[i] < 700);
     expect(mid.every((e) => e !== null)).toBe(true);
+  });
+});
+
+describe("distancia que el reloj no registró (4-jul)", () => {
+  // Pista a 2,6 m/s todo el rato; el reloj registra hasta 2504 s, luego 3 m en 256 s (pero el
+  // GPS marca ~660 m) y después sigue normal.
+  const track = { t: [] as number[], lat: [] as number[], lon: [] as number[], ele: [] as (number | null)[] };
+  for (let t = 0; t <= 3600; t += 2) {
+    track.t.push(t);
+    track.lat.push(43 + (t * 2.6) / 111_195);
+    track.lon.push(-3);
+    track.ele.push(null);
+  }
+  const dt: number[] = [];
+  const dv: number[] = [];
+  for (let t = 3; t <= 2504; t += 3) {
+    dt.push(t);
+    dv.push(7.8);
+  }
+  dt.push(2760);
+  dv.push(3);
+  for (let t = 2763; t <= 3600; t += 3) {
+    dt.push(t);
+    dv.push(7.8);
+  }
+  const distance = { t: dt, v: dv };
+
+  it("localiza el tramo y cuánto marca el GPS", () => {
+    const m = missingDistance(distance, track);
+    expect(m).toHaveLength(1);
+    expect(m[0].t0).toBe(2502);
+    expect(m[0].t1).toBe(2760);
+    expect(m[0].gpsM).toBeCloseTo(258 * 2.6, -1);
+    expect(m[0].watchM).toBe(3);
+  });
+
+  it("una pausa real (el GPS tampoco se mueve) no cuenta", () => {
+    // Parado de 2504 a 2760 s y después sigue desde el mismo sitio.
+    const pos = (t: number) => 43 + ((t <= 2504 ? t : t < 2760 ? 2504 : t - 256) * 2.6) / 111_195;
+    const still = { ...track, lat: track.t.map(pos) };
+    expect(missingDistance(distance, still)).toHaveLength(0);
+  });
+
+  it("eje de km del GPS solo si cuadra mejor con el total", () => {
+    expect(preferGpsKm(20654, 21308, 21379)).toBe(true); // 4-jul
+    expect(preferGpsKm(21340, 21300, 21340)).toBe(false); // las muestras ya cuadran
+    expect(preferGpsKm(20000, 23000, 21379)).toBe(false); // el GPS tampoco
+    expect(preferGpsKm(null, 21000, 21000)).toBe(false);
+  });
+
+  it("con el eje del GPS, el último km llega al total", () => {
+    const st = buildStream({ durationS: 3600, distance, track, kmFromGps: true });
+    expect(st.km.at(-1)! * 1000).toBeCloseTo(3600 * 2.6, -1);
+    const raw = buildStream({ durationS: 3600, distance, track });
+    expect(raw.km.at(-1)! * 1000).toBeLessThan(st.km.at(-1)! * 1000 - 500);
+  });
+
+  it("bandas «sin datos»: huecos de ritmo dentro de la parte con datos", () => {
+    const t = [0, 3, 6, 9, 12, 15, 18, 21];
+    expect(noDataRanges(t, [null, 300, null, null, null, 310, 305, null])).toEqual([[3, 15]]);
+    expect(noDataRanges(t, [300, null, 300, 300, 300, 300, 300, 300])).toEqual([]); // un punto: no
+    expect(noDataRanges(t, [null, null])).toEqual([]);
+  });
+});
+
+describe("eje del pulso por parciales", () => {
+  it("empieza en 60 con marcas claras (no exagera diferencias)", () => {
+    expect(hrAxisFrom60([121, 150, 138])).toEqual({ min: 60, max: 160, interval: 20 });
+    expect(hrAxisFrom60([52, 170])).toMatchObject({ min: 40 });
+    expect(hrAxisFrom60([null])).toBeNull();
   });
 });

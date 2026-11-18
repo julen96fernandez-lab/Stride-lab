@@ -203,7 +203,17 @@ media en 92 carreras); para dibujarla habría que reimportar con los pasos por i
     parcial con el pulso medio de cada km, del color de su zona.
   - Altitud: hueco de la pista rellenado hasta 10 min (sin cortes), suavizada, con degradado
     vertical y color por pendiente (bajada azul, llano neutro, subida ámbar/roja).
-  - Tarjeta: si en ese instante no hay pulso, la muestra más cercana a ≤ 60 s con «muestra a
+  - Franja fija encima de los gráficos (sticky) con ritmo, km, tiempo, pulso + zona, altitud
+    y potencia; sobre los gráficos solo el punto con brillo (la tarjeta flotante tapaba datos).
+  - Ritmo: banda tenue «sin datos» en los huecos dentro de la carrera; relleno que se desvanece.
+  - Pulso por parciales: eje desde 60 ppm (marcas cada 20) y barra discontinua tenue en los
+    parciales sin pulso.
+  - Eje de km: la suma de muestras del reloj, salvo que se desvíe > 2 % del total y el GPS no
+    (entonces la distancia del GPS). En 88 de 187 carreras con ruta las muestras no cuadran
+    con el total; en el 4‑jul suman 20,65 km (el GPS 21,31; el total 21,38): el reloj no
+    registró distancia en 5 tramos donde el GPS sí marca movimiento. Un texto bajo los
+    gráficos lo explica.
+  - Franja: si en ese instante no hay pulso, la muestra más cercana a ≤ 60 s con «muestra a
     N s»; en modo por parciales, la media del parcial.
 - Pista con tiempo: tabla `run_tracks` (≤ 1 punto cada 2 s, con altitud) sacada del GPX
   completo de Blob; el build rellena las que falten y, si no, se hace al abrir la carrera.

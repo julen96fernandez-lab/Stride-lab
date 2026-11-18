@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Explorer } from "@/lib/db/queries";
 import type { RouteShape } from "@/lib/db/queries";
-import { hrSegments, nearestIndex, nearestWithin, niceXStep, paceAxisRange } from "@/lib/analysis/run-stream";
+import { hrAxisFrom60, hrSegments, nearestIndex, nearestWithin, niceXStep, noDataRanges, paceAxisRange } from "@/lib/analysis/run-stream";
 import { zoneOf, type HrZones } from "@/lib/analysis/hr-zones";
 import { regularAxis } from "@/lib/analysis/axis";
 import { RouteMap, type MapApi } from "@/components/map/RouteMap";
@@ -175,6 +175,21 @@ export function RunExplorer({
     () => paceAxisRange(paceVals, data.avgPace ? [data.avgPace] : []),
     [paceVals, data.avgPace],
   );
+  // Tramos sin ritmo dentro de la carrera (pausas, muestras no fiables): banda tenue «sin datos».
+  const gapBands = useMemo(
+    () =>
+      data.coarsePace
+        ? []
+        : noDataRanges(data.t, data.pace).map(([a, b]) => [
+            {
+              xAxis: xAt(a),
+              itemStyle: { color: "alpha(var(--fg),0.045)" },
+              label: { show: true, position: "insideTop", formatter: "sin datos", color: "alpha(var(--fg),0.45)", fontSize: 9, fontFamily: C.font },
+            },
+            { xAxis: xAt(b) },
+          ]),
+    [data, xAt],
+  );
   const paceOpt = useMemo(() => {
     if (!hasPace || !paceAx) return null;
     return {
@@ -197,8 +212,23 @@ export function RunExplorer({
           smooth: data.coarsePace ? false : 0.35,
           step: data.coarsePace ? "end" : undefined,
           lineStyle: { width: 2, color: C.lime, cap: "round", join: "round" },
-          areaStyle: { origin: "end", color: grad("var(--chart-line)", 0.3, 0) },
-          markArea: selArea,
+          // Degradado que se desvanece hacia abajo (también en la escalera por parciales).
+          areaStyle: {
+            origin: "end",
+            color: {
+              type: "linear",
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: "alpha(var(--chart-line),0.26)" },
+                { offset: 0.55, color: "alpha(var(--chart-line),0.06)" },
+                { offset: 1, color: "alpha(var(--chart-line),0)" },
+              ],
+            },
+          },
+          markArea: { silent: true, data: [...gapBands, ...(selArea ? selArea.data : [])] },
           // Ritmo medio: referencia fina, sin etiqueta dentro (va en la cabecera, no la tapa el cursor).
           markLine: data.avgPace
             ? { silent: true, symbol: "none", label: { show: false }, lineStyle: { color: "alpha(var(--fg),0.45)", type: [3, 4], width: 1 }, data: [{ yAxis: data.avgPace }] }
@@ -212,10 +242,12 @@ export function RunExplorer({
       ],
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paceVals, paceAx, showGap, data, base, pts, selArea, hasPace, lastKey]);
+  }, [paceVals, paceAx, showGap, data, base, pts, selArea, gapBands, hasPace, lastKey]);
 
   const hrAx = useMemo(() => {
-    const vals = (hrStep ?? data.hrRaw?.v ?? []).filter((v): v is number => v !== null);
+    // Por parciales: eje desde 60 ppm para no exagerar diferencias entre barras.
+    if (hrStep) return hrAxisFrom60(hrStep);
+    const vals = (data.hrRaw?.v ?? []).filter((v): v is number => v !== null);
     return vals.length ? regularAxis([Math.min(...vals), Math.max(...vals)], 3, [10, 20, 25, 50]) : null;
   }, [hrStep, data.hrRaw]);
   const hrOpt = useMemo(() => {
@@ -225,17 +257,20 @@ export function RunExplorer({
       // Barras por parcial (pulso medio de cada km), cada una del color de su zona.
       const l = data.zoneLimits;
       const zc = (h: number) => `alpha(var(--z${h < l[1] ? 1 : h < l[2] ? 2 : h < l[3] ? 3 : h < l[4] ? 4 : 5}),0.75)`;
-      const bars = data.splits
-        .filter((sp) => sp.avgHr !== null)
-        .map((sp) => {
-          const x0 = xAt(sp.t0);
-          const x1 = xAt(sp.t1);
-          const pad = (x1 - x0) * 0.08;
-          return [
-            { xAxis: x0 + pad, yAxis: hrAx.min, itemStyle: { color: zc(sp.avgHr!), borderRadius: 3 } },
-            { xAxis: x1 - pad, yAxis: sp.avgHr },
-          ];
-        });
+      const known = data.splits.map((sp) => sp.avgHr).filter((h): h is number => h !== null);
+      const ref = known.reduce((a, b) => a + b, 0) / Math.max(1, known.length);
+      const bars = data.splits.map((sp) => {
+        const x0 = xAt(sp.t0);
+        const x1 = xAt(sp.t1);
+        const pad = (x1 - x0) * 0.08;
+        // Parcial sin pulso: barra tenue de referencia (a la altura de la media), sin color de zona.
+        return sp.avgHr !== null
+          ? [{ xAxis: x0 + pad, yAxis: hrAx.min, itemStyle: { color: zc(sp.avgHr), borderRadius: 3 } }, { xAxis: x1 - pad, yAxis: sp.avgHr }]
+          : [
+              { xAxis: x0 + pad, yAxis: hrAx.min, itemStyle: { color: "alpha(var(--fg),0.05)", borderColor: "alpha(var(--fg),0.14)", borderWidth: 1, borderType: "dashed", borderRadius: 3 } },
+              { xAxis: x1 - pad, yAxis: ref },
+            ];
+      });
       series = {
         type: "line",
         data: pts(hrStep),
@@ -371,7 +406,7 @@ export function RunExplorer({
   // ─── Cursor sincronizado (sin re-renderizar React) ─────────────────────────
   const wrap = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLDivElement>(null);
-  const card = useRef<HTMLDivElement>(null);
+  const strip = useRef<HTMLDivElement>(null);
   const dots = useRef<Record<string, HTMLDivElement | null>>({});
   const rKm = useRef<HTMLSpanElement>(null);
   const rTime = useRef<HTMLSpanElement>(null);
@@ -428,18 +463,18 @@ export function RunExplorer({
       set(rPace.current, paceStr(data.coarsePace ? splitPaceAt(data.t[i]) : data.pace[i]));
       if (data.gap) set(rGap.current, paceStr(data.gap[i]));
       // Pulso y zona: si en este instante no hay dato, la muestra más cercana (≤ 60 s) con aviso.
-      let hr = data.hr?.[i] ?? null;
+      let hr = hrStep ? null : (data.hr?.[i] ?? null);
       let note = "";
+      if (hrStep && hrStep[i] !== null) {
+        hr = hrStep[i];
+        note = "media del parcial";
+      }
       if (hr === null && data.hrRaw) {
         const n = nearestWithin(data.hrRaw, data.t[i], 60);
         if (n) {
           hr = n.v;
           note = `muestra a ${Math.round(n.dt)} s`;
         }
-      }
-      if (hr === null && hrStep && hrStep[i] !== null) {
-        hr = hrStep[i];
-        note = "media del parcial";
       }
       set(rHr.current, intStr(hr));
       set(rHrNote.current, note);
@@ -448,15 +483,8 @@ export function RunExplorer({
       const z = hr === null ? null : zoneOf(hr, data.zoneLimits as HrZones["limits"]);
       set(rZone.current, z === null ? "—" : `Z${z}`);
       if (rZoneDot.current) rZoneDot.current.style.background = z === null ? "transparent" : `var(--z${z})`;
-      // Tarjeta flotante junto al dedo (al otro lado si no cabe).
-      const c = card.current;
-      if (c) {
-        const cw = c.offsetWidth || 160;
-        const left = px + 14 + cw > width ? px - 14 - cw : px + 14;
-        c.style.transform = `translateX(${Math.max(0, left)}px)`;
-        c.style.opacity = "1";
-      }
-      if (rHint.current) rHint.current.style.opacity = "0";
+      if (rHint.current) rHint.current.style.display = "none";
+      if (strip.current) strip.current.style.opacity = "1";
       mapApi.current?.setCursor(data.lat?.[i] ?? null, data.lon?.[i] ?? null);
     },
     [xs, xMin, xMax, data, splitPaceAt, hrStep],
@@ -540,9 +568,39 @@ export function RunExplorer({
               </button>
             )}
           </div>
-          <p ref={rHint} className="mt-2 text-[11px] text-fg-2 transition-opacity">
-            Desliza el dedo por los gráficos.
-          </p>
+          {/* Franja fija con el instante señalado: no tapa los gráficos (solo el punto brilla encima). */}
+          <div
+            className="sticky top-2 z-10 mt-3 rounded-2xl border border-line px-3 py-2 shadow-[0_10px_28px_-14px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+            style={{ background: "color-mix(in srgb, var(--card) 82%, transparent)" }}
+          >
+            <p ref={rHint} className="py-1 text-[12px] text-fg-2">
+              Desliza el dedo por los gráficos.
+            </p>
+            <div ref={strip} aria-live="off" className="opacity-0 transition-opacity duration-150">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                <Cell refEl={rPace} unit="/km" lime big />
+                <Cell refEl={rKm} unit="km" />
+                <Cell refEl={rTime} />
+                {hasHr && (
+                  <span className="flex items-baseline gap-1">
+                    <span ref={rZoneDot} className="h-2 w-2 self-center rounded-full" aria-hidden="true" />
+                    <Cell refEl={rHr} unit="ppm" />
+                    <span ref={rZone} className="num text-[12px] text-fg-2">
+                      —
+                    </span>
+                  </span>
+                )}
+                {data.ele && <Cell refEl={rEle} unit="m" />}
+                {data.power && <Cell refEl={rPower} unit="W" />}
+                {data.gap && showGap && (
+                  <span className="text-[11px] text-fg-2">
+                    ajust. <Cell refEl={rGap} />
+                  </span>
+                )}
+              </div>
+              <span ref={rHrNote} className="block text-[10px] leading-tight text-fg-2" />
+            </div>
+          </div>
 
           <div ref={wrap} className="relative mt-1 select-none">
             {charts.map((c) => (
@@ -583,66 +641,8 @@ export function RunExplorer({
               className="pointer-events-none absolute top-3 bottom-6 left-0 z-[1] w-px opacity-0 transition-opacity"
               style={{ willChange: "transform", background: "linear-gradient(to bottom, transparent, var(--chart-line) 8%, var(--chart-line) 92%, transparent)" }}
             />
-            {/* Tarjeta flotante del instante, junto al dedo. */}
-            <div
-              ref={card}
-              aria-live="off"
-              className="pointer-events-none absolute top-[18px] left-0 z-[4] w-[158px] rounded-2xl border border-line px-3 py-2.5 opacity-0 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-opacity duration-150"
-              style={{ willChange: "transform", background: "color-mix(in srgb, var(--card) 78%, transparent)" }}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="num text-[13px]">
-                  <span ref={rKm}>—</span> <span className="text-[10px] text-fg-2">km</span>
-                </span>
-                <span ref={rTime} className="num text-[12px] text-fg-2">
-                  —
-                </span>
-              </div>
-              <div className="mt-1 flex items-baseline gap-1">
-                <span ref={rPace} className="num text-[22px] leading-none text-lime-text">
-                  —
-                </span>
-                <span className="text-[10px] text-fg-2">/km</span>
-              </div>
-              {data.gap && showGap && (
-                <div className="mt-0.5 text-[11px] text-fg-2">
-                  ajustado <span ref={rGap} className="num text-fg">—</span>
-                </div>
-              )}
-              <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
-                {hasHr && (
-                  <>
-                    <dt className="text-fg-2">Pulso</dt>
-                    <dd className="num text-right">
-                      <span ref={rHr}>—</span>
-                    </dd>
-                    <dt className="text-fg-2">Zona</dt>
-                    <dd className="num flex items-center justify-end gap-1">
-                      <span ref={rZoneDot} className="h-2 w-2 rounded-full" />
-                      <span ref={rZone}>—</span>
-                    </dd>
-                  </>
-                )}
-                {data.ele && (
-                  <>
-                    <dt className="text-fg-2">Altitud</dt>
-                    <dd className="num text-right">
-                      <span ref={rEle}>—</span> m
-                    </dd>
-                  </>
-                )}
-                {data.power && (
-                  <>
-                    <dt className="text-fg-2">Potencia</dt>
-                    <dd className="num text-right">
-                      <span ref={rPower}>—</span> W
-                    </dd>
-                  </>
-                )}
-              </dl>
-              <span ref={rHrNote} className="mt-1 block text-[10px] leading-tight text-fg-2" />
-            </div>
           </div>
+          <DistanceNote info={data.distanceInfo} />
           <Legend coarse={data.coarsePace} gap={!!data.gap && showGap} avg={data.avgPace !== null} hrBySplits={!!hrStep} ele={!!data.ele} />
         </section>
       )}
@@ -687,6 +687,34 @@ function slopeGradient(xs: number[], ele: (number | null)[], grade: (number | nu
     prev = c;
   }
   return { type: "linear", x: 0, y: 0, x2: 1, y2: 0, colorStops: stops };
+}
+
+function Cell({ refEl, unit, lime, big }: { refEl: React.RefObject<HTMLSpanElement | null>; unit?: string; lime?: boolean; big?: boolean }) {
+  return (
+    <span className="whitespace-nowrap">
+      <span ref={refEl} className={`num ${big ? "text-[20px]" : "text-[14px]"} ${lime ? "text-lime-text" : ""}`}>
+        —
+      </span>
+      {unit && <span className="ml-0.5 text-[10px] text-fg-2">{unit}</span>}
+    </span>
+  );
+}
+
+/** Aviso de distancia: de dónde sale el eje de km y qué no registró el reloj. */
+function DistanceNote({ info }: { info: Explorer["distanceInfo"] }) {
+  const km = (m: number | null) => (m === null ? "—" : (m / 1000).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const parts: string[] = [];
+  if (info.missing) {
+    parts.push(
+      `El reloj no registró distancia en ${info.missing.stretches} ${info.missing.stretches === 1 ? "tramo" : "tramos"} donde el GPS marca ${Math.round(info.missing.gpsM - info.missing.watchM)} m: ahí no hay ritmo (banda «sin datos»).`,
+    );
+  }
+  if (info.kmFrom === "gps" && info.samplesM !== null)
+    parts.push(`Eje de km con el GPS (${km(info.gpsM)} km): las muestras del reloj suman ${km(info.samplesM)} km y el total es ${km(info.totalM)} km.`);
+  else if (info.samplesM !== null && info.totalM && Math.abs(info.samplesM - info.totalM) / info.totalM > 0.02)
+    parts.push(`Las muestras del reloj suman ${km(info.samplesM)} km; el total del entrenamiento es ${km(info.totalM)} km.`);
+  if (!parts.length) return null;
+  return <p className="mt-2 px-1 text-[10px] leading-relaxed text-fg-2">{parts.join(" ")}</p>;
 }
 
 function Legend({ coarse, gap, avg, hrBySplits, ele }: { coarse: boolean; gap: boolean; avg: boolean; hrBySplits: boolean; ele: boolean }) {
