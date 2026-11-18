@@ -7,6 +7,7 @@ import { planScreen } from "@/lib/db/screens";
 import { cacheDay } from "@/lib/cache/tags";
 import { SHIFT_META, dayNum, ymdOf } from "@/lib/plan/shifts";
 import { PredictionsCard } from "@/components/charts/PredictionsCard";
+import type { SessionKind, WeekSession } from "@/lib/plan/weekly";
 
 export const metadata = { title: "Plan · Stride Lab" };
 
@@ -40,7 +41,8 @@ function range(start: string, end: string) {
 
 async function PlanData() {
   await connection();
-  const { anchor, today, weeks, predictions } = await planScreen(cacheDay());
+  const { anchor, today, weeks, sessions, predictions } =
+    await planScreen(cacheDay());
   const preds = (
     <PredictionsCard
       now={predictions.now}
@@ -69,6 +71,7 @@ async function PlanData() {
     );
   }
   const current = weeks[0];
+  const sessionsBy = new Map(sessions.map((x) => [x.start, x]));
   const todayDay = dayNum(today)!;
   const left = current.startDay + 6 - todayDay;
   return (
@@ -89,6 +92,7 @@ async function PlanData() {
             : `Quedan ${left} ${left === 1 ? "día" : "días"} de este bloque.`}{" "}
           Semana {current.pos + 1} de 5 del ciclo.
         </p>
+        {sessions[0] && <SessionBlock s={sessions[0]} />}
       </section>
 
       <section className="card p-5" aria-label="Próximas semanas">
@@ -118,6 +122,16 @@ async function PlanData() {
                     : ""}
                   semana {w.pos + 1} de 5
                 </div>
+                {sessionsBy.get(w.start) && (
+                  <div className="mt-1 text-[13px]">
+                    <SessionDot kind={sessionsBy.get(w.start)!.session} />{" "}
+                    <b>{sessionsBy.get(w.start)!.label}</b>
+                    <span className="text-fg-2">
+                      {" "}
+                      · {sessionsBy.get(w.start)!.dayLabel}
+                    </span>
+                  </div>
+                )}
               </div>
               <ShiftPill kind={w.kind} />
             </li>
@@ -154,5 +168,45 @@ function ShiftPill({ kind }: { kind: keyof typeof SHIFT_META }) {
     >
       {SHIFT_META[kind].label}
     </span>
+  );
+}
+
+const SESSION_COLOR: Record<SessionKind, string> = {
+  tirada_larga: "var(--t-tirada_larga)",
+  calidad: "var(--t-series)",
+  calidad_corta: "var(--t-tempo)",
+  suave: "var(--t-rodaje)",
+  suave_opcional: "var(--fg-3)",
+};
+
+function SessionDot({ kind }: { kind: SessionKind }) {
+  return (
+    <span
+      className="inline-block h-2 w-2 rounded-full align-middle"
+      style={{ background: SESSION_COLOR[kind] }}
+      aria-hidden="true"
+    />
+  );
+}
+
+/** Sesión de la semana en curso: qué, cuándo y por qué (en una línea). */
+function SessionBlock({ s }: { s: WeekSession }) {
+  return (
+    <div className="relative mt-4 rounded-2xl border border-line bg-inset p-3.5">
+      <div className="text-[12px] text-fg-2">Sesión de la semana</div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <SessionDot kind={s.session} />
+        <span className="font-display text-[20px] font-bold">{s.label}</span>
+      </div>
+      <div className="mt-0.5 text-[14px] first-letter:uppercase">
+        {s.dayLabel}
+        {s.when ? `, ${s.when}` : ""}
+      </div>
+      <p className="mt-1.5 text-[12px] leading-snug text-fg-2">{s.reason}</p>
+      <p className="mt-1.5 text-[11px] text-fg-3">
+        Sugerencia, no obligación: si no te encuentras bien, cambia a suave o
+        descansa.
+      </p>
+    </div>
   );
 }

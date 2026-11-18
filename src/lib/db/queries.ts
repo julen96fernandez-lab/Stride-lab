@@ -753,12 +753,24 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 
 import { shiftWeeks, type ShiftWeek } from "@/lib/plan/shifts";
 import { predictAt, predictionHistory } from "@/lib/plan/predict";
+import { planWeeks } from "@/lib/plan/weekly";
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
 export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
-  const [anchor, predictions] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx)]);
+  const [anchor, predictions, runs, fitness] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx)]);
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
-  return { anchor, today, weeks, predictions };
+  const cur = fitness.current;
+  const sessions = anchor
+    ? planWeeks({
+        weeks,
+        anchor,
+        today,
+        history: runs.map((r) => ({ date: new Date(localDay(r.startAt) * 86_400_000).toISOString().slice(0, 10), type: r.type })),
+        ratio: cur && !cur.warmup ? cur.ratio : null,
+        openInjury: fitness.openInjury,
+      })
+    : [];
+  return { anchor, today, weeks, sessions, predictions };
 }
 
 /** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */

@@ -411,8 +411,25 @@ Contexto: ~1 carrera por semana, sin carrera objetivo, turnos en ciclo de 5 sema
 - Con datos reales (18‑nov‑2026): 5K ≈22:17 (20:36–24:15), 10K ≈45:55 (44:09–47:39), media
   ≈1:40:57 (1:39:22–1:48:20), las tres con confianza alta; maratón oculto (máx. 22,9 km).
 
+### Paso 3 · Una sesión por semana (hecho)
+- `src/lib/plan/weekly.ts` (con pruebas): por cada semana del ciclo, UNA sesión, día recomendado
+  y motivo en una línea.
+  - Tardes → tirada larga el sábado (o el domingo si el sábado ya pasó).
+  - Mañanas → entre semana por la tarde: calidad corta o rodaje suave (nunca tirada larga).
+  - Noches → rodaje suave opcional («si has dormido bien»).
+  - Libre → la exigente, alternando con la última (hecha o prevista); tras noches, nunca el lunes;
+    la libre que precede a las tardes es de calidad (las tardes llevan la tirada larga), así que
+    nunca hay dos tiradas largas seguidas. Ciclo típico: larga · suave opc. · calidad · suave ·
+    calidad.
+  - Nunca calidad el día después de una noche.
+  - Prudencia: lesión abierta → suave todas las semanas; carga alta (ratio > 1,3) o > 3 semanas
+    sin correr → suave la semana en curso.
+- En la semana en curso el día nunca es anterior a hoy si queda uno válido.
+- Plan: «Sesión de la semana» en la tarjeta de esta semana y la sesión y el día en cada semana
+  próxima, con la nota «sugerencia, no obligación».
+
 ### Pendiente
-3. Una sesión por semana con día y motivo. 4. Previsto frente a realizado y reorganizar.
+4. Previsto frente a realizado y reorganizar.
 
 ## Rendimiento
 
@@ -744,6 +761,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑18 — Plan, paso 3: una sesión por semana con día y motivo según el turno, la carga, la
+  lesión y lo hecho antes.
 - 2026‑11‑18 — Plan, paso 2: predicción de 5K, 10K, media y maratón con rango, confianza y
   evolución mensual.
 - 2026‑11‑18 — Plan, paso 1: ciclo de turnos de 5 semanas (Perfil y Plan), migración 0009 con
