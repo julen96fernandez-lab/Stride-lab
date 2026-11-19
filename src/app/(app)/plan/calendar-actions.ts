@@ -8,5 +8,5 @@ import { blockRange, type CalendarBlock } from "@/lib/plan/calendar";
 export async function calendarBlockAction(year: number, month: number): Promise<CalendarBlock | null> {
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || year < 2000 || year > 2100) return null;
   const { from, to } = blockRange({ year, month });
-  return calendarScreen(cacheDay(), from, to);
+  return calendarScreen(from, to, cacheDay());
 }

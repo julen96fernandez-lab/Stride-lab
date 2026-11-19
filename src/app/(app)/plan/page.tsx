@@ -66,7 +66,7 @@ async function PlanData({ searchParams }: { searchParams: SP }) {
   await connection();
   const day = cacheDay();
   const { from, to } = blockRange({ year: Number(day.slice(0, 4)), month: Number(day.slice(5, 7)) });
-  const [sp, plan, calendar] = await Promise.all([searchParams, planScreen(day), calendarScreen(day, from, to)]);
+  const [sp, plan, calendar] = await Promise.all([searchParams, planScreen(day), calendarScreen(from, to, day)]);
   const initial = choicesFromParams(sp, VIEWS);
   return (
     <ChoiceProvider initial={initial} defaults={DEFAULTS}>

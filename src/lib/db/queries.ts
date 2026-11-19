@@ -1036,7 +1036,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
     return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx, unplanned: {} as Record<string, RunBrief[]> };
   }
 
-  const { madrid, history, pastStart, stored, byStart, mine, hidden, sessions } = core;
+  const { madrid, history, pastStart, byStart, mine, hidden, sessions } = core;
 
   // Avisos de mis sesiones frente a las reglas (otras exigentes: mías, sugeridas visibles y corridas).
   const exigentes: Exigente[] = [

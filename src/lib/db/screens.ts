@@ -76,7 +76,7 @@ export async function recordsScreen(day: string) {
 }
 
 /** Bloque del calendario de Plan (de lunes a domingo de las cuadrículas de varios meses). */
-export async function calendarScreen(day: string, from: string, to: string) {
+export async function calendarScreen(from: string, to: string, day: string) {
   "use cache: remote";
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
