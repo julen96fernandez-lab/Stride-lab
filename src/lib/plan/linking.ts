@@ -15,12 +15,13 @@ import { dayNum } from "./shifts";
 import { matchesSession } from "./compliance";
 import type { SessionKind } from "./weekly";
 
-export type MineStatus = "cumplida" | "otra" | "pendiente" | "no_hecha";
+export type MineStatus = "cumplida" | "otra" | "pendiente" | "no_hecha" | "descanso";
 export const MINE_STATUS_LABEL: Record<MineStatus, string> = {
   cumplida: "Cumplida",
   otra: "Hecha, otro tipo",
   pendiente: "Pendiente",
   no_hecha: "No hecha",
+  descanso: "Descanso",
 };
 
 export interface LinkRun {
@@ -42,7 +43,8 @@ export function mineMatches(kind: string, runType: string | null): boolean {
 export function linkMine<R extends LinkRun>(mine: readonly { id: string; date: string; kind: string }[], runs: readonly R[]): Map<string, R> {
   const out = new Map<string, R>();
   const used = new Set<string>();
-  const sorted = [...mine].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  // Un descanso no se vincula con ninguna carrera.
+  const sorted = mine.filter((m) => m.kind !== "descanso").sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   for (const maxGap of [0, 1]) {
     for (const m of sorted) {
       if (out.has(m.id)) continue;
@@ -60,6 +62,7 @@ export function linkMine<R extends LinkRun>(mine: readonly { id: string; date: s
 }
 
 export function mineStatus(m: { date: string; kind: string }, run: LinkRun | null | undefined, today: string): MineStatus {
+  if (m.kind === "descanso") return "descanso";
   if (run) return mineMatches(m.kind, run.type) ? "cumplida" : "otra";
   return dayNum(m.date)! + 1 >= dayNum(today)! ? "pendiente" : "no_hecha";
 }

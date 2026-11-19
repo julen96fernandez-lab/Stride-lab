@@ -193,3 +193,14 @@ describe("recálculo alrededor de mis sesiones", () => {
     expect(ws["2026-12-07"]).toMatchObject({ session: "suave", occupiedBy: "m1" });
   });
 });
+
+describe("descanso puesto por mí", () => {
+  const H: PastRun[] = [{ date: "2026-11-15", type: "rodaje" }, { date: "2026-10-17", type: "tirada_larga" }];
+  it("no ocupa el sitio de la sugerencia ni cuenta para alternar; la sugerencia va a otro día", () => {
+    const base = plan("2026-11-23", H).find((w) => w.start === "2026-12-07")!;
+    const w = plan("2026-11-23", H, { mine: [{ id: "d", date: base.day, kind: "descanso" }] }).find((x) => x.start === "2026-12-07")!;
+    expect(w.occupiedBy).toBeUndefined();
+    expect(w.session).toBe(base.session);
+    expect(w.day).not.toBe(base.day);
+  });
+});

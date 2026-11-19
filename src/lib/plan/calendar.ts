@@ -9,9 +9,9 @@
 import { dayNum, mondayOfDay, ymdOf, type ShiftKind } from "./shifts";
 import { SESSION_LABEL, type SessionKind } from "./weekly";
 
-export type CalKind = "calidad" | "tirada_larga" | "suave" | "otro";
-export const CAL_KINDS: readonly CalKind[] = ["calidad", "tirada_larga", "suave", "otro"];
-export const CAL_LABEL: Record<CalKind, string> = { calidad: "Calidad", tirada_larga: "Tirada larga", suave: "Rodaje suave", otro: "Otro" };
+export type CalKind = "calidad" | "tirada_larga" | "suave" | "otro" | "descanso";
+export const CAL_KINDS: readonly CalKind[] = ["calidad", "tirada_larga", "suave", "otro", "descanso"];
+export const CAL_LABEL: Record<CalKind, string> = { calidad: "Calidad", tirada_larga: "Tirada larga", suave: "Rodaje suave", otro: "Otro", descanso: "Descanso" };
 
 /** Tipo del calendario de una sugerencia (la de «solo la carrera» no lleva punto: va el 🏁). */
 export function calKindOfSuggestion(s: SessionKind): CalKind | null {
@@ -76,6 +76,10 @@ export interface DayPlan {
   /** «12 km · 1 h» (mi sesión) */
   detail?: string | null;
   note?: string | null;
+  distanceM?: number | null;
+  durationS?: number | null;
+  /** choques con las reglas (mi sesión; se guarda igual) */
+  warnings?: string[];
   /** sugerencia: su semana (lunes) y la sesión, para editarla o moverla */
   week?: string;
   session?: SessionKind;
@@ -108,7 +112,7 @@ export function buildCalendar(o: {
   shiftOf: ((monday: string) => ShiftKind) | null;
   /** sugerencias visibles (no quitadas ni sustituidas): día y sesión */
   suggestions: readonly { day: string; session: SessionKind; week: string }[];
-  mine: readonly { id: string; date: string; kind: string; detail?: string | null; note?: string | null }[];
+  mine: readonly { id: string; date: string; kind: string; detail?: string | null; note?: string | null; distanceM?: number | null; durationS?: number | null; warnings?: string[] }[];
   runs: readonly { id: string; date: string; distanceM: number | null; type?: string | null; paceS?: number | null }[];
   races: readonly { name: string; date: string }[];
   injuries: readonly { startDate: string; endDate: string | null }[];
@@ -127,7 +131,17 @@ export function buildCalendar(o: {
   for (const m of o.mine) {
     if (!inRange(m.date)) continue;
     const k = (CAL_KINDS as readonly string[]).includes(m.kind) ? (m.kind as CalKind) : "otro";
-    cell(m.date).plans.push({ kind: k, mine: true, label: CAL_LABEL[k], id: m.id, detail: m.detail ?? null, note: m.note ?? null });
+    cell(m.date).plans.push({
+      kind: k,
+      mine: true,
+      label: CAL_LABEL[k],
+      id: m.id,
+      detail: m.detail ?? null,
+      note: m.note ?? null,
+      distanceM: m.distanceM ?? null,
+      durationS: m.durationS ?? null,
+      warnings: m.warnings ?? [],
+    });
   }
   for (const r of o.runs)
     if (inRange(r.date)) cell(r.date).runs.push({ id: r.id, km: r.distanceM === null ? null : Math.round(r.distanceM / 100) / 10, type: r.type ?? null, paceS: r.paceS ?? null });

@@ -29,3 +29,11 @@ describe("«Hoy» con mi sesión", () => {
     expect(todayFromMine([m({ status: "otra" })], { label: "Descanso" }, false)!.done).toBe("Hecha, otro tipo");
   });
 });
+
+describe("«Hoy» con descanso", () => {
+  it("título «Descanso», lo pusiste tú; con lesión, sin decir que corras", () => {
+    const t = todayFromMine([m({ kind: "descanso" })], { label: "Rodaje suave" }, true)!;
+    expect(t).toMatchObject({ title: "Descanso", sub: "lo pusiste tú" });
+    expect(t.injury).toMatch(/buen día para descansar/);
+  });
+});

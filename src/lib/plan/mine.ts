@@ -6,13 +6,15 @@
 import { dayNum, mondayOfDay, ymdOf } from "./shifts";
 import type { SessionKind } from "./weekly";
 
-export type MineKind = "tirada_larga" | "calidad" | "suave" | "otro";
-export const MINE_KINDS: readonly MineKind[] = ["tirada_larga", "calidad", "suave", "otro"];
+/** «descanso»: el día marcado como de descanso (sin sesión; no cuenta para alternar ni se vincula). */
+export type MineKind = "tirada_larga" | "calidad" | "suave" | "otro" | "descanso";
+export const MINE_KINDS: readonly MineKind[] = ["calidad", "tirada_larga", "suave", "otro", "descanso"];
 export const MINE_LABEL: Record<MineKind, string> = {
   tirada_larga: "Tirada larga",
   calidad: "Calidad",
   suave: "Rodaje suave",
   otro: "Otro",
+  descanso: "Descanso",
 };
 export const isMineKind = (k: unknown): k is MineKind => typeof k === "string" && (MINE_KINDS as readonly string[]).includes(k);
 
@@ -92,7 +94,9 @@ export function parseMineForm(f: Record<string, string | undefined>, today: stri
   const replacesWeek = rwDay !== null && mondayOfDay(rwDay) === rwDay ? rw : null;
 
   if (Object.keys(errors).length) return { input: null, errors };
-  return { input: { date, kind: kind as MineKind, distanceM, durationS, note: note || null, replacesWeek }, errors };
+  // Un descanso no lleva distancia ni duración.
+  const rest = kind === "descanso";
+  return { input: { date, kind: kind as MineKind, distanceM: rest ? null : distanceM, durationS: rest ? null : durationS, note: note || null, replacesWeek }, errors };
 }
 
 /** ¿Vale esta fecha para una sesión mía? (de 4 semanas atrás a un año adelante) Mensaje o null. */

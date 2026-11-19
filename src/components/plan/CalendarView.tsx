@@ -12,6 +12,7 @@ export const CAL_COLOR: Record<CalKind, string> = {
   calidad: "var(--t-series)",
   suave: "var(--t-rodaje)",
   otro: "var(--chart-line)",
+  descanso: "var(--fg-3)",
 };
 const SHIFT_LETTER: Record<ShiftKind, string> = { tardes: "T", noches: "N", libre: "L", mananas: "M" };
 const WD = ["L", "M", "X", "J", "V", "S", "D"];
@@ -172,7 +173,11 @@ function Day({ ymd, d, inMonth, today, cell, onOpen }: { ymd: string; d: number;
       {!!cell?.plans.length && (
         <span className="mt-1 flex gap-[3px]" aria-hidden="true">
           {cell.plans.slice(0, 3).map((p, i) => (
-            <span key={i} className="h-[7px] w-[7px] rounded-full" style={{ background: CAL_COLOR[p.kind], opacity: p.mine ? 1 : 0.35 }} />
+            <span
+              key={i}
+              className="h-[7px] w-[7px] rounded-full"
+              style={p.kind === "descanso" ? { border: "1.5px solid var(--fg-2)" } : { background: CAL_COLOR[p.kind], opacity: p.mine ? 1 : 0.35 }}
+            />
           ))}
         </span>
       )}
@@ -202,7 +207,7 @@ function Legend() {
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {CAL_KINDS.map((k) => (
           <span key={k} className="inline-flex items-center gap-1">
-            <span className="h-[7px] w-[7px] rounded-full" style={{ background: CAL_COLOR[k] }} />
+            <span className="h-[7px] w-[7px] rounded-full" style={k === "descanso" ? { border: "1.5px solid var(--fg-2)" } : { background: CAL_COLOR[k] }} />
             {CAL_LABEL[k]}
           </span>
         ))}

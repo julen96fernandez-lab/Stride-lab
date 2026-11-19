@@ -95,3 +95,60 @@ export async function moveSuggestionAction(weekStart: string, session: string, d
   refresh();
   return movedMessage(id, date);
 }
+
+/** Avisos de una sesión mía recién guardada (se guarda igual). */
+async function warningsOf(id: string): Promise<string[]> {
+  return (await getPlan(cacheDay())).mine.find((m) => m.id === id)?.warnings ?? [];
+}
+
+/**
+ * Hoja del día: poner el entrenamiento con un toque. Si ya hay una sesión mía ese día (`id`), le
+ * cambia el tipo; si no, la crea. Si choca con una regla, se guarda igual y se devuelve el aviso.
+ */
+export async function setDayKindAction(date: string, kind: string, id?: string | null): Promise<Result & { id?: string; warnings?: string[] }> {
+  const { isMineKind, MINE_LABEL } = await import("@/lib/plan/mine");
+  if (!isMineKind(kind)) return { ok: false, message: "Tipo no válido." };
+  if (id && !UUID.test(id)) return { ok: false, message: "Sesión no válida." };
+  const err = mineDateError(date, cacheDay());
+  if (err) return { ok: false, message: err };
+  let saved = id ?? null;
+  if (id) {
+    const { eq } = await import("drizzle-orm");
+    const s = await import("@/lib/db/schema");
+    const rest = kind === "descanso" ? { distanceM: null, durationS: null } : {};
+    const rows = await db().update(s.plannedSessions).set({ kind, ...rest, updatedAt: new Date() }).where(eq(s.plannedSessions.id, id)).returning({ id: s.plannedSessions.id });
+    if (!rows.length) saved = null;
+  }
+  if (!saved) saved = await saveMine(db(), { date, kind, distanceM: null, durationS: null, note: null, replacesWeek: null });
+  dataChanged();
+  refresh();
+  const warnings = await warningsOf(saved);
+  const what = kind === "descanso" ? "Día de descanso" : MINE_LABEL[kind];
+  return { ok: true, id: saved, warnings, message: warnings.length ? `${what} guardado, con aviso: ${warnings[0]}` : `${what} · puesta por ti.` };
+}
+
+/** Hoja del día: km, duración y nota de mi sesión (opcionales). */
+export async function setDayDetailsAction(id: string, f: { distanceKm: string; duration: string; note: string }): Promise<Result & { errors?: MineErrors }> {
+  if (!UUID.test(id)) return { ok: false, message: "Sesión no válida." };
+  const { getMine } = await import("@/lib/plan/plan-db");
+  const m = await getMine(db(), id);
+  if (!m) return { ok: false, message: "Esa sesión ya no existe." };
+  // Se valida igual que el formulario (la fecha puede ser de hace más de 4 semanas: no se toca).
+  const { input, errors } = parseMineForm({ date: cacheDay(), kind: m.kind, distanceKm: f.distanceKm, duration: f.duration, note: f.note }, cacheDay());
+  if (!input) return { ok: false, message: Object.values(errors)[0] ?? "Revisa los datos.", errors };
+  const { eq } = await import("drizzle-orm");
+  const s = await import("@/lib/db/schema");
+  await db().update(s.plannedSessions).set({ distanceM: input.distanceM, durationS: input.durationS, note: input.note, updatedAt: new Date() }).where(eq(s.plannedSessions.id, id));
+  dataChanged();
+  refresh();
+  return { ok: true, message: "Guardado." };
+}
+
+/** Hoja del día: «Quitar» mi sesión (sin salir del calendario). */
+export async function removeMineAction(id: string): Promise<Result> {
+  if (!UUID.test(id)) return { ok: false, message: "Sesión no válida." };
+  await deleteMine(db(), id);
+  dataChanged();
+  refresh();
+  return { ok: true, message: "Sesión quitada." };
+}

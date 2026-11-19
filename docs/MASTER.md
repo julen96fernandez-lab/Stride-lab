@@ -610,6 +610,14 @@ punto fuerte = mi sesión, tenue = sugerencia.
   en la nueva fecha y sustituye a la de su semana; avisos de reglas en el mensaje); carreras hechas
   con enlace al detalle; «Añadir sesión» y «Añadir carrera» (hoy o pasado; `/actividad/nueva?fecha=`
   rellena la fecha). En la prueba de desbordes con la hoja abierta.
+  - **Entrenamiento con un toque** (arriba de la hoja): Calidad, Tirada larga, Rodaje suave, Otro
+    y Descanso. Crea al instante mi sesión del día (o le cambia el tipo; el activo resaltado),
+    con toast y aviso con el motivo si choca con una regla (se guarda igual); debajo, km, duración
+    y nota opcionales y «Quitar» con doble toque. `setDayKindAction`, `setDayDetailsAction`,
+    `removeMineAction`. Hasta 4 semanas atrás, como el formulario.
+  - **Descanso**: tipo nuevo de sesión mía (`descanso`): marca el día sin sesión; no lleva km ni
+    duración, no ocupa el sitio de la sugerencia ni cuenta para alternar, no se vincula con
+    carreras (estado «Descanso») y la sugerencia evita ese día. En el calendario, un aro.
 
 ## Rendimiento
 
@@ -952,7 +960,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
-- 2026‑11‑19 — Calendario, paso 2: hoja inferior del día con editar, mover y añadir.
+- 2026‑11‑19 — Calendario, paso 2: hoja inferior del día con editar, mover y añadir; entrenamiento
+  del día con un toque y «Descanso».
 - 2026‑11‑19 — Calendario, paso 1: selector Resumen | Calendario y cuadrícula mensual con marcas.
 - 2026‑11‑19 — Detalle, paso 3: «Sesiones parecidas» (ritmo, pulso y carga frente a las 5 últimas).
 - 2026‑11‑19 — Detalle, paso 2: «Misma ruta» (sentido incluido) con lista y gráfico por fecha.

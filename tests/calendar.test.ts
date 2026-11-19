@@ -60,7 +60,7 @@ describe("marcas de cada día", () => {
       mine: [{ id: "m1", date: "2026-11-28", kind: "suave", detail: "8 km", note: "con Ane" }, { id: "m2", date: "2026-11-30", kind: "raro" }],
     });
     expect(c.days["2026-11-28"].plans).toEqual([
-      { kind: "suave", mine: true, label: "Rodaje suave", id: "m1", detail: "8 km", note: "con Ane" },
+      { kind: "suave", mine: true, label: "Rodaje suave", id: "m1", detail: "8 km", note: "con Ane", distanceM: null, durationS: null, warnings: [] },
       { kind: "tirada_larga", mine: false, label: "Tirada larga", week: "2026-11-23", session: "tirada_larga" },
     ]);
     expect(c.days["2026-12-02"].plans).toEqual([{ kind: "calidad", mine: false, label: "Calidad corta", week: "2026-11-30", session: "calidad_corta" }]);

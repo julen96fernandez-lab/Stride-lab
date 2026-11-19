@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { moveMineAction, moveSuggestionAction } from "@/app/(app)/plan/session-actions";
+import { moveMineAction, moveSuggestionAction, removeMineAction, setDayDetailsAction, setDayKindAction } from "@/app/(app)/plan/session-actions";
+import { Warnings } from "@/components/plan/SessionForm";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Spinner } from "@/components/ui/SubmitButton";
 import { toast } from "@/components/ui/Toaster";
 import { TYPE_META, isSessionType } from "@/lib/analysis/session-type";
 import type { DayCell, DayPlan } from "@/lib/plan/calendar";
-import { MINE_PAST_DAYS } from "@/lib/plan/mine";
+import { MINE_KINDS, MINE_LABEL, MINE_NOTE_MAX, MINE_PAST_DAYS, durationField, type MineKind } from "@/lib/plan/mine";
 import { SHIFT_META, dayNum, mondayOfDay, ymdOf, type ShiftKind } from "@/lib/plan/shifts";
 
 const COLOR: Record<string, string> = {
@@ -16,6 +17,7 @@ const COLOR: Record<string, string> = {
   calidad: "var(--t-series)",
   suave: "var(--t-rodaje)",
   otro: "var(--chart-line)",
+  descanso: "var(--fg-3)",
 };
 const pace = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const btn = "flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl px-3 text-[14px] font-semibold";
@@ -27,7 +29,10 @@ export function DaySheet({ ymd, cell, shift, today, onClose }: { ymd: string | n
   const title = new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`));
   const past = ymd < today;
   const canAddSession = d >= dayNum(today)! - MINE_PAST_DAYS;
-  const plans = cell?.plans ?? [];
+  const all = cell?.plans ?? [];
+  // Mi sesión del día (la primera mía) se maneja con los botones de arriba; el resto, en la lista.
+  const primary = all.find((p) => p.mine) ?? null;
+  const plans = all.filter((p) => p !== primary);
   const runs = cell?.runs ?? [];
   return (
     <BottomSheet
@@ -62,9 +67,16 @@ export function DaySheet({ ymd, cell, shift, today, onClose }: { ymd: string | n
         )}
         {cell?.injury && <p className="text-[13px] text-danger">Día dentro de un periodo de lesión.</p>}
 
-        {/* Previstas */}
+        {/* Entrenamiento del día con un toque */}
+        {canAddSession ? (
+          <QuickDay key={ymd} ymd={ymd} primary={primary} />
+        ) : (
+          <p className="text-[13px] text-fg-2">Solo se pueden poner sesiones desde hace {MINE_PAST_DAYS / 7} semanas.</p>
+        )}
+
+        {/* Previstas (la sugerencia y otras sesiones mías) */}
         <section aria-label="Sesiones previstas">
-          <div className="eyebrow">Previstas</div>
+          <div className="eyebrow">{primary ? "También previstas" : "Previstas"}</div>
           {plans.length ? (
             <ul className="mt-2 flex flex-col gap-2">
               {plans.map((p, i) => (
@@ -72,7 +84,7 @@ export function DaySheet({ ymd, cell, shift, today, onClose }: { ymd: string | n
               ))}
             </ul>
           ) : (
-            <p className="mt-1.5 text-[14px] text-fg-2">Nada previsto.</p>
+            <p className="mt-1.5 text-[14px] text-fg-2">{primary ? "Nada más." : "Nada previsto por la app."}</p>
           )}
         </section>
 
@@ -112,7 +124,7 @@ export function DaySheet({ ymd, cell, shift, today, onClose }: { ymd: string | n
         <div className="grid grid-cols-2 gap-2">
           {canAddSession ? (
             <Link href={`/plan/sesion/nueva?fecha=${ymd}`} className={`${btn} ${ymd > today ? "col-span-2" : ""} border border-line-strong`}>
-              ＋ Añadir sesión
+              ＋ Añadir otra sesión
             </Link>
           ) : null}
           {ymd <= today && (
@@ -182,5 +194,175 @@ function PlanItem({ p, day, onDone }: { p: DayPlan; day: string; onDone: () => v
       )}
       {!p.mine && <p className="mt-1.5 text-[11px] text-fg-3">Al editarla o moverla pasa a ser tuya y sustituye a la sugerencia de su semana.</p>}
     </li>
+  );
+}
+
+const QUICK_LABEL: Record<MineKind, string> = { calidad: "Calidad", tirada_larga: "Tirada larga", suave: "Rodaje suave", otro: "Otro", descanso: "Descanso" };
+
+/**
+ * Botones grandes para poner el entrenamiento del día con un toque. Crea mi sesión al instante o,
+ * si ya la hay, le cambia el tipo (el activo, resaltado). Debajo: km, duración y nota, y «Quitar».
+ */
+function QuickDay({ ymd, primary }: { ymd: string; primary: DayPlan | null }) {
+  const server = primary ? { id: primary.id!, kind: primary.kind as MineKind } : null;
+  // Lo elegido aquí se ve al instante; cuando llegan los datos del servidor, mandan ellos.
+  const [opt, setOpt] = useState<{ id: string | null; kind: MineKind } | "removed" | null>(null);
+  const [seen, setSeen] = useState(server ? `${server.id}:${server.kind}` : "");
+  const now = server ? `${server.id}:${server.kind}` : "";
+  if (now !== seen) {
+    setSeen(now);
+    setOpt(null);
+  }
+  const cur = opt === "removed" ? null : (opt ?? server);
+  const [warnings, setWarnings] = useState<string[] | null>(null);
+  const shown = warnings ?? primary?.warnings ?? [];
+  const [busy, setBusy] = useState<MineKind | null>(null);
+  const [pending, start] = useTransition();
+  const [confirm, setConfirm] = useState(false);
+
+  const choose = (k: MineKind) => {
+    if (cur?.kind === k || pending) return;
+    setOpt({ id: cur?.id ?? null, kind: k });
+    setBusy(k);
+    setConfirm(false);
+    start(async () => {
+      try {
+        const r = await setDayKindAction(ymd, k, cur?.id ?? null);
+        if (!r.ok) {
+          setOpt(null);
+          toast.error(r.message);
+          return;
+        }
+        setOpt({ id: r.id ?? null, kind: k });
+        setWarnings(r.warnings ?? []);
+        if (r.warnings?.length) toast.show("info", r.message);
+        else toast.success(r.message);
+      } catch {
+        setOpt(null);
+        toast.error("No se pudo guardar. Inténtalo de nuevo.");
+      } finally {
+        setBusy(null);
+      }
+    });
+  };
+
+  const remove = () => {
+    if (!cur?.id) return;
+    if (!confirm) return setConfirm(true);
+    const id = cur.id;
+    setConfirm(false);
+    setOpt("removed");
+    start(async () => {
+      try {
+        const r = await removeMineAction(id);
+        if (r.ok) {
+          setWarnings([]);
+          toast.success(r.message);
+        } else {
+          setOpt(null);
+          toast.error(r.message);
+        }
+      } catch {
+        setOpt(null);
+        toast.error("No se pudo quitar. Inténtalo de nuevo.");
+      }
+    });
+  };
+
+  return (
+    <section aria-label="Tu entrenamiento de este día">
+      <div className="eyebrow">Tu entrenamiento</div>
+      <div className="mt-2 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tipo de entrenamiento">
+        {MINE_KINDS.map((k) => {
+          const on = cur?.kind === k;
+          return (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-busy={busy === k || undefined}
+              onClick={() => choose(k)}
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-2xl border px-1 text-[13px] leading-tight font-semibold ${on ? "border-lime bg-lime text-lime-ink" : "border-line-strong text-fg"}`}
+            >
+              {busy === k ? (
+                <Spinner size={14} />
+              ) : (
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={k === "descanso" ? { border: "1.5px solid currentColor" } : { background: on ? "currentColor" : COLOR[k] }}
+                  aria-hidden="true"
+                />
+              )}
+              {QUICK_LABEL[k]}
+            </button>
+          );
+        })}
+      </div>
+      {shown.length > 0 && cur && (
+        <div className="mt-2">
+          <Warnings items={shown} />
+        </div>
+      )}
+      {cur?.id && <Details key={cur.id} id={cur.id} kind={cur.kind} primary={primary} />}
+      {cur?.id && (
+        <button
+          type="button"
+          onClick={remove}
+          disabled={pending}
+          className={`mt-2 min-h-[44px] w-full rounded-xl text-[14px] font-semibold ${confirm ? "border border-danger text-danger" : "text-fg-2"}`}
+        >
+          {confirm ? `Toca otra vez para quitar ${cur.kind === "descanso" ? "el descanso" : "la sesión"}` : "Quitar"}
+        </button>
+      )}
+      {!cur && <p className="mt-1.5 text-[12px] text-fg-2">Un toque y queda puesta por ti; luego puedes añadir km, duración o una nota.</p>}
+    </section>
+  );
+}
+
+/** Km, duración y nota de mi sesión del día (opcionales). */
+function Details({ id, kind, primary }: { id: string; kind: MineKind; primary: DayPlan | null }) {
+  const same = primary?.id === id;
+  const [km, setKm] = useState(same && primary?.distanceM ? String(primary.distanceM / 1000).replace(".", ",") : "");
+  const [dur, setDur] = useState(same ? durationField(primary?.durationS ?? null) : "");
+  const [note, setNote] = useState(same ? (primary?.note ?? "") : "");
+  const [pending, start] = useTransition();
+  const field = "h-11 w-full rounded-xl border border-line-strong bg-[var(--card)] px-3 text-[16px] text-fg outline-none focus:border-lime";
+  const save = () =>
+    start(async () => {
+      try {
+        const r = await setDayDetailsAction(id, { distanceKm: kind === "descanso" ? "" : km, duration: kind === "descanso" ? "" : dur, note });
+        if (r.ok) toast.success(r.message);
+        else toast.error(r.message);
+      } catch {
+        toast.error("No se pudo guardar. Inténtalo de nuevo.");
+      }
+    });
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-line bg-inset p-3">
+      <div className="text-[12px] text-fg-2">
+        {MINE_LABEL[kind]} · puesta por ti · opcional:
+      </div>
+      {kind !== "descanso" && (
+        <div className="form-row">
+          <label className="flex flex-col gap-1 text-[12px] text-fg-2">
+            Distancia (km)
+            <input inputMode="decimal" value={km} onChange={(e) => setKm(e.target.value)} placeholder="Ej.: 10" className={field} />
+          </label>
+          <label className="flex flex-col gap-1 text-[12px] text-fg-2">
+            Duración
+            <input inputMode="numeric" value={dur} onChange={(e) => setDur(e.target.value)} placeholder="45 o 1:15" className={field} />
+          </label>
+        </div>
+      )}
+      <label className="flex flex-col gap-1 text-[12px] text-fg-2">
+        Nota
+        <input value={note} maxLength={MINE_NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder={kind === "descanso" ? "Ej.: piernas cargadas" : "Ej.: 6 × 1000"} className={field} />
+      </label>
+      <button type="button" disabled={pending} onClick={save} className={`${btn} border border-line-strong`}>
+        {pending && <Spinner size={14} />}
+        {pending ? "Guardando…" : "Guardar detalles"}
+      </button>
+    </div>
   );
 }

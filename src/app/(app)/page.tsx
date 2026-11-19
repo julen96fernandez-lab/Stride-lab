@@ -65,6 +65,7 @@ const MINE_STYLE: Record<MineKind, { color: string; icon: string }> = {
   calidad: TODAY_STYLE.calidad,
   suave: TODAY_STYLE.suave,
   otro: TODAY_STYLE.libre,
+  descanso: TODAY_STYLE.descanso,
 };
 
 async function HomeData() {

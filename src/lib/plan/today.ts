@@ -38,13 +38,16 @@ export function todayFromMine(mine: readonly TodayMine[], advice: { label: strin
   const detail = mine.length === 1 ? mineDetail(first) : null;
   const done = mine.find((m) => m.status === "cumplida" || m.status === "otra");
   const exigente = mine.some((m) => m.kind === "tirada_larga" || m.kind === "calidad");
+  const rest = mine.every((m) => m.kind === "descanso");
   return {
     title,
     sub: `${mine.length > 1 ? "las pusiste tú" : "lo pusiste tú"}${detail ? ` · ${detail}` : ""}`,
     note: mine.length === 1 ? first.note : null,
     done: done ? MINE_STATUS_LABEL[done.status] : null,
     injury: openInjury
-      ? exigente
+      ? rest
+        ? "Tienes una lesión abierta: buen día para descansar."
+        : exigente
         ? "Tienes una lesión abierta: una sesión exigente no es buena idea; si la haces, sin forzar y para si molesta."
         : "Tienes una lesión abierta: hazlo suave y para si molesta."
       : null,

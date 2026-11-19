@@ -909,6 +909,8 @@ export interface MineView {
   /** ritmo previsto si puse distancia y duración */
   plannedPace: string | null;
   plannedKm: string | null;
+  distanceM: number | null;
+  durationS: number | null;
 }
 /** Una carrera hecha, en una línea. */
 export interface RunBrief {
@@ -921,6 +923,8 @@ export interface RunBrief {
 }
 const mineView = (m: MineRow): MineView => ({
   warnings: [],
+  distanceM: m.distanceM,
+  durationS: m.durationS,
   status: "pendiente",
   done: null,
   plannedPace: m.distanceM && m.durationS ? fmtPace(m.durationS / (m.distanceM / 1000)) : null,
@@ -1001,6 +1005,23 @@ async function planCore(today: string, ctx: Ctx, o: { weeksAhead: number; from?:
   return { anchor, runs, raceRows, raceList, history, madrid, weeks, pastStart, stored, byStart, mine, hidden, sessions } as const;
 }
 
+/** Contexto de avisos: otras exigentes (mías, sugeridas visibles desde hoy y corridas), carreras y ciclo. */
+function warnContext(core: Extract<Awaited<ReturnType<typeof planCore>>, { weeks: unknown }>, today: string): WarnCtx {
+  const { anchor, mine, sessions, hidden, history, pastStart, raceList } = core;
+  const exigentes: Exigente[] = [
+    ...mineExigentes(mine),
+    ...sessions.flatMap((w) => {
+      const k = demandingOf(w.session);
+      return k && !hidden[w.start] && w.day >= today ? [{ date: w.day, kind: k, what: SUGG_WHAT[k] }] : [];
+    }),
+    ...history.flatMap((r) => {
+      const k = demandingOf(r.type);
+      return k && r.date >= pastStart && r.date <= today ? [{ date: r.date, kind: k, what: RUN_WHAT[k] }] : [];
+    }),
+  ];
+  return { anchor, races: raceList, exigentes };
+}
+
 /** Calendario: marcas de cada día entre `from` y `to` (lunes y domingo de las cuadrículas). */
 export async function getCalendar(today: string, from: string, to: string, ctx: Ctx = makeCtx()): Promise<CalendarBlock> {
   const t = dayNum(today)!;
@@ -1012,6 +1033,8 @@ export async function getCalendar(today: string, from: string, to: string, ctx: 
     return buildCalendar({ from, to, shiftOf: null, suggestions: [], mine, runs, races: core.raceList, injuries, today });
   }
   const { anchor, sessions, stored, hidden, mine } = core;
+  const warnCtx = warnContext(core, today);
+  for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
   const current = sessions[0].start;
   const mineExigWeeks = new Set(mine.filter((m) => demandingOf(m.kind)).map((m) => m.week));
   const suggestions = [
@@ -1039,18 +1062,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const { madrid, history, pastStart, byStart, mine, hidden, sessions } = core;
 
   // Avisos de mis sesiones frente a las reglas (otras exigentes: mías, sugeridas visibles y corridas).
-  const exigentes: Exigente[] = [
-    ...mineExigentes(mine),
-    ...sessions.flatMap((w) => {
-      const k = demandingOf(w.session);
-      return k && !hidden[w.start] && w.day >= today ? [{ date: w.day, kind: k, what: SUGG_WHAT[k] }] : [];
-    }),
-    ...history.flatMap((r) => {
-      const k = demandingOf(r.type);
-      return k && r.date >= pastStart && r.date <= today ? [{ date: r.date, kind: k, what: RUN_WHAT[k] }] : [];
-    }),
-  ];
-  const warnCtx: WarnCtx = { anchor, races: raceList, exigentes };
+  const warnCtx = warnContext(core, today);
   for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
 
   // La semana en curso se congela la primera vez que se ve: ya no cambia al recalcular.

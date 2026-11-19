@@ -63,3 +63,11 @@ describe("sesión no prevista", () => {
     expect(unplannedRuns(rs, new Set(["a"]), sug, weekOf).map((r) => r.id)).toEqual(["b"]);
   });
 });
+
+describe("descanso", () => {
+  it("no se vincula con ninguna carrera y su estado es «Descanso»", () => {
+    const mine = [{ id: "d", date: "2026-11-21", kind: "descanso" }, { id: "s", date: "2026-11-22", kind: "suave" }];
+    expect(ids(linkMine(mine, [run("r1", "2026-11-21", "rodaje")]))).toEqual({ s: "r1" });
+    expect(mineStatus({ date: "2026-11-21", kind: "descanso" }, null, "2026-11-30")).toBe("descanso");
+  });
+});

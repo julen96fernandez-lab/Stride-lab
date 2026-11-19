@@ -90,3 +90,11 @@ describe("mover: fecha válida", () => {
     expect(mineDateError("", "2026-11-18")).toBe("Elige una fecha.");
   });
 });
+
+describe("descanso", () => {
+  it("es un tipo mío y no lleva distancia ni duración", () => {
+    expect(isMineKind("descanso")).toBe(true);
+    const { input } = parseMineForm({ date: "2026-11-21", kind: "descanso", distanceKm: "10", duration: "45", note: "piernas" }, T);
+    expect(input).toMatchObject({ kind: "descanso", distanceM: null, durationS: null, note: "piernas" });
+  });
+});

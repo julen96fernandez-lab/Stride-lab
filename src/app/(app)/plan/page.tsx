@@ -311,6 +311,7 @@ const MINE_COLOR: Record<MineKind, string> = {
   calidad: "var(--t-series)",
   suave: "var(--t-rodaje)",
   otro: "var(--chart-line)",
+  descanso: "var(--fg-3)",
 };
 
 /** Mis sesiones: cada una abre su edición. */
@@ -422,6 +423,7 @@ const MINE_STATUS_COLOR: Record<MineStatus, string> = {
   otra: "var(--load-mod)",
   pendiente: "var(--fg-2)",
   no_hecha: "var(--load-high)",
+  descanso: "var(--fg-3)",
 };
 
 function MineStatusPill({ status }: { status: MineStatus }) {
