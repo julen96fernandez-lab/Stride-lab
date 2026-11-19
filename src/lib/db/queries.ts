@@ -770,6 +770,9 @@ import { SESSION_LABEL, demandingOf, fmtDay, planWeeks, type SessionKind } from 
 import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
 import { freezeWeek, getStoredWeeks, listMine, type MineRow } from "@/lib/plan/plan-db";
 import { MINE_LABEL, mineDetail, weekOf, type MineKind } from "@/lib/plan/mine";
+import { linkMine, mineStatus, unplannedRuns, type MineStatus } from "@/lib/plan/linking";
+import { TYPE_META as RUN_TYPE_META, isSessionType as isRunType } from "@/lib/analysis/session-type";
+import { pace as fmtPace } from "@/lib/format";
 import { MINE_WHAT, RUN_WHAT, SUGG_WHAT, mineWarnings, type Exigente, type WarnCtx } from "@/lib/plan/warnings";
 
 export interface MineView {
@@ -784,9 +787,28 @@ export interface MineView {
   replacesWeek: string | null;
   /** choques con las reglas (se guarda igual) */
   warnings: string[];
+  /** prevista frente a realizada (vinculación ±1 día) */
+  status: MineStatus;
+  done: RunBrief | null;
+  /** ritmo previsto si puse distancia y duración */
+  plannedPace: string | null;
+  plannedKm: string | null;
+}
+/** Una carrera hecha, en una línea. */
+export interface RunBrief {
+  id: string;
+  date: string;
+  dayLabel: string;
+  typeLabel: string;
+  km: string | null;
+  pace: string | null;
 }
 const mineView = (m: MineRow): MineView => ({
   warnings: [],
+  status: "pendiente",
+  done: null,
+  plannedPace: m.distanceM && m.durationS ? fmtPace(m.durationS / (m.distanceM / 1000)) : null,
+  plannedKm: m.distanceM ? (m.distanceM / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 }) : null,
   id: m.id,
   date: m.date,
   dayLabel: fmtDay(m.date),
@@ -822,7 +844,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
     const mine = (await listMine(db(), today, ymdOf(dayNum(today)! + 365))).map(mineView);
     const warnCtx: WarnCtx = { anchor: null, races: raceList, exigentes: mineExigentes(mine) };
     for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
-    return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx };
+    return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx, unplanned: {} as Record<string, RunBrief[]> };
   }
 
   const madrid = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
@@ -880,26 +902,48 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const newDay = status === "dia_pasado" ? rescheduleDay({ anchor, kind: now.kind, session: now.session, weekStart: now.start, today, latest }) : null;
   const current = { ...now, status, rescheduledFrom: nowRow?.rescheduledFrom ?? null, canReschedule: newDay !== null && newDay !== now.day, rescheduleTo: newDay, hidden: hidden[now.start] ?? null };
 
-  // Las 4 semanas anteriores que tengan plan guardado, con su resultado.
-  const past = stored
-    .filter((r) => r.weekStart < now.start)
-    .sort((a, b) => b.weekStart.localeCompare(a.weekStart))
-    .map((r) => {
-      const session = r.session as SessionKind;
-      const w = shiftWeek(anchor, r.weekStart);
-      return {
-        start: r.weekStart,
-        end: w.end,
-        kind: r.shiftKind,
-        session,
-        label: SESSION_LABEL[session],
-        day: r.day,
-        dayLabel: fmtDay(r.day),
-        status: weekStatus({ session, day: r.day, weekStart: r.weekStart, today, runs: history }),
-        hidden: hidden[r.weekStart] ?? null,
-      };
-    });
-  return { anchor, today, weeks, sessions, current, past, predictions, races, mine, hidden, warnCtx };
+  // Las 4 semanas anteriores, con la sugerencia guardada (si la hubo) y su resultado.
+  const past = [1, 2, 3, 4].map((k) => {
+    const w = shiftWeek(anchor, ymdOf(weeks[0].startDay - 7 * k));
+    const r = byStart.get(w.start);
+    const session = r ? (r.session as SessionKind) : null;
+    return {
+      start: w.start,
+      end: w.end,
+      kind: w.kind,
+      sug:
+        r && session
+          ? { session, label: SESSION_LABEL[session], day: r.day, dayLabel: fmtDay(r.day), status: weekStatus({ session, day: r.day, weekStart: r.weekStart, today, runs: history }) }
+          : null,
+      hidden: hidden[w.start] ?? null,
+    };
+  });
+
+  // Prevista frente a realizada: mis sesiones con la carrera del mismo día o ±1; el resto, no previstas.
+  const lite = runs
+    .map((r) => ({ id: r.id, date: madrid(r.startAt), at: r.startAt.getTime(), type: r.type, distanceM: r.distanceM, durationS: r.durationS }))
+    .filter((r) => r.date >= pastStart && r.date <= today);
+  const brief = (r: (typeof lite)[number]): RunBrief => ({
+    id: r.id,
+    date: r.date,
+    dayLabel: fmtDay(r.date),
+    typeLabel: r.type && isRunType(r.type) ? RUN_TYPE_META[r.type].label : "Sin tipo",
+    km: r.distanceM ? (r.distanceM / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 }) : null,
+    pace: r.distanceM && r.durationS ? fmtPace(r.durationS / (r.distanceM / 1000)) : null,
+  });
+  const links = linkMine(mine, lite);
+  for (const m of mine) {
+    const run = links.get(m.id);
+    m.status = mineStatus(m, run, today);
+    m.done = run ? brief(run) : null;
+  }
+  const sugBy = new Map<string, SessionKind>();
+  for (const w of sessions) if (!hidden[w.start]) sugBy.set(w.start, w.session);
+  for (const w of past) if (w.sug && !w.hidden) sugBy.set(w.start, w.sug.session);
+  const unplanned: Record<string, RunBrief[]> = {};
+  for (const r of unplannedRuns(lite, new Set([...links.values()].map((x) => x.id)), sugBy, weekOf)) (unplanned[weekOf(r.date)] ??= []).push(brief(r));
+
+  return { anchor, today, weeks, sessions, current, past, predictions, races, mine, hidden, warnCtx, unplanned };
 }
 
 /** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */

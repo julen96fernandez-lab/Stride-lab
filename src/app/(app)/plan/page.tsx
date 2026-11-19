@@ -13,7 +13,8 @@ import { STATUS_LABEL, type WeekStatus } from "@/lib/plan/compliance";
 import { RescheduleButton } from "./RescheduleButton";
 import { RestoreSuggestion } from "./RestoreSuggestion";
 import { Warnings } from "@/components/plan/SessionForm";
-import type { Hidden, MineView } from "@/lib/db/queries";
+import type { Hidden, MineView, RunBrief } from "@/lib/db/queries";
+import { MINE_STATUS_LABEL, type MineStatus } from "@/lib/plan/linking";
 import type { MineKind } from "@/lib/plan/mine";
 
 export const metadata = { title: "Plan · Stride Lab" };
@@ -59,6 +60,7 @@ async function PlanData() {
     races,
     mine,
     hidden,
+    unplanned,
   } = await planScreen(cacheDay());
   const preds = (
     <PredictionsCard
@@ -119,8 +121,15 @@ async function PlanData() {
         {cur && <SessionBlock s={cur} />}
         {(mineBy.get(current.start) ?? []).length > 0 && (
           <div className="relative mt-3">
-            <div className="text-[12px] text-fg-2">Tus sesiones esta semana</div>
+            <div className="text-[12px] text-fg-2">
+              Tus sesiones esta semana
+            </div>
             <MineList items={mineBy.get(current.start)!} today={today} />
+          </div>
+        )}
+        {(unplanned[current.start] ?? []).length > 0 && (
+          <div className="relative mt-3">
+            <UnplannedList items={unplanned[current.start]} />
           </div>
         )}
         <Link
@@ -189,42 +198,55 @@ async function PlanData() {
         </p>
       </section>
 
-      {past.length > 0 && (
+      {past.some((w) => w.sug || mineBy.has(w.start) || unplanned[w.start]) && (
         <section className="card p-5" aria-label="Semanas anteriores">
           <div className="eyebrow">
             Semanas anteriores · previsto frente a realizado
           </div>
           <ol className="mt-2 divide-y divide-line">
-            {past.map((w) => (
-              <li
-                key={w.start}
-                className="flex min-h-[52px] items-start justify-between gap-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-semibold">
-                    {range(w.start, w.end)}
+            {past
+              .filter((w) => w.sug || mineBy.has(w.start) || unplanned[w.start])
+              .map((w) => (
+                <li
+                  key={w.start}
+                  className="flex min-h-[52px] items-start justify-between gap-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] font-semibold">
+                      {range(w.start, w.end)}
+                    </div>
+                    <div className="text-[12px] text-fg-2">
+                      {w.sug ? (
+                        <>
+                          <SessionDot kind={w.sug.session} />{" "}
+                          <span className={w.hidden ? "line-through" : ""}>
+                            {w.sug.label} · {w.sug.dayLabel}
+                          </span>
+                        </>
+                      ) : (
+                        "Sin sugerencia guardada"
+                      )}
+                    </div>
+                    {(mineBy.get(w.start) ?? []).length > 0 && (
+                      <MineList items={mineBy.get(w.start)!} today={today} />
+                    )}
+                    {(unplanned[w.start] ?? []).length > 0 && (
+                      <UnplannedList items={unplanned[w.start]} />
+                    )}
                   </div>
-                  <div className="text-[12px] text-fg-2">
-                    <SessionDot kind={w.session} />{" "}
-                    <span className={w.hidden ? "line-through" : ""}>
-                      {w.label} · {w.dayLabel}
-                    </span>
-                  </div>
-                  {(mineBy.get(w.start) ?? []).length > 0 && (
-                    <MineList items={mineBy.get(w.start)!} today={today} />
-                  )}
-                </div>
-                {w.hidden ? (
-                  <HiddenPill hidden={w.hidden} />
-                ) : (
-                  <StatusPill status={w.status} />
-                )}
-              </li>
-            ))}
+                  {w.hidden ? (
+                    <HiddenPill hidden={w.hidden} />
+                  ) : w.sug ? (
+                    <StatusPill status={w.sug.status} />
+                  ) : null}
+                </li>
+              ))}
           </ol>
           <p className="mt-2 text-[12px] text-fg-2">
-            Cumplida: una carrera del tipo previsto en esa semana (tirada larga;
-            calidad = series, tempo o competición; suave = cualquier carrera).
+            Sugerencia cumplida: una carrera del tipo previsto en esa semana
+            (tirada larga; calidad = series, tempo o competición; suave =
+            cualquier carrera). Tus sesiones se vinculan con la carrera del
+            mismo día o de ±1 día.
           </p>
         </section>
       )}
@@ -278,7 +300,127 @@ function MineList({ items, today }: { items: MineView[]; today: string }) {
             </span>
             <MinePill />
           </Link>
-          {m.warnings.length > 0 && <Warnings items={m.warnings} compact />}
+          {m.done ? (
+            <Compare m={m} run={m.done} />
+          ) : m.status === "no_hecha" ? (
+            <div className="mt-1 flex justify-end">
+              <MineStatusPill status="no_hecha" />
+            </div>
+          ) : (
+            m.warnings.length > 0 && <Warnings items={m.warnings} compact />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Prevista frente a realizada: tipo, km y ritmo. Abre la carrera. */
+function Compare({ m, run }: { m: MineView; run: RunBrief }) {
+  const km = (s: string | null) => (s ? `${s} km` : "—");
+  return (
+    <Link
+      href={`/actividad/${run.id}`}
+      aria-label={`Ver la carrera del ${run.dayLabel}`}
+      className="mt-1 block rounded-2xl border border-line px-3 py-2 text-[13px]"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] text-fg-2">
+          Hecha el {run.date === m.date ? "mismo día" : run.dayLabel} ›
+        </span>
+        <MineStatusPill status={m.status} />
+      </div>
+      <table className="mt-1 w-full">
+        <thead>
+          <tr className="text-[11px] tracking-[0.06em] text-fg-2 uppercase">
+            <th scope="col" className="py-0.5 text-left font-semibold">
+              <span className="sr-only">Sesión</span>
+            </th>
+            <th scope="col" className="py-0.5 text-left font-semibold">
+              Tipo
+            </th>
+            <th scope="col" className="py-0.5 text-right font-semibold">
+              Km
+            </th>
+            <th scope="col" className="py-0.5 text-right font-semibold">
+              Ritmo
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row" className="py-0.5 text-left font-normal text-fg-2">
+              Prevista
+            </th>
+            <td className="py-0.5">{m.label}</td>
+            <td className="py-0.5 text-right">{km(m.plannedKm)}</td>
+            <td className="py-0.5 text-right">
+              {m.plannedPace ? `${m.plannedPace} /km` : "—"}
+            </td>
+          </tr>
+          <tr className="font-semibold">
+            <th scope="row" className="py-0.5 text-left font-normal text-fg-2">
+              Realizada
+            </th>
+            <td className="py-0.5">{run.typeLabel}</td>
+            <td className="num py-0.5 text-right">{km(run.km)}</td>
+            <td className="num py-0.5 text-right">
+              {run.pace ? `${run.pace} /km` : "—"}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </Link>
+  );
+}
+
+const MINE_STATUS_COLOR: Record<MineStatus, string> = {
+  cumplida: "var(--load-low)",
+  otra: "var(--load-mod)",
+  pendiente: "var(--fg-2)",
+  no_hecha: "var(--load-high)",
+};
+
+function MineStatusPill({ status }: { status: MineStatus }) {
+  const c = MINE_STATUS_COLOR[status];
+  return (
+    <span
+      className="flex-none rounded-full px-2 py-0.5 text-[11px] font-semibold"
+      style={{
+        color: c,
+        background: `color-mix(in srgb, ${c} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${c} 40%, transparent)`,
+      }}
+    >
+      {status === "cumplida" ? "✓ " : status === "no_hecha" ? "✕ " : ""}
+      {MINE_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+/** Carreras que no vinculan con ninguna sesión mía ni cumplen la sugerencia de su semana. */
+function UnplannedList({ items }: { items: RunBrief[] }) {
+  return (
+    <ul className="mt-1.5 flex flex-col gap-1.5">
+      {items.map((r) => (
+        <li key={r.id}>
+          <Link
+            href={`/actividad/${r.id}`}
+            className="flex min-h-[48px] items-center gap-3 rounded-2xl border border-dashed border-line-strong px-3 py-2"
+          >
+            <span className="min-w-0 flex-1 text-[14px]">
+              <b>{r.typeLabel}</b>
+              <span className="text-fg-2">
+                {" "}
+                · {r.dayLabel}
+                {r.km ? ` · ${r.km} km` : ""}
+                {r.pace ? ` · ${r.pace} /km` : ""}
+              </span>
+            </span>
+            <span className="flex-none rounded-full border border-line-strong px-2 py-0.5 text-[11px] font-semibold text-fg-2">
+              Sesión no prevista
+            </span>
+          </Link>
         </li>
       ))}
     </ul>

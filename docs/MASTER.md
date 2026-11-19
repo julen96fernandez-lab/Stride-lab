@@ -539,6 +539,18 @@ para mis sesiones.
     sugerida o corrida); afinado (2 semanas antes sin tirada larga, la anterior solo suave, la de
     la carrera solo suave corto y nada en los 2 días previos; el día de la carrera). Al guardar
     con aviso, el toast lo dice.
+- **Paso 3 · Prevista frente a realizada (hecho).** `lib/plan/linking.ts` (con pruebas), calculado
+  al leer (sin guardar nada; sobrevive a «Reprocesar»):
+  - cada sesión mía se vincula con una carrera del mismo día o de ±1 día (primero las del mismo
+    día; a igualdad, la del tipo previsto y la más cercana; una carrera, una sesión);
+  - estado: «Cumplida» (del tipo previsto), «Hecha, otro tipo», «Pendiente» (aún en el margen)
+    o «No hecha»; tabla prevista/realizada con tipo, km y ritmo (el previsto solo si puse
+    distancia y duración; si no, «—»), que abre la carrera;
+  - «Sesión no prevista»: carrera que no vincula con mis sesiones ni cumple la sugerencia visible
+    de su semana (la del tipo sugerido o, si no hay, la primera). Cuenta para la alternancia por
+    estar en el historial.
+  - «Semanas anteriores» muestra las 4 últimas con algo (sugerencia guardada, sesiones mías o
+    carreras no previstas). El cumplimiento de la sugerencia sigue siendo por semana.
 
 ## Rendimiento
 
@@ -870,6 +882,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Plan editable, paso 3: vinculación automática (±1 día), prevista frente a
+  realizada y «Sesión no prevista».
 - 2026‑11‑19 — Plan editable, paso 2: el plan se recalcula alrededor de mis sesiones y avisa
   (con el motivo) si una choca con las reglas.
 - 2026‑11‑18 — Plan editable, paso 1: añadir, editar, mover y borrar sesiones (también la
