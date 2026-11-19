@@ -574,6 +574,15 @@ fiable el resumen no habla de pulso ni de zonas; el resumen va bajo los números
   - mitades (±5 s/km; no en series); desacople (solo donde vale y con pulso fiable; > 5 % =
     «el pulso subió al mismo ritmo»); entorno como coincidencia (≥ 24 °C, ≤ 3 °C, ≥ 80 %).
   - Si faltan datos salen menos frases: nunca se afirma sin el dato.
+- **Paso 2 · Misma ruta (hecho).** `lib/analysis/route-match.ts` (con pruebas; reglas en
+  `ROUTE_RULES`): distancia ±5 %, inicio con inicio y fin con fin a ≤ 200 m, 50 puntos a igual
+  distancia recorrida con separación media ≤ 60 m y ninguna > 250 m; la ruta invertida no cuenta.
+  Las candidatas se filtran en la base de datos (carreras anteriores, distancia ±5 % y cada lado
+  del recuadro a ≤ 0,003°) y solo de ellas se decodifican los trazados (polilínea simplificada,
+  sin descargar el GPX). Con ≥ 2 anteriores, tarjeta con la lista (fecha, tiempo, ritmo, pulso,
+  °C), gráfico de ritmo y pulso por fecha con la actual marcada y aviso de que temperatura,
+  humedad y descanso cambian. Comprobado con trazados reales: los tres 7 km de otoño de 2025
+  coinciden (media 21–44 m) y rutas con el mismo inicio pero otro camino, no.
 
 ## Rendimiento
 
@@ -916,6 +925,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Detalle, paso 2: «Misma ruta» (sentido incluido) con lista y gráfico por fecha.
 - 2026‑11‑19 — Formularios sin desbordes en iPhone estrecho (Fecha y Hora de «Añadir carrera»
   y el resto), con prueba en navegador.
 - 2026‑11‑19 — Detalle, paso 1: «Resumen» en lenguaje claro con reglas (sin IA) bajo los

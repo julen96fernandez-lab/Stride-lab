@@ -1,6 +1,7 @@
 import "server-only";
 import { EFFORT_DISTANCES, improvementPct, recordProgression, type EffortKey } from "@/lib/analysis/best-efforts";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db, schema as s } from "./client";
 import { decodePolyline } from "@/lib/import/gpx";
 import { HR_BANDS, paceAtHrByYear, type YearPace } from "@/lib/analysis/pace-at-hr";
@@ -221,6 +222,67 @@ export async function listRuns(filter: SessionType | null, ctx: Ctx = makeCtx())
 // ─── Detalle ─────────────────────────────────────────────────────────────────
 
 import { hrReliable, pickSimilar, runSummary } from "@/lib/analysis/summary";
+import { ROUTE_RULES, sameRoute } from "@/lib/analysis/route-match";
+
+export interface SameRouteRow {
+  id: string;
+  startAt: Date;
+  durationS: number;
+  distanceM: number | null;
+  paceS: number | null;
+  avgHr: number | null;
+  temperatureC: number | null;
+  humidityPct: number | null;
+  current: boolean;
+}
+
+/**
+ * Carreras anteriores por la misma ruta (mismo sentido). Primero se filtran en la base de datos
+ * por recuadro y distancia (±5 %); solo de esas se cargan los trazados para compararlos.
+ * null si hay menos de 2 coincidencias.
+ */
+async function getSameRoute(
+  run: typeof s.runs.$inferSelect,
+  route: typeof s.runRoutes.$inferSelect | null,
+): Promise<SameRouteRow[] | null> {
+  if (!route?.polyline || !run.distanceM || route.minLat === null || route.minLon === null || route.maxLat === null || route.maxLon === null) return null;
+  const B = ROUTE_RULES.bboxDeg;
+  const near = (col: AnyPgColumn, v: number) => and(gte(col, v - B), lte(col, v + B));
+  const cands = await db()
+    .select({
+      id: s.runs.id,
+      startAt: s.runs.startAt,
+      durationS: s.runs.durationS,
+      distanceM: s.runs.distanceM,
+      paceS: s.runs.avgPaceSPerKm,
+      avgHr: s.runs.avgHr,
+      temperatureC: s.runs.temperatureC,
+      humidityPct: s.runs.humidityPct,
+      polyline: s.runRoutes.polyline,
+    })
+    .from(s.runs)
+    .innerJoin(s.runRoutes, eq(s.runRoutes.runId, s.runs.id))
+    .where(
+      and(
+        eq(s.runs.status, "valid"),
+        sql`${s.runs.id} <> ${run.id}`,
+        lt(s.runs.startAt, run.startAt),
+        gte(s.runs.distanceM, run.distanceM * (1 - ROUTE_RULES.distPct)),
+        lte(s.runs.distanceM, run.distanceM * (1 + ROUTE_RULES.distPct)),
+        near(s.runRoutes.minLat, route.minLat),
+        near(s.runRoutes.minLon, route.minLon),
+        near(s.runRoutes.maxLat, route.maxLat),
+        near(s.runRoutes.maxLon, route.maxLon),
+      ),
+    );
+  const me = { distanceM: run.distanceM, pts: decodePolyline(route.polyline) };
+  const matches = cands.filter((c) => c.polyline && sameRoute(me, { distanceM: c.distanceM, pts: decodePolyline(c.polyline) }));
+  if (matches.length < ROUTE_RULES.minMatches) return null;
+  return [
+    { id: run.id, startAt: run.startAt, durationS: run.durationS, distanceM: run.distanceM, paceS: run.avgPaceSPerKm, avgHr: run.avgHr, temperatureC: run.temperatureC, humidityPct: run.humidityPct, current: true },
+    ...matches.map(({ polyline: _p, ...m }) => (void _p, { ...m, current: false })),
+  ].sort((a, b) => b.startAt.getTime() - a.startAt.getTime());
+}
 
 export async function getRun(id: string, ctx: Ctx = makeCtx()) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
@@ -262,6 +324,7 @@ export async function getRun(id: string, ctx: Ctx = makeCtx()) {
   const decoupling: DecouplingCheck = decouplingEligible({ type, hasHr: !!series.hr && series.hr.t.length > 1, splits });
 
   // Resumen con reglas: frente a las 5 últimas parecidas (mismo tipo, ±20 %, 12 meses).
+  const sameRouteRows = await getSameRoute(run, route);
   const similar = pickSimilar({ id: run.id, type, startAt: run.startAt, distanceM: run.distanceM }, await ctx.runs());
   const summary = runSummary({
     run: {
@@ -288,6 +351,7 @@ export async function getRun(id: string, ctx: Ctx = makeCtx()) {
   return {
     run,
     summary,
+    sameRoute: sameRouteRows,
     route: route
       ? { points: decodePolyline(route.polyline ?? ""), bbox: [route.minLon, route.minLat, route.maxLon, route.maxLat] as const, shape: routeShape(route.polyline, 400) }
       : null,

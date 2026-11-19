@@ -11,6 +11,7 @@ import { TypePicker } from "@/components/ui/TypePicker";
 import { FeelingsCard } from "@/components/feelings/FeelingsCard";
 import { ZonesCard } from "@/components/ui/ZonesCard";
 import { SummaryCard } from "@/components/detail/SummaryCard";
+import { SameRouteCard } from "@/components/detail/SameRouteCard";
 import { LoadBadge } from "@/components/ui/Load";
 import { isSessionType } from "@/lib/analysis/session-type";
 import type { Durability } from "@/lib/analysis/durability";
@@ -45,7 +46,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = /^[0-9a-f-]{36}$/i.test(id) ? await runScreen(id, cacheDay()) : null;
   if (!data) notFound();
-  const { run, route, durability, decoupling, zones, explorer, prevId, nextId, feeling, summary } = data;
+  const { run, route, durability, decoupling, zones, explorer, prevId, nextId, feeling, summary, sameRoute } = data;
 
   return (
     <div className="stagger flex flex-col gap-4">
@@ -109,6 +110,9 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
         </Card>
       )}
       <RunExplorer data={explorer} route={route} />
+
+      {/* Misma ruta: solo con al menos 2 carreras anteriores por el mismo recorrido */}
+      {sameRoute && <SameRouteCard rows={sameRoute} />}
 
       {/* Durabilidad */}
       <DurabilityCard d={durability} check={decoupling} />
