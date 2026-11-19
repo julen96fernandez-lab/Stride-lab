@@ -879,7 +879,8 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 
 // ─── Plan ────────────────────────────────────────────────────────────────────
 
-import { dayNum, shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
+import { dayNum, mondayOfDay, shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
+import { buildCalendar, type CalendarBlock } from "@/lib/plan/calendar";
 import { pickSources, predictAt, predictionHistory } from "@/lib/plan/predict";
 import { SESSION_LABEL, demandingOf, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
 import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
@@ -960,35 +961,30 @@ export async function getMineOn(day: string, ctx: Ctx = makeCtx()): Promise<(Min
 }
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */
-export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
-  const [anchor, predictions, runs, fitness, raceRows] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx), ctx.races()]);
-  const races = await withRaceResults(raceViews(raceRows, today, predictions), runs);
-  const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
+/**
+ * Núcleo del plan, compartido por Plan (Resumen) y el Calendario: semanas sugeridas desde la
+ * actual (`weeksAhead`), semanas guardadas, mis sesiones desde `from` y qué sugerencias no se
+ * muestran (quitadas o sustituidas por una sesión mía).
+ */
+async function planCore(today: string, ctx: Ctx, o: { weeksAhead: number; from?: string }) {
+  const [anchor, runs, fitness, raceRows] = await Promise.all([ctx.shiftAnchor(), ctx.runs(), getFitness(ctx), ctx.races()]);
   const raceList = raceRows.map((r) => ({ name: r.name, date: r.date }));
-  if (!anchor || !weeks.length) {
-    const mine = (await listMine(db(), today, ymdOf(dayNum(today)! + 365))).map(mineView);
-    const warnCtx: WarnCtx = { anchor: null, races: raceList, exigentes: mineExigentes(mine) };
-    for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
-    return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx, unplanned: {} as Record<string, RunBrief[]> };
-  }
-
   const madrid = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
   const history = runs.map((r) => ({ date: madrid(r.startAt), type: r.type }));
-  const cur = fitness.current;
+  const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, Math.max(1, o.weeksAhead)) : [];
+  if (!anchor || !weeks.length) return { anchor: null, runs, raceRows, raceList, history, madrid } as const;
   const pastStart = ymdOf(weeks[0].startDay - 28);
-  const [stored, mineRows] = await Promise.all([
-    getStoredWeeks(db(), pastStart, weeks[weeks.length - 1].start),
-    listMine(db(), pastStart, ymdOf(dayNum(today)! + 365)),
-  ]);
+  const from = o.from && o.from < pastStart ? o.from : pastStart;
+  const [stored, mineRows] = await Promise.all([getStoredWeeks(db(), from, weeks[weeks.length - 1].start), listMine(db(), from, ymdOf(dayNum(today)! + 365))]);
   const byStart = new Map(stored.map((r) => [r.weekStart, r]));
   const mine = mineRows.map(mineView);
-  // Sugerencias que no se muestran: quitadas por mí o sustituidas por una sesión mía.
   const hidden: Record<string, Hidden> = {};
   for (const r of stored) if (r.dismissed) hidden[r.weekStart] = { by: "dismissed" };
   for (const m of mine) if (m.replacesWeek && !hidden[m.replacesWeek]) hidden[m.replacesWeek] = { by: "replaced", id: m.id };
   const fixed = Object.fromEntries(
     stored.filter((r) => !r.dismissed).map((r) => [r.weekStart, { session: r.session as SessionKind, day: r.day, when: r.whenText, reason: r.reason, downgraded: r.downgraded }]),
   );
+  const cur = fitness.current;
   const sessions = planWeeks({
     weeks,
     anchor,
@@ -1002,6 +998,45 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   });
   // Una exigente mía ocupa el sitio de la sugerencia de su semana.
   for (const w of sessions) if (w.occupiedBy && !hidden[w.start]) hidden[w.start] = { by: "replaced", id: w.occupiedBy };
+  return { anchor, runs, raceRows, raceList, history, madrid, weeks, pastStart, stored, byStart, mine, hidden, sessions } as const;
+}
+
+/** Calendario: marcas de cada día entre `from` y `to` (lunes y domingo de las cuadrículas). */
+export async function getCalendar(today: string, from: string, to: string, ctx: Ctx = makeCtx()): Promise<CalendarBlock> {
+  const t = dayNum(today)!;
+  const weeksAhead = Math.ceil((dayNum(to)! - mondayOfDay(t)) / 7) + 1;
+  const [core, injuries] = await Promise.all([planCore(today, ctx, { weeksAhead, from }), ctx.injuries()]);
+  const runs = core.runs.map((r) => ({ id: r.id, date: core.madrid(r.startAt), distanceM: r.distanceM }));
+  if (!core.anchor) {
+    const mine = await listMine(db(), from, to);
+    return buildCalendar({ from, to, shiftOf: null, suggestions: [], mine, runs, races: core.raceList, injuries, today });
+  }
+  const { anchor, sessions, stored, hidden, mine } = core;
+  const current = sessions[0].start;
+  const mineExigWeeks = new Set(mine.filter((m) => demandingOf(m.kind)).map((m) => m.week));
+  const suggestions = [
+    // semanas pasadas: solo las guardadas, si no se quitaron ni las sustituyó una sesión mía
+    ...stored
+      .filter((r) => r.weekStart < current && !hidden[r.weekStart] && !mineExigWeeks.has(r.weekStart))
+      .map((r) => ({ day: r.day, session: r.session as SessionKind })),
+    ...sessions.filter((w) => !hidden[w.start]).map((w) => ({ day: w.day, session: w.session })),
+  ];
+  return buildCalendar({ from, to, shiftOf: (m) => shiftWeek(anchor, m).kind, suggestions, mine, runs, races: core.raceList, injuries, today });
+}
+
+export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
+  const [predictions, core] = await Promise.all([getPredictions(ctx), planCore(today, ctx, { weeksAhead: 10 })]);
+  const { anchor, runs, raceRows, raceList } = core;
+  const races = await withRaceResults(raceViews(raceRows, today, predictions), runs);
+  const weeks: ShiftWeek[] = core.anchor ? core.weeks : [];
+  if (!core.anchor || !anchor) {
+    const mine = (await listMine(db(), today, ymdOf(dayNum(today)! + 365))).map(mineView);
+    const warnCtx: WarnCtx = { anchor: null, races: raceList, exigentes: mineExigentes(mine) };
+    for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
+    return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx, unplanned: {} as Record<string, RunBrief[]> };
+  }
+
+  const { madrid, history, pastStart, stored, byStart, mine, hidden, sessions } = core;
 
   // Avisos de mis sesiones frente a las reglas (otras exigentes: mías, sugeridas visibles y corridas).
   const exigentes: Exigente[] = [

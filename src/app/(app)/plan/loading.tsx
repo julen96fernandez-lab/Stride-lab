@@ -8,6 +8,7 @@ export default function Loading() {
       <div className="mt-4">
         <PageHeader title="Plan" subtitle="Turnos, marcas estimadas y tu semana." />
       </div>
+      <span className="skel block h-11 rounded-full" aria-hidden="true" />
       <ProfileSkeleton rows={6} />
     </div>
   );

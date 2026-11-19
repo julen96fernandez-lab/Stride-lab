@@ -3,7 +3,11 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { ProfileSkeleton } from "@/components/ui/Skeletons";
-import { planScreen } from "@/lib/db/screens";
+import { calendarScreen, planScreen } from "@/lib/db/screens";
+import { ChoicePanel, ChoiceProvider, ChoiceSelector } from "@/components/ui/Choice";
+import { CalendarView } from "@/components/plan/CalendarView";
+import { blockRange } from "@/lib/plan/calendar";
+import { choicesFromParams } from "@/lib/ui/choice";
 import { cacheDay } from "@/lib/cache/tags";
 import { SHIFT_META, dayNum, ymdOf } from "@/lib/plan/shifts";
 import { PredictionsCard } from "@/components/charts/PredictionsCard";
@@ -19,7 +23,11 @@ import type { MineKind } from "@/lib/plan/mine";
 
 export const metadata = { title: "Plan · Stride Lab" };
 
-export default function PlanPage() {
+type SP = Promise<Record<string, string | string[] | undefined>>;
+const VIEWS = { vista: { default: "resumen", options: ["resumen", "calendario"] } } as const;
+const DEFAULTS = { vista: "resumen" };
+
+export default function PlanPage({ searchParams }: { searchParams: SP }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="mt-4">
@@ -28,8 +36,15 @@ export default function PlanPage() {
           subtitle="Turnos, marcas estimadas y tu semana."
         />
       </div>
-      <Suspense fallback={<ProfileSkeleton rows={6} />}>
-        <PlanData />
+      <Suspense
+        fallback={
+          <>
+            <span className="skel block h-11 rounded-full" aria-hidden="true" />
+            <ProfileSkeleton rows={6} />
+          </>
+        }
+      >
+        <PlanData searchParams={searchParams} />
       </Suspense>
     </div>
   );
@@ -47,8 +62,36 @@ function range(start: string, end: string) {
     : `${fmt(start, { day: "numeric", month: "short" })} – ${fmt(end, { day: "numeric", month: "short" })}`;
 }
 
-async function PlanData() {
+async function PlanData({ searchParams }: { searchParams: SP }) {
   await connection();
+  const day = cacheDay();
+  const { from, to } = blockRange({ year: Number(day.slice(0, 4)), month: Number(day.slice(5, 7)) });
+  const [sp, plan, calendar] = await Promise.all([searchParams, planScreen(day), calendarScreen(day, from, to)]);
+  const initial = choicesFromParams(sp, VIEWS);
+  return (
+    <ChoiceProvider initial={initial} defaults={DEFAULTS}>
+      <ChoiceSelector
+        name="vista"
+        label="Vista de Plan"
+        stretch
+        items={[
+          { key: "resumen", label: "Resumen" },
+          { key: "calendario", label: "Calendario" },
+        ]}
+      />
+      <ChoicePanel when={{ vista: "resumen" }}>
+        <div className="flex flex-col gap-4">
+          <PlanSummary plan={plan} />
+        </div>
+      </ChoicePanel>
+      <ChoicePanel when={{ vista: "calendario" }}>
+        <CalendarView initial={calendar} today={day} />
+      </ChoicePanel>
+    </ChoiceProvider>
+  );
+}
+
+function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> }) {
   const {
     anchor,
     today,
@@ -61,7 +104,7 @@ async function PlanData() {
     mine,
     hidden,
     unplanned,
-  } = await planScreen(cacheDay());
+  } = plan;
   const preds = (
     <PredictionsCard
       now={predictions.now}

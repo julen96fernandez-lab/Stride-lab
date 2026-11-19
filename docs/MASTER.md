@@ -590,6 +590,20 @@ fiable el resumen no habla de pulso ni de zonas; el resumen va bajo los números
   de las anteriores y posición («La 2.ª más rápida de 4»; en pulso y carga, de más bajo a más
   alto, sin juzgar). Enlaces a cada parecida.
 
+### Calendario en Plan
+Decisiones: «Noche» en un día = ese día solo suave u opcional y el siguiente nada exigente; un
+«Libre» dentro de noches quita las restricciones ese día salvo que el anterior fuera noche. Las
+flechas van más allá de ±3 meses cargando otro bloque con esqueleto de la cuadrícula. En semanas
+pasadas sin sugerencia guardada, solo mis sesiones y lo corrido. Colores de turno como en Plan;
+punto fuerte = mi sesión, tenue = sugerencia.
+- **Paso 1 · Cuadrícula (hecho).** Selector «Resumen | Calendario» en Plan (instantáneo, en la
+  URL `?vista=calendario`). `lib/plan/calendar.ts` (con pruebas): cuadrícula de lunes a domingo
+  (meses de 28–31 días, semanas que cruzan mes y año), bloques de ±3 meses y marcas por día
+  (sesiones por tipo, mía o sugerida; ✓ km; 🏁; lesión). `planCore` en queries.ts lo comparten
+  Resumen y Calendario (mismas sugerencias, ocultas y sesiones mías). El bloque inicial llega
+  con la página (caché con la etiqueta de datos); más allá, `calendarBlockAction` y se unen.
+  Flechas, deslizar, «Hoy», turno por semana (letra y color) y leyenda. En la prueba de desbordes.
+
 ## Rendimiento
 
 - **Región**: funciones en **fra1** (`vercel.json`), junto a Neon (eu-central-1). Antes en iad1:
@@ -931,6 +945,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Calendario, paso 1: selector Resumen | Calendario y cuadrícula mensual con marcas.
 - 2026‑11‑19 — Detalle, paso 3: «Sesiones parecidas» (ritmo, pulso y carga frente a las 5 últimas).
 - 2026‑11‑19 — Detalle, paso 2: «Misma ruta» (sentido incluido) con lista y gráfico por fecha.
 - 2026‑11‑19 — Formularios sin desbordes en iPhone estrecho (Fecha y Hora de «Añadir carrera»

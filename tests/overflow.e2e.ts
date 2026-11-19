@@ -27,11 +27,12 @@ const UNDO_FIX = `${IOS_DATE}
   .form-row > * { min-width: auto !important; }`;
 
 // Perfil: sus campos (pulso máximo) están visibles sin tocar nada; se abre además el de lesión.
-const FORMS: { name: string; path: string; open?: (p: Page) => Promise<void> }[] = [
+const FORMS: { name: string; path: string; ready?: string; open?: (p: Page) => Promise<void> }[] = [
   { name: "Añadir carrera", path: "/actividad/nueva" },
   { name: "Sesión prevista", path: "/plan/sesion/nueva" },
   { name: "Carrera objetivo", path: "/plan/carrera/nueva" },
   { name: "Perfil (con el formulario de lesión abierto)", path: "/perfil", open: async (p) => p.getByRole("button", { name: /Añadir periodo/ }).first().click() },
+  { name: "Plan · Calendario", path: "/plan?vista=calendario", ready: "section[aria-label='Calendario'] [role=grid]" },
 ];
 
 /** Problemas de maquetación: página más ancha que la pantalla, campos fuera o montados. */
@@ -85,7 +86,7 @@ d("formularios sin desbordes en iPhone estrecho", () => {
     await ctx.addCookies(cookies);
     const p = await ctx.newPage();
     await p.goto(`${BASE}${f.path}`);
-    await p.locator("main input[type=date], main input[name=maxHr], main input[name=distanceKm]").first().waitFor({ state: "visible" });
+    await p.locator(f.ready ?? "main input[type=date], main input[name=maxHr], main input[name=distanceKm]").first().waitFor({ state: "visible" });
     await p.addStyleTag({ content: css });
     if (f.open) await f.open(p);
     await p.waitForTimeout(150);
