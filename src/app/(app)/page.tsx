@@ -15,7 +15,8 @@ import { FitnessMini } from "@/components/charts/FitnessCharts";
 import { RaceCountdown } from "@/components/race/RaceCards";
 import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
-import { mineKindForToday } from "@/lib/plan/mine";
+import { mineKindForToday, type MineKind } from "@/lib/plan/mine";
+import { todayFromMine } from "@/lib/plan/today";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
 
 const MONTH_NAME = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -59,6 +60,13 @@ const TODAY_STYLE: Record<TodayKind, { color: string; icon: string }> = {
   libre: { color: "var(--chart-line)", icon: "M12 3v18M3 12h18" },
 };
 
+const MINE_STYLE: Record<MineKind, { color: string; icon: string }> = {
+  tirada_larga: { color: "var(--t-tirada_larga)", icon: "M3 17c3-6 6-6 9 0s6 6 9 0M3 11c3-6 6-6 9 0s6 6 9 0" },
+  calidad: TODAY_STYLE.calidad,
+  suave: TODAY_STYLE.suave,
+  otro: TODAY_STYLE.libre,
+};
+
 async function HomeData() {
   await connection();
   const today = cacheDay();
@@ -88,6 +96,8 @@ async function HomeData() {
   const vo2 = h.vo2;
   const latestVo2 = vo2.at(-1) ?? null;
   const st = TODAY_STYLE[o.advice.kind];
+  const mine = todayFromMine(mineToday, o.advice, !!o.openInjury);
+  const mst = MINE_STYLE[mine?.kind ?? "suave"];
   const w = o.week;
   const m = o.month;
   const cmp = m.cmp;
@@ -114,40 +124,68 @@ async function HomeData() {
         </Link>
       )}
 
-      {/* 1) Hoy */}
-      <section className="card card-hero p-5" aria-label="Hoy">
-        <div className="relative flex items-baseline justify-between">
-          <div className="eyebrow">Hoy</div>
-          <span className="text-[11px] text-fg-2">Estimación, no un plan</span>
-        </div>
-        <div className="relative mt-3 flex items-center gap-3">
-          <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${st.color} 18%, transparent)`, color: st.color }} aria-hidden="true">
-            <svg width="26" height="26" viewBox="0 0 24 24">
-              <path d={st.icon} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <div className="min-w-0">
-            <div className="font-display text-[28px] leading-tight font-bold">{o.advice.label}</div>
+      {/* 1) Hoy: si puse una sesión para hoy, manda la mía */}
+      {mine ? (
+        <section className="card card-hero p-5" aria-label="Hoy">
+          <div className="relative flex items-baseline justify-between">
+            <div className="eyebrow">Hoy</div>
+            <span className="rounded-full border border-lime/40 bg-lime/10 px-2 py-0.5 text-[11px] font-semibold text-lime-text">Puesta por mí</span>
           </div>
-        </div>
-        <p className="relative mt-2 text-[14px] leading-snug text-fg-2">{o.advice.reason}</p>
-        {mineToday.length ? (
-          <Link href={`/plan/sesion/${mineToday[0].id}`} className="relative mt-3 flex min-h-[48px] items-center gap-2 rounded-2xl border border-line bg-inset px-3.5 text-[14px]">
-            <span className="min-w-0 flex-1">
-              Tu sesión de hoy: <b>{mineToday[0].label}</b>
-              {mineToday[0].detail ? <span className="text-fg-2"> · {mineToday[0].detail}</span> : null}
+          <div className="relative mt-3 flex items-center gap-3">
+            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${mst.color} 18%, transparent)`, color: mst.color }} aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24">
+                <path d={mst.icon} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </span>
-            <span className="flex-none rounded-full border border-lime/40 bg-lime/10 px-2 py-0.5 text-[11px] font-semibold text-lime-text">Puesta por mí</span>
+            <div className="min-w-0">
+              <div className="text-[13px] text-fg-2">Hoy te toca</div>
+              <div className="font-display text-[26px] leading-tight font-bold">{mine.title}</div>
+            </div>
+          </div>
+          <p className="relative mt-2 text-[14px] leading-snug">
+            {mine.sub}
+            {mine.done && (
+              <span className="ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: "var(--load-low)", background: "color-mix(in srgb, var(--load-low) 14%, transparent)", border: "1px solid color-mix(in srgb, var(--load-low) 40%, transparent)" }}>
+                ✓ {mine.done}
+              </span>
+            )}
+          </p>
+          {mine.note && <p className="relative mt-1 text-[13px] text-fg-2">{mine.note}</p>}
+          {mine.injury && (
+            <p role="alert" className="relative mt-3 rounded-2xl px-3.5 py-2.5 text-[13px] leading-snug" style={{ background: "color-mix(in srgb, var(--danger) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)" }}>
+              {mine.injury}
+            </p>
+          )}
+          {mine.appNote && <p className="relative mt-2 text-[12px] text-fg-2">{mine.appNote}</p>}
+          <Link href={`/plan/sesion/${mineToday[0].id}`} className="relative mt-3 flex min-h-[44px] items-center justify-center rounded-2xl border border-line-strong text-[14px] font-semibold">
+            {mineToday.length > 1 ? "Ver o cambiar la primera" : "Ver o cambiar"}
           </Link>
-        ) : (
+        </section>
+      ) : (
+        <section className="card card-hero p-5" aria-label="Hoy">
+          <div className="relative flex items-baseline justify-between">
+            <div className="eyebrow">Hoy</div>
+            <span className="text-[11px] text-fg-2">Estimación, no un plan</span>
+          </div>
+          <div className="relative mt-3 flex items-center gap-3">
+            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${st.color} 18%, transparent)`, color: st.color }} aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24">
+                <path d={st.icon} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <div className="font-display text-[28px] leading-tight font-bold">{o.advice.label}</div>
+            </div>
+          </div>
+          <p className="relative mt-2 text-[14px] leading-snug text-fg-2">{o.advice.reason}</p>
           <Link
             href={`/plan/sesion/nueva?fecha=${today}&tipo=${mineKindForToday(o.advice.kind)}&volver=inicio`}
             className="relative mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-line-strong text-[15px] font-semibold"
           >
             Voy a correr hoy
           </Link>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Carga y forma */}
       {/* Próxima carrera objetivo */}

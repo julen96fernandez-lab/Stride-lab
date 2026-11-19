@@ -829,9 +829,19 @@ function mineExigentes(mine: readonly MineView[]): Exigente[] {
   });
 }
 
-/** Mis sesiones de un día (para Inicio). */
-export async function getMineOn(day: string): Promise<MineView[]> {
-  return (await listMine(db(), day, day)).map(mineView);
+/** Mis sesiones de un día (para Inicio), con su estado (misma vinculación ±1 día que en Plan). */
+export async function getMineOn(day: string, ctx: Ctx = makeCtx()): Promise<(MineView & { distanceM: number | null; durationS: number | null })[]> {
+  const d = dayNum(day)!;
+  const [rows, runs] = await Promise.all([listMine(db(), ymdOf(d - 2), ymdOf(d + 2)), ctx.runs()]);
+  if (!rows.some((m) => m.date === day)) return [];
+  const madrid = (x: Date) => new Date(localDay(x) * 86_400_000).toISOString().slice(0, 10);
+  const lite = runs
+    .map((r) => ({ id: r.id, date: madrid(r.startAt), at: r.startAt.getTime(), type: r.type }))
+    .filter((r) => r.date >= ymdOf(d - 3) && r.date <= day);
+  const links = linkMine(rows, lite);
+  return rows
+    .filter((m) => m.date === day)
+    .map((m) => ({ ...mineView(m), distanceM: m.distanceM, durationS: m.durationS, status: mineStatus(m, links.get(m.id), day) }));
 }
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */

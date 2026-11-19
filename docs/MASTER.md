@@ -551,6 +551,11 @@ para mis sesiones.
     estar en el historial.
   - «Semanas anteriores» muestra las 4 últimas con algo (sugerencia guardada, sesiones mías o
     carreras no previstas). El cumplimiento de la sugerencia sigue siendo por semana.
+- **Paso 4 · «Hoy» usa mi sesión (hecho).** `lib/plan/today.ts` (con pruebas). Si puse algo para
+  hoy, la tarjeta «Hoy» de Inicio dice «Hoy te toca: …» con «lo pusiste tú», el detalle, la nota
+  y «✓ Cumplida» cuando ya la corrí (misma vinculación ±1 día). Con lesión abierta avisa también
+  (más fuerte si la sesión es exigente). La estimación de la app queda como nota si es otra.
+  Sin sesión mía, la estimación de siempre y «Voy a correr hoy».
 
 ## Rendimiento
 
@@ -882,6 +887,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Plan editable, paso 4: «Hoy» en Inicio usa mi sesión («Hoy te toca: …, lo
+  pusiste tú») y avisa si hay lesión abierta.
 - 2026‑11‑19 — Plan editable, paso 3: vinculación automática (±1 día), prevista frente a
   realizada y «Sesión no prevista».
 - 2026‑11‑19 — Plan editable, paso 2: el plan se recalcula alrededor de mis sesiones y avisa
