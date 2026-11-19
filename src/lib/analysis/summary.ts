@@ -98,6 +98,9 @@ const TYPE_PLURAL: Record<string, [string, boolean]> = {
   cinta: ["carreras en cinta", true],
 };
 
+/** «rodajes», «tiradas largas»… (para textos de comparación) */
+export const typePlural = (type: string | null) => (type && TYPE_PLURAL[type]?.[0]) || "carreras";
+
 const fmtKm = (m: number) => (m / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 });
 const fmtPace = (s: number) => {
   const t = Math.round(s);

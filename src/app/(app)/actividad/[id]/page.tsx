@@ -12,6 +12,8 @@ import { FeelingsCard } from "@/components/feelings/FeelingsCard";
 import { ZonesCard } from "@/components/ui/ZonesCard";
 import { SummaryCard } from "@/components/detail/SummaryCard";
 import { SameRouteCard } from "@/components/detail/SameRouteCard";
+import { SimilarCard } from "@/components/detail/SimilarCard";
+import { typePlural } from "@/lib/analysis/summary";
 import { LoadBadge } from "@/components/ui/Load";
 import { isSessionType } from "@/lib/analysis/session-type";
 import type { Durability } from "@/lib/analysis/durability";
@@ -22,6 +24,7 @@ import { cacheDay } from "@/lib/cache/tags";
 import { DASH, cap, date, dec, duration, int, pace } from "@/lib/format";
 
 export const metadata = { title: "Carrera · Stride Lab" };
+
 
 export default function RunPage({ params }: PageProps<"/actividad/[id]">) {
   return (
@@ -46,7 +49,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = /^[0-9a-f-]{36}$/i.test(id) ? await runScreen(id, cacheDay()) : null;
   if (!data) notFound();
-  const { run, route, durability, decoupling, zones, explorer, prevId, nextId, feeling, summary, sameRoute } = data;
+  const { run, route, durability, decoupling, zones, explorer, prevId, nextId, feeling, summary, sameRoute, similar, similarLabel } = data;
 
   return (
     <div className="stagger flex flex-col gap-4">
@@ -113,6 +116,8 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Misma ruta: solo con al menos 2 carreras anteriores por el mismo recorrido */}
       {sameRoute && <SameRouteCard rows={sameRoute} />}
+      {/* Si no hay ruta repetida: frente a las 5 últimas del mismo tipo y distancia parecida */}
+      {!sameRoute && similar && <SimilarCard metrics={similar} typeLabel={typePlural(similarLabel)} />}
 
       {/* Durabilidad */}
       <DurabilityCard d={durability} check={decoupling} />

@@ -223,6 +223,7 @@ export async function listRuns(filter: SessionType | null, ctx: Ctx = makeCtx())
 
 import { hrReliable, pickSimilar, runSummary } from "@/lib/analysis/summary";
 import { ROUTE_RULES, sameRoute } from "@/lib/analysis/route-match";
+import { compareSimilar } from "@/lib/analysis/similar";
 
 export interface SameRouteRow {
   id: string;
@@ -352,6 +353,28 @@ export async function getRun(id: string, ctx: Ctx = makeCtx()) {
     run,
     summary,
     sameRoute: sameRouteRows,
+    // Sesiones parecidas: solo si no hay tarjeta de misma ruta.
+    similar: sameRouteRows
+      ? null
+      : compareSimilar(
+          {
+            id: run.id,
+            startAt: run.startAt,
+            paceS: run.isSpecial ? null : run.avgPaceSPerKm,
+            avgHr: hrReliable({ avgHr: run.avgHr, zoneSeconds: run.hrZoneSeconds, durationS: run.durationS }) ? run.avgHr : null,
+            load: run.trainingLoad,
+            current: true,
+          },
+          similar.map((x) => ({
+            id: x.id,
+            startAt: x.startAt,
+            paceS: x.avgPaceSPerKm,
+            avgHr: hrReliable({ avgHr: x.avgHr, zoneSeconds: x.hrZoneSeconds, durationS: x.durationS }) ? x.avgHr : null,
+            load: x.trainingLoad,
+            current: false,
+          })),
+        ),
+    similarLabel: type,
     route: route
       ? { points: decodePolyline(route.polyline ?? ""), bbox: [route.minLon, route.minLat, route.maxLon, route.maxLat] as const, shape: routeShape(route.polyline, 400) }
       : null,

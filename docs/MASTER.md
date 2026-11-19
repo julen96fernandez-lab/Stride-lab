@@ -583,6 +583,12 @@ fiable el resumen no habla de pulso ni de zonas; el resumen va bajo los números
   °C), gráfico de ritmo y pulso por fecha con la actual marcada y aviso de que temperatura,
   humedad y descanso cambian. Comprobado con trazados reales: los tres 7 km de otoño de 2025
   coinciden (media 21–44 m) y rutas con el mismo inicio pero otro camino, no.
+- **Paso 3 · Sesiones parecidas (hecho).** `lib/analysis/similar.ts` (con pruebas). Si no hay
+  tarjeta de misma ruta: la carrera frente a sus parecidas (las 5 últimas del mismo tipo, ±20 %,
+  12 meses; mínimo 3). Selector Ritmo | Pulso | Carga (cada métrica solo si esta carrera y al
+  menos 3 parecidas la tienen; pulso solo fiable), barras por fecha con la actual en color, media
+  de las anteriores y posición («La 2.ª más rápida de 4»; en pulso y carga, de más bajo a más
+  alto, sin juzgar). Enlaces a cada parecida.
 
 ## Rendimiento
 
@@ -925,6 +931,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Detalle, paso 3: «Sesiones parecidas» (ritmo, pulso y carga frente a las 5 últimas).
 - 2026‑11‑19 — Detalle, paso 2: «Misma ruta» (sentido incluido) con lista y gráfico por fecha.
 - 2026‑11‑19 — Formularios sin desbordes en iPhone estrecho (Fecha y Hora de «Añadir carrera»
   y el resto), con prueba en navegador.
