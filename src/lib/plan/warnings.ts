@@ -1,0 +1,68 @@
+/**
+ * Avisos de una sesión puesta por mí: si choca con una regla, se dice el motivo, pero se puede
+ * guardar igual (mis sesiones nunca se mueven). Lógica pura, con pruebas. Reglas:
+ * - Tras una noche, nada exigente (el lunes que sigue a la semana de noches).
+ * - Semana de noches: solo suave u opcional.
+ * - Nunca dos exigentes en días consecutivos (con otra mía, la sugerida o una ya corrida).
+ * - Nunca el mismo tipo exigente dos veces seguidas (con la exigente anterior, mía, sugerida o hecha).
+ * - Afinado de una carrera objetivo: dos semanas antes, nada de tirada larga; la semana anterior,
+ *   solo suave; la semana de la carrera, solo un rodaje suave corto y no en los 2 días previos.
+ */
+import { afterNights, dayNum, mondayOfDay, shiftWeek } from "./shifts";
+import { RACE_GAP_DAYS, demandingOf, fmtDay, type Demanding } from "./weekly";
+
+export interface Exigente {
+  date: string;
+  kind: Demanding;
+  /** «tu calidad», «la tirada larga sugerida», «la tirada larga que corriste» */
+  what: string;
+  /** id de mi sesión (para no compararla consigo misma) */
+  id?: string;
+}
+
+export interface WarnCtx {
+  anchor: string | null;
+  races: readonly { name: string; date: string }[];
+  /** otras sesiones exigentes: mías, sugeridas visibles y corridas */
+  exigentes: readonly Exigente[];
+}
+
+const NAME: Record<Demanding, string> = { long: "tirada larga", quality: "calidad" };
+
+export function mineWarnings(m: { id?: string; date: string; kind: string }, ctx: WarnCtx): string[] {
+  const out: string[] = [];
+  const d = dayNum(m.date);
+  if (d === null) return out;
+  const dem = demandingOf(m.kind);
+  const others = ctx.exigentes.filter((e) => !(m.id && e.id === m.id));
+
+  if (ctx.anchor && dem) {
+    if (afterNights(ctx.anchor, d)) out.push("Tras una noche: nada exigente ese día (regla de turnos).");
+    else if (shiftWeek(ctx.anchor, m.date).kind === "noches") out.push("Semana de noches: solo rodaje suave u opcional.");
+  }
+
+  if (dem) {
+    const next = others.filter((e) => Math.abs(dayNum(e.date)! - d) === 1);
+    if (next.length) out.push(`Dos exigentes en días seguidos: ${next[0].what} del ${fmtDay(next[0].date)}.`);
+    const before = others.filter((e) => e.date < m.date).sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+    if (before && before.kind === dem) out.push(`Repite ${NAME[dem]}: la exigente anterior es ${before.what} del ${fmtDay(before.date)}; toca alternar.`);
+  }
+
+  // Afinado: la carrera más próxima en o después del día.
+  const race = [...ctx.races].filter((r) => r.date >= m.date).sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (race) {
+    const rd = dayNum(race.date)!;
+    const weeks = Math.round((mondayOfDay(rd) - mondayOfDay(d)) / 7);
+    if (d === rd) out.push(`Es el día de la carrera (${race.name}).`);
+    else if (weeks === 0) {
+      if (dem) out.push(`Semana de la carrera (${race.name}): solo un rodaje suave corto.`);
+      if (rd - d < RACE_GAP_DAYS) out.push(`A menos de ${RACE_GAP_DAYS} días de la carrera (${race.name}): mejor descansar.`);
+    } else if (weeks === 1 && dem) out.push(`Semana anterior a la carrera (${race.name}): solo rodaje suave.`);
+    else if (weeks === 2 && dem === "long") out.push(`Dos semanas antes de la carrera (${race.name}): calidad corta, no tirada larga.`);
+  }
+  return out;
+}
+
+export const MINE_WHAT: Record<string, string> = { tirada_larga: "tu tirada larga", calidad: "tu calidad" };
+export const SUGG_WHAT: Record<Demanding, string> = { long: "la tirada larga sugerida", quality: "la calidad sugerida" };
+export const RUN_WHAT: Record<Demanding, string> = { long: "la tirada larga que corriste", quality: "la calidad que corriste" };

@@ -70,6 +70,7 @@ export const FLASH: Record<string, { kind: ToastKind; text: string }> = {
   "carrera-objetivo-borrada": { kind: "success", text: "Carrera objetivo borrada." },
   "sesion-guardada": { kind: "success", text: "Sesión guardada · Puesta por ti." },
   "sesion-actualizada": { kind: "success", text: "Cambios guardados." },
+  "sesion-con-aviso": { kind: "info", text: "Guardada, con aviso: choca con alguna regla (lo ves en Plan)." },
   "sesion-borrada": { kind: "success", text: "Sesión borrada." },
   "sugerencia-quitada": { kind: "success", text: "Sugerencia quitada de esa semana." },
 };

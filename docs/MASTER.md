@@ -526,6 +526,19 @@ para mis sesiones.
     turnos borra lo guardado desde la semana en curso, también lo quitado.
   - Inicio: «Voy a correr hoy» en Hoy (tipo propuesto: calidad si Hoy dice calidad; si no,
     suave) y, si ya hay, «Tu sesión de hoy … Puesta por mí».
+- **Paso 2 · Recálculo y avisos (hecho).** `planWeeks` recibe mis sesiones (con pruebas):
+  - una mía exigente ocupa el sitio de la sugerencia de su semana («Sustituida») y es la que
+    cuenta para alternar; una suave u otro deja la sugerencia, que se va a otro día;
+  - la sugerida exigente evita los días junto a una exigente mía o corrida (y el día de una
+    sesión mía); tras una semana con exigente mía no repite su tipo (p. ej. tardes pasa a
+    calidad si la semana anterior tuve tirada larga). El ciclo por defecto no cambia;
+  - turnos, rebajas por prudencia y afinado siguen mandando sobre la sugerencia.
+  - Avisos (`lib/plan/warnings.ts`, con pruebas), en el formulario al momento y bajo cada sesión
+    en Plan, sin impedir guardar: tras una noche nada exigente; en noches solo suave u opcional;
+    dos exigentes en días seguidos; el mismo tipo exigente que la exigente anterior (mía,
+    sugerida o corrida); afinado (2 semanas antes sin tirada larga, la anterior solo suave, la de
+    la carrera solo suave corto y nada en los 2 días previos; el día de la carrera). Al guardar
+    con aviso, el toast lo dice.
 
 ## Rendimiento
 
@@ -857,6 +870,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Plan editable, paso 2: el plan se recalcula alrededor de mis sesiones y avisa
+  (con el motivo) si una choca con las reglas.
 - 2026‑11‑18 — Plan editable, paso 1: añadir, editar, mover y borrar sesiones (también la
   sugerida), «Puesta por mí» y «Voy a correr hoy» en Inicio.
 - 2026‑11‑18 — Competición, paso 4: afinado en Plan, carrera marcada, vincular la carrera real

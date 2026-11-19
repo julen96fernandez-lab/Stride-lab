@@ -12,6 +12,7 @@ import { fmtDay, type SessionKind, type WeekSession } from "@/lib/plan/weekly";
 import { STATUS_LABEL, type WeekStatus } from "@/lib/plan/compliance";
 import { RescheduleButton } from "./RescheduleButton";
 import { RestoreSuggestion } from "./RestoreSuggestion";
+import { Warnings } from "@/components/plan/SessionForm";
 import type { Hidden, MineView } from "@/lib/db/queries";
 import type { MineKind } from "@/lib/plan/mine";
 
@@ -277,6 +278,7 @@ function MineList({ items, today }: { items: MineView[]; today: string }) {
             </span>
             <MinePill />
           </Link>
+          {m.warnings.length > 0 && <Warnings items={m.warnings} compact />}
         </li>
       ))}
     </ul>

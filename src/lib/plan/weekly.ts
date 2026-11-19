@@ -11,6 +11,10 @@
  *   que precede a las tardes es de calidad, porque las tardes llevan la tirada larga.
  * - Baja a rodaje suave: lesión abierta (todas las semanas), carga alta (ratio > 1,3) o más de
  *   3 semanas sin correr (solo la semana en curso: la carga futura no se conoce).
+ * - Mis sesiones (Plan editable) mandan y nunca se mueven: una mía exigente ocupa el sitio de la
+ *   sugerencia de su semana y cuenta para alternar; una suave u otro deja la sugerencia. La
+ *   sugerencia evita los días junto a una exigente (mía o hecha), el día de una sesión mía y,
+ *   tras una semana con exigente mía, repetir su tipo.
  */
 import { afterNights, dayNum, mondayOfDay, weekdayOf, ymdOf, type ShiftKind, type ShiftWeek } from "./shifts";
 
@@ -27,8 +31,8 @@ export const SESSION_LABEL: Record<SessionKind, string> = {
 };
 
 /** Sesiones que cuentan como «exigentes» para alternar. */
-type Demanding = "long" | "quality";
-const demandingOf = (k: SessionKind | string | null): Demanding | null =>
+export type Demanding = "long" | "quality";
+export const demandingOf = (k: SessionKind | string | null): Demanding | null =>
   k === "tirada_larga" ? "long" : k === "calidad" || k === "calidad_corta" || k === "series" || k === "tempo" || k === "competicion" ? "quality" : null;
 
 export interface PastRun {
@@ -55,6 +59,16 @@ export interface WeekSession {
   downgraded: boolean;
   /** carrera objetivo que cae en esta semana */
   race?: { name: string; date: string; dayLabel: string } | null;
+  /** id de mi sesión exigente que ocupa el sitio de esta sugerencia */
+  occupiedBy?: string | null;
+}
+
+/** Sesión puesta por mí, tal como la ve el cálculo. */
+export interface MineIn {
+  id: string;
+  date: string;
+  /** tirada_larga | calidad | suave | otro */
+  kind: string;
 }
 
 export const LOAD_HIGH = 1.3;
@@ -66,10 +80,23 @@ const fmtDay = (ymd: string) => {
 };
 const fmtDate = (ymd: string) => new Intl.DateTimeFormat("es-ES", { timeZone: "UTC", day: "numeric", month: "short" }).format(new Date(`${ymd}T00:00:00Z`));
 
-/** Primer día de `prefs` (0 = lunes) que no sea anterior a hoy y cumpla `ok`; si ninguno, el primero de `prefs`. */
-function pickDay(w: ShiftWeek, prefs: number[], today: number, ok: (day: number) => boolean = () => true): number {
-  const cands = prefs.map((p) => w.startDay + p).filter(ok);
-  return cands.find((d) => d >= today) ?? cands.at(-1) ?? w.startDay + prefs[0];
+/**
+ * Primer día de `prefs` (0 = lunes) que no sea anterior a hoy y cumpla la primera condición de
+ * `oks` que tenga candidatos (de la más estricta a la más laxa); si ninguna, el primero de `prefs`.
+ */
+function pickDay(w: ShiftWeek, prefs: number[], today: number, ...oks: ((day: number) => boolean)[]): number {
+  const days = prefs.map((p) => w.startDay + p);
+  oks = [...oks, () => true];
+  for (const ok of oks) {
+    const cands = days.filter(ok);
+    const d = cands.find((x) => x >= today);
+    if (d !== undefined) return d;
+  }
+  for (const ok of oks) {
+    const cands = days.filter(ok);
+    if (cands.length) return cands.at(-1)!;
+  }
+  return days[0];
 }
 
 export function planWeeks(o: {
@@ -84,6 +111,8 @@ export function planWeeks(o: {
   fixed?: Readonly<Record<string, Pick<WeekSession, "session" | "day" | "when" | "reason" | "downgraded">>>;
   /** carreras objetivo (afinado: 2 semanas antes, la anterior y la de la carrera) */
   races?: readonly { name: string; date: string }[];
+  /** sesiones puestas por mí (mandan; nunca se mueven) */
+  mine?: readonly MineIn[];
 }): WeekSession[] {
   const races = (o.races ?? []).map((r) => ({ ...r, day: dayNum(r.date)! })).sort((a, b) => a.day - b.day);
   return planWeeksBase(o).map((s, i) => applyTaper(s, o.weeks[i], races, dayNum(o.today)!));
@@ -143,12 +172,29 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
   let lastDemanding: Demanding | null = lastDemandingRun ? demandingOf(lastDemandingRun.type) : null;
   const lastTxt = lastDemandingRun ? `la última exigente fue ${lastDemanding === "long" ? "tirada larga" : "calidad"} el ${fmtDate(lastDemandingRun.date)}` : "sin sesiones exigentes recientes";
 
+  // Mis sesiones y días exigentes (míos y hechos): la sugerencia los esquiva.
+  const mine = [...(o.mine ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+  const mineDays = new Set(mine.map((m) => dayNum(m.date)!));
+  const hardDays = new Set([...mine.filter((m) => demandingOf(m.kind)).map((m) => dayNum(m.date)!), ...past.filter((r) => demandingOf(r.type)).map((r) => dayNum(r.date)!)]);
+  const notNextToHard = (d: number) => !hardDays.has(d - 1) && !hardDays.has(d) && !hardDays.has(d + 1);
+  const free = (d: number) => !mineDays.has(d);
+  let prevWeek: Demanding | null = null;
+
   return o.weeks.map((w, i) => {
+    const mineExig = mine.filter((m) => dayNum(m.date)! >= w.startDay && dayNum(m.date)! <= w.startDay + 6 && demandingOf(m.kind));
+    const occupiedBy = mineExig[0]?.id ?? null;
+    /** Cierra la semana: lo exigente que cuenta para alternar es lo mío si ocupa su sitio. */
+    const close = (ws: WeekSession): WeekSession => {
+      const dem = mineExig.length ? demandingOf(mineExig.at(-1)!.kind) : demandingOf(ws.session);
+      if (dem) lastDemanding = dem;
+      // Solo una exigente mía obliga a no repetir el tipo la semana siguiente; el ciclo por
+      // defecto (tardes = tirada larga, libre previa = calidad) ya alterna a su manera.
+      prevWeek = mineExig.length ? dem : null;
+      return occupiedBy ? { ...ws, occupiedBy } : ws;
+    };
     const f = o.fixed?.[w.start];
     if (f) {
-      const dem = demandingOf(f.session);
-      if (dem) lastDemanding = dem;
-      return { start: w.start, end: w.end, kind: w.kind, pos: w.pos, ...f, label: SESSION_LABEL[f.session], dayLabel: fmtDay(f.day) };
+      return close({ start: w.start, end: w.end, kind: w.kind, pos: w.pos, ...f, label: SESSION_LABEL[f.session], dayLabel: fmtDay(f.day) });
     }
     const current = i === 0 && today >= w.startDay && today <= w.startDay + 6;
     const noQualityOn = (d: number) => !afterNights(o.anchor, d);
@@ -159,18 +205,26 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
 
     if (w.kind === "noches") {
       session = "suave_opcional";
-      day = pickDay(w, [5, 6, 2], today);
+      day = pickDay(w, [5, 6, 2], today, free);
       when = "si has dormido bien";
       reason = "Semana de noches: solo si el sueño lo permite, suave o nada; nunca calidad tras una noche.";
     } else if (w.kind === "tardes") {
-      session = "tirada_larga";
-      day = pickDay(w, [5, 6], today);
-      reason = "Semana de tardes: trabajas de lunes a viernes; el fin de semana, la tirada larga.";
+      // La tirada larga, salvo que la semana anterior ya tuviera una (mía): entonces, calidad.
+      const long = prevWeek !== "long";
+      session = long ? "tirada_larga" : "calidad";
+      day = pickDay(w, [5, 6], today, (d) => notNextToHard(d) && free(d), notNextToHard);
+      reason = long
+        ? "Semana de tardes: trabajas de lunes a viernes; el fin de semana, la tirada larga."
+        : "Semana de tardes: el fin de semana, calidad (la semana anterior ya tuvo tirada larga).";
     } else if (w.kind === "mananas") {
-      const next: Demanding = lastDemanding === "quality" ? "long" : "quality";
+      let next: Demanding = lastDemanding === "quality" ? "long" : "quality";
+      if (next === prevWeek) next = next === "long" ? "quality" : "long";
       // La tirada larga no cabe entre semana: si «tocaría», suave; si toca calidad, corta.
       session = next === "quality" ? "calidad_corta" : "suave";
-      day = pickDay(w, [2, 3, 1], today, noQualityOn);
+      day =
+        session === "calidad_corta"
+          ? pickDay(w, [2, 3, 1], today, (d) => noQualityOn(d) && notNextToHard(d) && free(d), (d) => noQualityOn(d) && notNextToHard(d), noQualityOn)
+          : pickDay(w, [2, 3, 1], today, (d) => noQualityOn(d) && free(d), noQualityOn);
       when = "por la tarde, tras el turno";
       reason =
         session === "calidad_corta"
@@ -180,10 +234,12 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
       // Libre: la exigente, alternando. Tras noches, nunca el lunes (ni calidad ese día).
       // La libre que precede a las tardes (5.ª del ciclo) es de calidad: las tardes llevan la tirada larga.
       const beforeTardes = w.pos === 4;
-      const next: Demanding = beforeTardes ? "quality" : lastDemanding === "long" ? "quality" : "long";
+      let next: Demanding = beforeTardes ? "quality" : lastDemanding === "long" ? "quality" : "long";
+      if (next === prevWeek) next = next === "long" ? "quality" : "long";
       session = next === "long" ? "tirada_larga" : "calidad";
       const prefs = w.pos === 2 ? [2, 3, 5, 1] : [1, 2, 3, 5];
-      day = pickDay(w, prefs, today, (d) => !afterNights(o.anchor, d));
+      const okNight = (d: number) => !afterNights(o.anchor, d);
+      day = pickDay(w, [...prefs, 4, 6, 0].filter((x, k, a) => a.indexOf(x) === k), today, (d) => okNight(d) && notNextToHard(d) && free(d) && prefs.includes(d - w.startDay), (d) => okNight(d) && notNextToHard(d) && free(d), (d) => okNight(d) && notNextToHard(d), okNight);
       reason = `Semana libre${w.pos === 2 ? " tras noches (sin el lunes)" : ""}: la sesión exigente; toca ${next === "long" ? "tirada larga" : "calidad"} (${
         beforeTardes ? "la semana de tardes que viene lleva la tirada larga" : i === 0 ? lastTxt : "alterna con la anterior"
       }).`;
@@ -205,10 +261,8 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
         reason = `Rodaje suave por ${cause}. ${reason.split(":")[0]}.`;
       }
     }
-    const dem = demandingOf(session);
-    if (dem) lastDemanding = dem;
     const ymd = ymdOf(day);
-    return { start: w.start, end: w.end, kind: w.kind, pos: w.pos, session, label: SESSION_LABEL[session], day: ymd, dayLabel: fmtDay(ymd), when, reason, downgraded };
+    return close({ start: w.start, end: w.end, kind: w.kind, pos: w.pos, session, label: SESSION_LABEL[session], day: ymd, dayLabel: fmtDay(ymd), when, reason, downgraded });
   });
 }
 

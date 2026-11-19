@@ -32,7 +32,8 @@ async function NewSession({ searchParams }: { searchParams: SP }) {
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(one(sp.fecha)) ? one(sp.fecha) : today;
   const tipo = one(sp.tipo);
 
-  const suggestion = semana ? (await planScreen(today)).sessions.find((s) => s.start === semana) ?? null : null;
+  const plan = await planScreen(today);
+  const suggestion = semana ? (plan.sessions.find((s) => s.start === semana) ?? null) : null;
   const back = (
     <Link href={volver ? "/" : "/plan"} className="mt-4 inline-flex min-h-[44px] items-center gap-1 text-[14px] font-semibold text-fg-2">
       ‹ {volver ? "Inicio" : "Plan"}
@@ -56,6 +57,7 @@ async function NewSession({ searchParams }: { searchParams: SP }) {
       )}
       <SessionForm
         suggestionWeek={suggestion?.start ?? null}
+        warnCtx={plan.warnCtx}
         initial={{
           date: suggestion?.day ?? fecha,
           kind: suggestion ? mineKindOf(suggestion.session) : isMineKind(tipo) ? tipo : "suave",

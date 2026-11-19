@@ -5,6 +5,7 @@ import { SubmitButton, Spinner } from "@/components/ui/SubmitButton";
 import { useActionToast } from "@/components/ui/Toaster";
 import { deleteMineAction, dismissSuggestionAction, saveMineAction, type MineState } from "@/app/(app)/plan/session-actions";
 import { MINE_KINDS, MINE_LABEL, MINE_NOTE_MAX, type MineKind } from "@/lib/plan/mine";
+import { mineWarnings, type WarnCtx } from "@/lib/plan/warnings";
 
 const field = "h-11 w-full rounded-xl border border-line-strong bg-inset px-3 text-[16px] text-fg outline-none focus:border-lime";
 const label = "flex flex-col gap-1.5 text-[13px] text-fg-2";
@@ -23,11 +24,14 @@ export interface SessionFormValues {
 }
 
 /** Añadir o editar una sesión prevista mía. Con `suggestion`, permite además quitar la sugerida. */
-export function SessionForm({ initial, suggestionWeek }: { initial: SessionFormValues; suggestionWeek?: string | null }) {
+export function SessionForm({ initial, suggestionWeek, warnCtx }: { initial: SessionFormValues; suggestionWeek?: string | null; warnCtx?: WarnCtx | null }) {
   const [state, action] = useActionState<MineState, FormData>(saveMineAction, {});
   useActionToast(state);
   const err = state.errors ?? {};
   const [kind, setKind] = useState<MineKind>(initial.kind);
+  const [date, setDate] = useState(initial.date);
+  // Avisos al momento: se puede guardar igual.
+  const warnings = warnCtx ? mineWarnings({ id: initial.id, date, kind }, warnCtx) : [];
   const [busy, start] = useTransition();
   const [confirm, setConfirm] = useState<null | "delete" | "dismiss">(null);
 
@@ -66,9 +70,10 @@ export function SessionForm({ initial, suggestionWeek }: { initial: SessionFormV
         {err.kind && <Err>{err.kind}</Err>}
         <label className={label}>
           Fecha
-          <input type="date" name="date" defaultValue={initial.date} className={field} />
+          <input type="date" name="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} />
         </label>
         {err.date && <Err>{err.date}</Err>}
+        {warnings.length > 0 && <Warnings items={warnings} />}
       </section>
 
       <section className="card flex flex-col gap-4 p-5">
@@ -117,6 +122,28 @@ export function SessionForm({ initial, suggestionWeek }: { initial: SessionFormV
         />
       )}
     </form>
+  );
+}
+
+export function Warnings({ items, compact = false }: { items: string[]; compact?: boolean }) {
+  return (
+    <div
+      role="status"
+      className={`rounded-2xl border ${compact ? "mt-1.5 px-3 py-2" : "px-3.5 py-3"}`}
+      style={{ borderColor: "color-mix(in srgb, var(--load-mod) 45%, transparent)", background: "color-mix(in srgb, var(--load-mod) 10%, transparent)" }}
+    >
+      {!compact && <div className="text-[12px] font-semibold" style={{ color: "var(--load-mod)" }}>Aviso · puedes guardarla igual</div>}
+      <ul className={`${compact ? "" : "mt-1"} flex flex-col gap-0.5 text-[13px] leading-snug`}>
+        {items.map((w) => (
+          <li key={w} className="flex gap-1.5">
+            <span aria-hidden="true" style={{ color: "var(--load-mod)" }}>
+              ⚠
+            </span>
+            <span>{w}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

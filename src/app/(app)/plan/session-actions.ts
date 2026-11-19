@@ -22,10 +22,12 @@ export async function saveMineAction(_prev: MineState, fd: FormData): Promise<Mi
   if (id && !UUID.test(id)) return { error: "Sesión no válida." };
   const { input, errors } = parseMineForm(f, cacheDay());
   if (!input) return { errors };
-  await saveMine(db(), input, id);
+  const saved = await saveMine(db(), input, id);
   dataChanged();
   refresh();
-  redirect(`${back(f.volver)}?aviso=${id ? "sesion-actualizada" : "sesion-guardada"}`);
+  // Si choca con alguna regla, se guarda igual y se avisa.
+  const warned = (await getPlan(cacheDay())).mine.find((m) => m.id === saved)?.warnings.length;
+  redirect(`${back(f.volver)}?aviso=${warned ? "sesion-con-aviso" : id ? "sesion-actualizada" : "sesion-guardada"}`);
 }
 
 export async function deleteMineAction(id: string): Promise<{ ok: boolean }> {

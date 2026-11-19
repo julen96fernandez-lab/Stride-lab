@@ -766,10 +766,11 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 
 import { dayNum, shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
 import { pickSources, predictAt, predictionHistory } from "@/lib/plan/predict";
-import { SESSION_LABEL, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
+import { SESSION_LABEL, demandingOf, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
 import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
 import { freezeWeek, getStoredWeeks, listMine, type MineRow } from "@/lib/plan/plan-db";
 import { MINE_LABEL, mineDetail, weekOf, type MineKind } from "@/lib/plan/mine";
+import { MINE_WHAT, RUN_WHAT, SUGG_WHAT, mineWarnings, type Exigente, type WarnCtx } from "@/lib/plan/warnings";
 
 export interface MineView {
   id: string;
@@ -781,8 +782,11 @@ export interface MineView {
   detail: string | null;
   note: string | null;
   replacesWeek: string | null;
+  /** choques con las reglas (se guarda igual) */
+  warnings: string[];
 }
 const mineView = (m: MineRow): MineView => ({
+  warnings: [],
   id: m.id,
   date: m.date,
   dayLabel: fmtDay(m.date),
@@ -796,6 +800,13 @@ const mineView = (m: MineRow): MineView => ({
 /** Por qué no se muestra la sugerencia de una semana. */
 export type Hidden = { by: "dismissed" } | { by: "replaced"; id: string };
 
+function mineExigentes(mine: readonly MineView[]): Exigente[] {
+  return mine.flatMap((m) => {
+    const k = demandingOf(m.kind);
+    return k ? [{ date: m.date, kind: k, what: MINE_WHAT[m.kind], id: m.id }] : [];
+  });
+}
+
 /** Mis sesiones de un día (para Inicio). */
 export async function getMineOn(day: string): Promise<MineView[]> {
   return (await listMine(db(), day, day)).map(mineView);
@@ -806,7 +817,13 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const [anchor, predictions, runs, fitness, raceRows] = await Promise.all([ctx.shiftAnchor(), getPredictions(ctx), ctx.runs(), getFitness(ctx), ctx.races()]);
   const races = await withRaceResults(raceViews(raceRows, today, predictions), runs);
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, 10) : [];
-  if (!anchor || !weeks.length) return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine: [] as MineView[], hidden: {} as Record<string, Hidden> };
+  const raceList = raceRows.map((r) => ({ name: r.name, date: r.date }));
+  if (!anchor || !weeks.length) {
+    const mine = (await listMine(db(), today, ymdOf(dayNum(today)! + 365))).map(mineView);
+    const warnCtx: WarnCtx = { anchor: null, races: raceList, exigentes: mineExigentes(mine) };
+    for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
+    return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx };
+  }
 
   const madrid = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
   const history = runs.map((r) => ({ date: madrid(r.startAt), type: r.type }));
@@ -821,7 +838,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   // Sugerencias que no se muestran: quitadas por mí o sustituidas por una sesión mía.
   const hidden: Record<string, Hidden> = {};
   for (const r of stored) if (r.dismissed) hidden[r.weekStart] = { by: "dismissed" };
-  for (const m of mine) if (m.replacesWeek) hidden[m.replacesWeek] = { by: "replaced", id: m.id };
+  for (const m of mine) if (m.replacesWeek && !hidden[m.replacesWeek]) hidden[m.replacesWeek] = { by: "replaced", id: m.id };
   const fixed = Object.fromEntries(
     stored.filter((r) => !r.dismissed).map((r) => [r.weekStart, { session: r.session as SessionKind, day: r.day, when: r.whenText, reason: r.reason, downgraded: r.downgraded }]),
   );
@@ -833,8 +850,26 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
     ratio: cur && !cur.warmup ? cur.ratio : null,
     openInjury: fitness.openInjury,
     fixed,
-    races: raceRows.map((r) => ({ name: r.name, date: r.date })),
+    races: raceList,
+    mine: mine.map((m) => ({ id: m.id, date: m.date, kind: m.kind })),
   });
+  // Una exigente mía ocupa el sitio de la sugerencia de su semana.
+  for (const w of sessions) if (w.occupiedBy && !hidden[w.start]) hidden[w.start] = { by: "replaced", id: w.occupiedBy };
+
+  // Avisos de mis sesiones frente a las reglas (otras exigentes: mías, sugeridas visibles y corridas).
+  const exigentes: Exigente[] = [
+    ...mineExigentes(mine),
+    ...sessions.flatMap((w) => {
+      const k = demandingOf(w.session);
+      return k && !hidden[w.start] && w.day >= today ? [{ date: w.day, kind: k, what: SUGG_WHAT[k] }] : [];
+    }),
+    ...history.flatMap((r) => {
+      const k = demandingOf(r.type);
+      return k && r.date >= pastStart && r.date <= today ? [{ date: r.date, kind: k, what: RUN_WHAT[k] }] : [];
+    }),
+  ];
+  const warnCtx: WarnCtx = { anchor, races: raceList, exigentes };
+  for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
 
   // La semana en curso se congela la primera vez que se ve: ya no cambia al recalcular.
   const now = sessions[0];
@@ -864,7 +899,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
         hidden: hidden[r.weekStart] ?? null,
       };
     });
-  return { anchor, today, weeks, sessions, current, past, predictions, races, mine, hidden };
+  return { anchor, today, weeks, sessions, current, past, predictions, races, mine, hidden, warnCtx };
 }
 
 /** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */

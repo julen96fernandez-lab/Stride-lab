@@ -9,6 +9,8 @@ import { db } from "@/lib/db/client";
 import { getMine } from "@/lib/plan/plan-db";
 import { durationField, isMineKind } from "@/lib/plan/mine";
 import { fmtDay } from "@/lib/plan/weekly";
+import { planScreen } from "@/lib/db/screens";
+import { cacheDay } from "@/lib/cache/tags";
 
 export const metadata = { title: "Sesión prevista · Stride Lab" };
 
@@ -29,12 +31,13 @@ async function SessionData({ params }: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const m = await getMine(db(), id);
+  const [m, plan] = await Promise.all([getMine(db(), id), planScreen(cacheDay())]);
   if (!m || !isMineKind(m.kind)) notFound();
   return (
     <>
       <PageHeader title="Tu sesión" subtitle={`Puesta por mí · ${fmtDay(m.date)}${m.replacesWeek ? " · sustituye a la sugerida" : ""}`} />
       <SessionForm
+        warnCtx={plan.warnCtx}
         initial={{
           id: m.id,
           date: m.date,

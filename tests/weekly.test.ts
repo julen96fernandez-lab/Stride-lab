@@ -141,3 +141,55 @@ describe("afinado antes de una carrera objetivo", () => {
     );
   });
 });
+
+describe("recálculo alrededor de mis sesiones", () => {
+  const H: PastRun[] = [{ date: "2026-11-15", type: "rodaje" }, { date: "2026-10-17", type: "tirada_larga" }];
+  const base = plan("2026-11-23", H);
+  const by = (ws: ReturnType<typeof plan>) => Object.fromEntries(ws.map((w) => [w.start, w]));
+  it("sin sesiones mías, el plan no cambia", () => {
+    expect(plan("2026-11-23", H, { mine: [] })).toEqual(base);
+  });
+  it("una exigente mía ocupa el sitio de la sugerencia de su semana y cuenta para alternar", () => {
+    // por defecto: libre 7–13 dic calidad; mañanas 14–20 dic suave
+    expect(by(base)["2026-12-07"].session).toBe("calidad");
+    expect(by(base)["2026-12-14"].session).toBe("suave");
+    const ws = by(plan("2026-11-23", H, { mine: [{ id: "m1", date: "2026-12-12", kind: "tirada_larga" }] }));
+    expect(ws["2026-12-07"].occupiedBy).toBe("m1");
+    // tras mi tirada larga, toca calidad: mañanas propone calidad corta
+    expect(ws["2026-12-14"].session).toBe("calidad_corta");
+  });
+  it("una suave u otro mía no ocupa el sitio: la sugerencia se queda, en otro día", () => {
+    expect(by(base)["2026-12-07"].day).toBe("2026-12-09");
+    for (const kind of ["suave", "otro"]) {
+      const w = by(plan("2026-11-23", H, { mine: [{ id: "m1", date: "2026-12-09", kind }] }))["2026-12-07"];
+      expect(w.occupiedBy).toBeUndefined();
+      expect(w.session).toBe("calidad");
+      expect(w.day).not.toBe("2026-12-09");
+    }
+  });
+  it("nunca el mismo tipo exigente tras una semana con exigente mía (tardes pasa a calidad)", () => {
+    expect(by(base)["2026-12-28"].session).toBe("tirada_larga");
+    const ws = by(plan("2026-11-23", H, { mine: [{ id: "m1", date: "2026-12-26", kind: "tirada_larga" }] }));
+    expect(ws["2026-12-21"].occupiedBy).toBe("m1");
+    expect(ws["2026-12-28"].session).toBe("calidad");
+    expect(ws["2026-12-28"].reason).toMatch(/ya tuvo tirada larga/);
+  });
+  it("nunca una exigente sugerida el día después de una exigente hecha", () => {
+    // hoy martes 8-dic, tirada larga corrida hoy: la calidad de la libre no va el miércoles 9
+    const w = plan("2026-12-08", [{ date: "2026-12-08", type: "tirada_larga" }])[0];
+    expect(w.session).toBe("calidad");
+    expect(w.day).toBe("2026-12-10");
+  });
+  it("se mantienen las reglas de turnos: noches suave opcional; nunca calidad el lunes tras noches", () => {
+    const ws = plan("2026-11-23", H, { mine: [{ id: "m1", date: "2026-12-02", kind: "suave" }, { id: "m2", date: "2026-12-26", kind: "tirada_larga" }] });
+    for (const w of ws) {
+      if (w.kind === "noches") expect(w.session).toBe("suave_opcional");
+      if (w.session.startsWith("calidad")) expect(wd(w.day) === 0 && w.kind === "libre" && w.pos === 2).toBe(false);
+    }
+  });
+  it("y el afinado de la carrera objetivo", () => {
+    const ws = by(plan("2026-11-23", H, { mine: [{ id: "m1", date: "2026-12-12", kind: "tirada_larga" }], races: [{ name: "Media", date: "2026-12-20" }] }));
+    expect(ws["2026-12-14"].session).toBe("suave_corto");
+    expect(ws["2026-12-07"]).toMatchObject({ session: "suave", occupiedBy: "m1" });
+  });
+});
