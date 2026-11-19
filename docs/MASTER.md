@@ -557,6 +557,24 @@ para mis sesiones.
   (más fuerte si la sesión es exigente). La estimación de la app queda como nota si es otra.
   Sin sesión mía, la estimación de siempre y «Voy a correr hoy».
 
+### Resumen y comparación en el detalle
+Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
+último año, todas), carga 95, temperatura y humedad 210; las antiguas tienen pulso escaso o
+ninguno. Decisiones: la ruta invertida NO es la misma; parecidas = las 5 últimas del mismo tipo
+con distancia ±20 % en los 12 meses anteriores (con menos de 3 no se compara); sin pulso
+fiable el resumen no habla de pulso ni de zonas; el resumen va bajo los números principales.
+- **Paso 1 · Resumen (hecho).** `lib/analysis/summary.ts` (con pruebas; umbrales en
+  `SUMMARY_RULES`): de 1 a 5 frases por prioridad, con tono verde (bien), ámbar (a tener en
+  cuenta) o neutro:
+  - tipo y distancia; si el pulso encaja: rodaje/recuperación/tirada larga ≥ 70 % en Z1–Z2,
+    tempo ≥ 40 % en Z3–Z4, series ≥ 15 % en Z4–Z5 (solo con pulso fiable: muestras ≥ 80 %);
+  - frente a las parecidas: ritmo medio (±5 s/km), relación velocidad/pulso (±4 %, solo con 3
+    parecidas con pulso fiable: «Pulso más alto/bajo de lo habitual para ese ritmo») y carga
+    (±10 %);
+  - mitades (±5 s/km; no en series); desacople (solo donde vale y con pulso fiable; > 5 % =
+    «el pulso subió al mismo ritmo»); entorno como coincidencia (≥ 24 °C, ≤ 3 °C, ≥ 80 %).
+  - Si faltan datos salen menos frases: nunca se afirma sin el dato.
+
 ## Rendimiento
 
 - **Región**: funciones en **fra1** (`vercel.json`), junto a Neon (eu-central-1). Antes en iad1:
@@ -887,6 +905,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Detalle, paso 1: «Resumen» en lenguaje claro con reglas (sin IA) bajo los
+  números principales.
 - 2026‑11‑19 — Plan editable, paso 4: «Hoy» en Inicio usa mi sesión («Hoy te toca: …, lo
   pusiste tú») y avisa si hay lesión abierta.
 - 2026‑11‑19 — Plan editable, paso 3: vinculación automática (±1 día), prevista frente a

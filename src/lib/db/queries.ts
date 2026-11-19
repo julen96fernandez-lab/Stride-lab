@@ -220,6 +220,8 @@ export async function listRuns(filter: SessionType | null, ctx: Ctx = makeCtx())
 
 // ─── Detalle ─────────────────────────────────────────────────────────────────
 
+import { hrReliable, pickSimilar, runSummary } from "@/lib/analysis/summary";
+
 export async function getRun(id: string, ctx: Ctx = makeCtx()) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const d = db();
@@ -258,8 +260,34 @@ export async function getRun(id: string, ctx: Ctx = makeCtx()) {
   const explorer = { ...buildExplorer({ run, series, track, splits, zones }), intervals };
   // Desacople aeróbico: solo en Rodaje / Tirada larga, con pulso y ritmo estable.
   const decoupling: DecouplingCheck = decouplingEligible({ type, hasHr: !!series.hr && series.hr.t.length > 1, splits });
+
+  // Resumen con reglas: frente a las 5 últimas parecidas (mismo tipo, ±20 %, 12 meses).
+  const similar = pickSimilar({ id: run.id, type, startAt: run.startAt, distanceM: run.distanceM }, await ctx.runs());
+  const summary = runSummary({
+    run: {
+      type,
+      distanceM: run.distanceM,
+      durationS: run.durationS,
+      paceS: run.avgPaceSPerKm,
+      avgHr: run.avgHr,
+      zoneSeconds: run.hrZoneSeconds,
+      load: run.trainingLoad,
+      isIndoor: !!run.isIndoor,
+      temperatureC: run.temperatureC,
+      humidityPct: run.humidityPct,
+    },
+    halves: durability ? { paceDeltaS: durability.paceDeltaS, decouplingPct: durability.decouplingPct } : null,
+    decouplingOk: decoupling.ok,
+    similar: similar.map((x) => ({
+      paceS: x.avgPaceSPerKm,
+      avgHr: x.avgHr,
+      hrReliable: hrReliable({ avgHr: x.avgHr, zoneSeconds: x.hrZoneSeconds, durationS: x.durationS }),
+      load: x.trainingLoad,
+    })),
+  });
   return {
     run,
+    summary,
     route: route
       ? { points: decodePolyline(route.polyline ?? ""), bbox: [route.minLon, route.minLat, route.maxLon, route.maxLat] as const, shape: routeShape(route.polyline, 400) }
       : null,
