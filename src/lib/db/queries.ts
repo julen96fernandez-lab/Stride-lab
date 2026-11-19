@@ -1006,9 +1006,9 @@ export async function getCalendar(today: string, from: string, to: string, ctx: 
   const t = dayNum(today)!;
   const weeksAhead = Math.ceil((dayNum(to)! - mondayOfDay(t)) / 7) + 1;
   const [core, injuries] = await Promise.all([planCore(today, ctx, { weeksAhead, from }), ctx.injuries()]);
-  const runs = core.runs.map((r) => ({ id: r.id, date: core.madrid(r.startAt), distanceM: r.distanceM }));
+  const runs = core.runs.map((r) => ({ id: r.id, date: core.madrid(r.startAt), distanceM: r.distanceM, type: r.type, paceS: r.isSpecial ? null : r.avgPaceSPerKm }));
   if (!core.anchor) {
-    const mine = await listMine(db(), from, to);
+    const mine = (await listMine(db(), from, to)).map(mineView);
     return buildCalendar({ from, to, shiftOf: null, suggestions: [], mine, runs, races: core.raceList, injuries, today });
   }
   const { anchor, sessions, stored, hidden, mine } = core;
@@ -1018,8 +1018,8 @@ export async function getCalendar(today: string, from: string, to: string, ctx: 
     // semanas pasadas: solo las guardadas, si no se quitaron ni las sustituyó una sesión mía
     ...stored
       .filter((r) => r.weekStart < current && !hidden[r.weekStart] && !mineExigWeeks.has(r.weekStart))
-      .map((r) => ({ day: r.day, session: r.session as SessionKind })),
-    ...sessions.filter((w) => !hidden[w.start]).map((w) => ({ day: w.day, session: w.session })),
+      .map((r) => ({ day: r.day, session: r.session as SessionKind, week: r.weekStart })),
+    ...sessions.filter((w) => !hidden[w.start]).map((w) => ({ day: w.day, session: w.session, week: w.start })),
   ];
   return buildCalendar({ from, to, shiftOf: (m) => shiftWeek(anchor, m).kind, suggestions, mine, runs, races: core.raceList, injuries, today });
 }

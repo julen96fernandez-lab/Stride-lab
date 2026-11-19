@@ -7,7 +7,7 @@
  * - En semanas pasadas sin sugerencia guardada solo salen mis sesiones y las carreras hechas.
  */
 import { dayNum, mondayOfDay, ymdOf, type ShiftKind } from "./shifts";
-import type { SessionKind } from "./weekly";
+import { SESSION_LABEL, type SessionKind } from "./weekly";
 
 export type CalKind = "calidad" | "tirada_larga" | "suave" | "otro";
 export const CAL_KINDS: readonly CalKind[] = ["calidad", "tirada_larga", "suave", "otro"];
@@ -69,12 +69,26 @@ export interface DayPlan {
   kind: CalKind;
   /** puesta por mí (true) o sugerencia de la app (false) */
   mine: boolean;
+  /** «Tirada larga», «Rodaje suave (opcional)»… */
+  label: string;
   /** id de mi sesión */
   id?: string;
+  /** «12 km · 1 h» (mi sesión) */
+  detail?: string | null;
+  note?: string | null;
+  /** sugerencia: su semana (lunes) y la sesión, para editarla o moverla */
+  week?: string;
+  session?: SessionKind;
+}
+export interface DayRun {
+  id: string;
+  km: number | null;
+  type: string | null;
+  paceS: number | null;
 }
 export interface DayCell {
   plans: DayPlan[];
-  runs: { id: string; km: number | null }[];
+  runs: DayRun[];
   race: string | null;
   injury: boolean;
 }
@@ -93,9 +107,9 @@ export function buildCalendar(o: {
   /** turno de una semana por su lunes (null sin ciclo) */
   shiftOf: ((monday: string) => ShiftKind) | null;
   /** sugerencias visibles (no quitadas ni sustituidas): día y sesión */
-  suggestions: readonly { day: string; session: SessionKind }[];
-  mine: readonly { id: string; date: string; kind: string }[];
-  runs: readonly { id: string; date: string; distanceM: number | null }[];
+  suggestions: readonly { day: string; session: SessionKind; week: string }[];
+  mine: readonly { id: string; date: string; kind: string; detail?: string | null; note?: string | null }[];
+  runs: readonly { id: string; date: string; distanceM: number | null; type?: string | null; paceS?: number | null }[];
   races: readonly { name: string; date: string }[];
   injuries: readonly { startDate: string; endDate: string | null }[];
   today: string;
@@ -108,14 +122,15 @@ export function buildCalendar(o: {
 
   for (const s of o.suggestions) {
     const k = calKindOfSuggestion(s.session);
-    if (k && inRange(s.day)) cell(s.day).plans.push({ kind: k, mine: false });
+    if (k && inRange(s.day)) cell(s.day).plans.push({ kind: k, mine: false, label: SESSION_LABEL[s.session], week: s.week, session: s.session });
   }
   for (const m of o.mine) {
     if (!inRange(m.date)) continue;
     const k = (CAL_KINDS as readonly string[]).includes(m.kind) ? (m.kind as CalKind) : "otro";
-    cell(m.date).plans.push({ kind: k, mine: true, id: m.id });
+    cell(m.date).plans.push({ kind: k, mine: true, label: CAL_LABEL[k], id: m.id, detail: m.detail ?? null, note: m.note ?? null });
   }
-  for (const r of o.runs) if (inRange(r.date)) cell(r.date).runs.push({ id: r.id, km: r.distanceM === null ? null : Math.round(r.distanceM / 100) / 10 });
+  for (const r of o.runs)
+    if (inRange(r.date)) cell(r.date).runs.push({ id: r.id, km: r.distanceM === null ? null : Math.round(r.distanceM / 100) / 10, type: r.type ?? null, paceS: r.paceS ?? null });
   for (const r of o.races) if (inRange(r.date)) cell(r.date).race = r.name;
   // Lesión abierta (o cerrada) cubre sus días; una abierta llega hasta hoy.
   for (const i of o.injuries) {

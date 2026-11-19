@@ -33,6 +33,17 @@ const FORMS: { name: string; path: string; ready?: string; open?: (p: Page) => P
   { name: "Carrera objetivo", path: "/plan/carrera/nueva" },
   { name: "Perfil (con el formulario de lesión abierto)", path: "/perfil", open: async (p) => p.getByRole("button", { name: /Añadir periodo/ }).first().click() },
   { name: "Plan · Calendario", path: "/plan?vista=calendario", ready: "section[aria-label='Calendario'] [role=grid]" },
+  {
+    name: "Plan · Calendario (hoja del día, con «Mover a…» abierto si hay sesión)",
+    path: "/plan?vista=calendario",
+    ready: "section[aria-label='Calendario'] [role=grid]",
+    open: async (p) => {
+      await p.locator("section[aria-label='Calendario'] [role=gridcell][aria-label*='hoy']").first().click();
+      await p.locator("[role=dialog]").waitFor();
+      const move = p.locator("[role=dialog]").getByRole("button", { name: "Mover a…" });
+      if (await move.count()) await move.first().click();
+    },
+  },
 ];
 
 /** Problemas de maquetación: página más ancha que la pantalla, campos fuera o montados. */

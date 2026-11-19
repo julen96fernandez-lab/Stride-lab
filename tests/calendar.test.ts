@@ -56,22 +56,26 @@ describe("marcas de cada día", () => {
   it("sugerencias por tipo (tenues) y mis sesiones (mandan, primero)", () => {
     const c = buildCalendar({
       ...base,
-      suggestions: [{ day: "2026-11-28", session: "tirada_larga" }, { day: "2026-12-02", session: "calidad_corta" }, { day: "2026-12-05", session: "suave_opcional" }],
-      mine: [{ id: "m1", date: "2026-11-28", kind: "suave" }, { id: "m2", date: "2026-11-30", kind: "raro" }],
+      suggestions: [{ day: "2026-11-28", session: "tirada_larga", week: "2026-11-23" }, { day: "2026-12-02", session: "calidad_corta", week: "2026-11-30" }, { day: "2026-12-05", session: "suave_opcional", week: "2026-11-30" }],
+      mine: [{ id: "m1", date: "2026-11-28", kind: "suave", detail: "8 km", note: "con Ane" }, { id: "m2", date: "2026-11-30", kind: "raro" }],
     });
-    expect(c.days["2026-11-28"].plans).toEqual([{ kind: "suave", mine: true, id: "m1" }, { kind: "tirada_larga", mine: false }]);
-    expect(c.days["2026-12-02"].plans).toEqual([{ kind: "calidad", mine: false }]);
+    expect(c.days["2026-11-28"].plans).toEqual([
+      { kind: "suave", mine: true, label: "Rodaje suave", id: "m1", detail: "8 km", note: "con Ane" },
+      { kind: "tirada_larga", mine: false, label: "Tirada larga", week: "2026-11-23", session: "tirada_larga" },
+    ]);
+    expect(c.days["2026-12-02"].plans).toEqual([{ kind: "calidad", mine: false, label: "Calidad corta", week: "2026-11-30", session: "calidad_corta" }]);
+    expect(c.days["2026-12-05"].plans[0].label).toBe("Rodaje suave (opcional)");
     expect(c.days["2026-12-05"].plans[0].kind).toBe("suave");
     expect(c.days["2026-11-30"].plans[0].kind).toBe("otro");
   });
   it("«solo la carrera» no lleva punto; la carrera objetivo lleva 🏁", () => {
     expect(calKindOfSuggestion("solo_carrera")).toBeNull();
-    const c = buildCalendar({ ...base, suggestions: [{ day: "2026-12-06", session: "solo_carrera" }], races: [{ name: "10K", date: "2026-12-06" }] });
+    const c = buildCalendar({ ...base, suggestions: [{ day: "2026-12-06", session: "solo_carrera", week: "2026-11-30" }], races: [{ name: "10K", date: "2026-12-06" }] });
     expect(c.days["2026-12-06"]).toEqual({ plans: [], runs: [], race: "10K", injury: false });
   });
   it("carreras hechas con km; fuera del rango no cuentan", () => {
-    const c = buildCalendar({ ...base, runs: [{ id: "r1", date: "2026-11-16", distanceM: 7440 }, { id: "r2", date: "2026-11-16", distanceM: null }, { id: "r3", date: "2026-10-01", distanceM: 5000 }] });
-    expect(c.days["2026-11-16"].runs).toEqual([{ id: "r1", km: 7.4 }, { id: "r2", km: null }]);
+    const c = buildCalendar({ ...base, runs: [{ id: "r1", date: "2026-11-16", distanceM: 7440, type: "cinta", paceS: 323 }, { id: "r2", date: "2026-11-16", distanceM: null }, { id: "r3", date: "2026-10-01", distanceM: 5000 }] });
+    expect(c.days["2026-11-16"].runs).toEqual([{ id: "r1", km: 7.4, type: "cinta", paceS: 323 }, { id: "r2", km: null, type: null, paceS: null }]);
     expect(c.days["2026-10-01"]).toBeUndefined();
   });
   it("lesión: banda en sus días; abierta, hasta hoy", () => {

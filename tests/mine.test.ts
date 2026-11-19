@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { durationField, fmtDuration, isMineKind, mineDetail, mineKindForToday, mineKindOf, parseDuration, parseMineForm, weekOf } from "@/lib/plan/mine";
+import { mineDateError, durationField, fmtDuration, isMineKind, mineDetail, mineKindForToday, mineKindOf, parseDuration, parseMineForm, weekOf } from "@/lib/plan/mine";
 
 const T = "2026-11-18";
 const base = { date: "2026-11-21", kind: "tirada_larga" };
@@ -77,5 +77,16 @@ describe("sesiones mías: traducciones", () => {
     expect(isMineKind("series")).toBe(false);
     expect(weekOf("2026-11-22")).toBe("2026-11-16");
     expect(weekOf("2026-11-23")).toBe("2026-11-23");
+  });
+});
+
+describe("mover: fecha válida", () => {
+  it("de 4 semanas atrás a un año adelante", () => {
+    expect(mineDateError("2026-11-21", "2026-11-18")).toBeNull();
+    expect(mineDateError("2026-10-21", "2026-11-18")).toBeNull();
+    expect(mineDateError("2026-10-20", "2026-11-18")).toMatch(/4 semanas/);
+    expect(mineDateError("2027-11-19", "2026-11-18")).toMatch(/un año/);
+    expect(mineDateError("2026-02-30", "2026-11-18")).toBe("Elige una fecha.");
+    expect(mineDateError("", "2026-11-18")).toBe("Elige una fecha.");
   });
 });

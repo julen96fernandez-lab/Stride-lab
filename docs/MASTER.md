@@ -603,6 +603,13 @@ punto fuerte = mi sesión, tenue = sugerencia.
   Resumen y Calendario (mismas sugerencias, ocultas y sesiones mías). El bloque inicial llega
   con la página (caché con la etiqueta de datos); más allá, `calendarBlockAction` y se unen.
   Flechas, deslizar, «Hoy», turno por semana (letra y color) y leyenda. En la prueba de desbordes.
+- **Paso 2 · Hoja del día (hecho).** Tocar un día abre una hoja inferior (`BottomSheet`, en el
+  <body> con un portal para quedar sobre la barra de pestañas; se cierra con ✕, tocando fuera,
+  Escape, deslizando el asa o al seguir un enlace): turno, carrera objetivo y lesión; previstas
+  con «Editar» y «Mover a…» (`moveMineAction` cambia la fecha; `moveSuggestionAction` la hace mía
+  en la nueva fecha y sustituye a la de su semana; avisos de reglas en el mensaje); carreras hechas
+  con enlace al detalle; «Añadir sesión» y «Añadir carrera» (hoy o pasado; `/actividad/nueva?fecha=`
+  rellena la fecha). En la prueba de desbordes con la hoja abierta.
 
 ## Rendimiento
 
@@ -945,6 +952,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Calendario, paso 2: hoja inferior del día con editar, mover y añadir.
 - 2026‑11‑19 — Calendario, paso 1: selector Resumen | Calendario y cuadrícula mensual con marcas.
 - 2026‑11‑19 — Detalle, paso 3: «Sesiones parecidas» (ritmo, pulso y carga frente a las 5 últimas).
 - 2026‑11‑19 — Detalle, paso 2: «Misma ruta» (sentido incluido) con lista y gráfico por fecha.

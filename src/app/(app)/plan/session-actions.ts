@@ -6,7 +6,9 @@ import { db } from "@/lib/db/client";
 import { dataChanged } from "@/lib/cache/invalidate";
 import { cacheDay } from "@/lib/cache/tags";
 import { getPlan } from "@/lib/db/queries";
-import { parseMineForm, type MineErrors } from "@/lib/plan/mine";
+import { mineDateError, mineKindOf, parseMineForm, type MineErrors } from "@/lib/plan/mine";
+import { SESSION_LABEL, fmtDay, type SessionKind } from "@/lib/plan/weekly";
+import { dayNum, mondayOfDay } from "@/lib/plan/shifts";
 import { deleteMine, dismissWeek, restoreWeek, saveMine } from "@/lib/plan/plan-db";
 
 export type MineState = { errors?: MineErrors; error?: string };
@@ -58,4 +60,38 @@ export async function restoreSuggestionAction(weekStart: string): Promise<{ ok: 
   dataChanged();
   refresh();
   return { ok: true, message: "Sugerencia recuperada." };
+}
+
+type Result = { ok: boolean; message: string };
+
+/** Mensaje tras mover: con aviso si choca con alguna regla (se mueve igual). */
+async function movedMessage(id: string, date: string): Promise<Result> {
+  const warned = (await getPlan(cacheDay())).mine.find((m) => m.id === id)?.warnings ?? [];
+  return { ok: true, message: warned.length ? `Movida al ${fmtDay(date)}, con aviso: ${warned[0]}` : `Movida al ${fmtDay(date)}.` };
+}
+
+/** «Mover a…» una sesión mía: solo cambia la fecha. */
+export async function moveMineAction(id: string, date: string): Promise<Result> {
+  if (!UUID.test(id)) return { ok: false, message: "Sesión no válida." };
+  const err = mineDateError(date, cacheDay());
+  if (err) return { ok: false, message: err };
+  const { eq } = await import("drizzle-orm");
+  const s = await import("@/lib/db/schema");
+  const rows = await db().update(s.plannedSessions).set({ date, updatedAt: new Date() }).where(eq(s.plannedSessions.id, id)).returning({ id: s.plannedSessions.id });
+  if (!rows.length) return { ok: false, message: "Esa sesión ya no existe." };
+  dataChanged();
+  refresh();
+  return movedMessage(id, date);
+}
+
+/** «Mover a…» la sugerida: pasa a ser mía en la nueva fecha y sustituye a la de su semana. */
+export async function moveSuggestionAction(weekStart: string, session: string, date: string): Promise<Result> {
+  const w = YMD.test(weekStart) ? dayNum(weekStart) : null;
+  if (w === null || mondayOfDay(w) !== w || !(session in SESSION_LABEL)) return { ok: false, message: "Sugerencia no válida." };
+  const err = mineDateError(date, cacheDay());
+  if (err) return { ok: false, message: err };
+  const id = await saveMine(db(), { date, kind: mineKindOf(session as SessionKind), distanceM: null, durationS: null, note: null, replacesWeek: weekStart });
+  dataChanged();
+  refresh();
+  return movedMessage(id, date);
 }

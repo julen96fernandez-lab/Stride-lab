@@ -95,6 +95,16 @@ export function parseMineForm(f: Record<string, string | undefined>, today: stri
   return { input: { date, kind: kind as MineKind, distanceM, durationS, note: note || null, replacesWeek }, errors };
 }
 
+/** ¿Vale esta fecha para una sesión mía? (de 4 semanas atrás a un año adelante) Mensaje o null. */
+export function mineDateError(date: string, today: string): string | null {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(date) ? dayNum(date) : null;
+  const t = dayNum(today)!;
+  if (d === null) return "Elige una fecha.";
+  if (d < t - MINE_PAST_DAYS) return `Como mucho ${MINE_PAST_DAYS / 7} semanas atrás.`;
+  if (d > t + MINE_FUTURE_DAYS) return "Como mucho un año adelante.";
+  return null;
+}
+
 /** Tipo mío equivalente a una sugerencia (para editarla). */
 export function mineKindOf(s: SessionKind): MineKind {
   if (s === "tirada_larga") return "tirada_larga";

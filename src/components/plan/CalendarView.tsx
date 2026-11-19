@@ -4,7 +4,8 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { calendarBlockAction } from "@/app/(app)/plan/calendar-actions";
 import { toast } from "@/components/ui/Toaster";
 import { CAL_KINDS, CAL_LABEL, addMonths, covers, mergeBlocks, monthGrid, type CalKind, type CalendarBlock, type DayCell } from "@/lib/plan/calendar";
-import { SHIFT_META, type ShiftKind } from "@/lib/plan/shifts";
+import { SHIFT_META, dayNum, mondayOfDay, ymdOf, type ShiftKind } from "@/lib/plan/shifts";
+import { DaySheet } from "./DaySheet";
 
 export const CAL_COLOR: Record<CalKind, string> = {
   tirada_larga: "var(--t-tirada_larga)",
@@ -29,6 +30,13 @@ export function CalendarView({ initial, today }: { initial: CalendarBlock; today
   const t = { year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) };
   const [ym, setYm] = useState(t);
   const [block, setBlock] = useState(initial);
+  // Tras guardar algo, la página trae un bloque nuevo: se cambia por el de aquí.
+  const [seed, setSeed] = useState(initial);
+  if (seed !== initial) {
+    setSeed(initial);
+    setBlock(initial);
+  }
+  const [open, setOpen] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const loading = useRef(new Set<string>());
 
@@ -113,7 +121,7 @@ export function CalendarView({ initial, today }: { initial: CalendarBlock; today
                 </span>
                 {w.days.map((d) =>
                   ready ? (
-                    <Day key={d.ymd} ymd={d.ymd} d={d.d} inMonth={d.inMonth} today={d.ymd === today} cell={block.days[d.ymd]} />
+                    <Day key={d.ymd} ymd={d.ymd} d={d.d} inMonth={d.inMonth} today={d.ymd === today} cell={block.days[d.ymd]} onOpen={setOpen} />
                   ) : (
                     <div key={d.ymd} role="gridcell" className="skel h-[54px] rounded-xl" aria-hidden="true" />
                   ),
@@ -125,11 +133,18 @@ export function CalendarView({ initial, today }: { initial: CalendarBlock; today
       </div>
 
       <Legend />
+      <DaySheet
+        ymd={open}
+        cell={open ? block.days[open] : undefined}
+        shift={open ? (block.shifts[ymdOf(mondayOfDay(dayNum(open)!))] as ShiftKind | undefined) : undefined}
+        today={today}
+        onClose={() => setOpen(null)}
+      />
     </section>
   );
 }
 
-function Day({ ymd, d, inMonth, today, cell }: { ymd: string; d: number; inMonth: boolean; today: boolean; cell?: DayCell }) {
+function Day({ ymd, d, inMonth, today, cell, onOpen }: { ymd: string; d: number; inMonth: boolean; today: boolean; cell?: DayCell; onOpen: (ymd: string) => void }) {
   const label = [
     new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`)),
     today ? "hoy" : null,
@@ -141,9 +156,11 @@ function Day({ ymd, d, inMonth, today, cell }: { ymd: string; d: number; inMonth
     .filter(Boolean)
     .join(", ");
   return (
-    <div
+    <button
+      type="button"
       role="gridcell"
       aria-label={label}
+      onClick={() => onOpen(ymd)}
       className={`relative flex h-[54px] min-w-0 flex-col items-center overflow-hidden rounded-xl pt-1 ${inMonth ? "bg-inset" : "opacity-40"} ${today ? "ring-2 ring-lime" : ""}`}
     >
       <span className={`text-[12px] leading-none ${today ? "font-bold text-lime-text" : "text-fg"}`}>{d}</span>
@@ -165,7 +182,7 @@ function Day({ ymd, d, inMonth, today, cell }: { ymd: string; d: number; inMonth
         </span>
       )}
       {cell?.injury && <span className="absolute inset-x-1 bottom-0.5 h-[3px] rounded-full bg-danger opacity-70" aria-hidden="true" />}
-    </div>
+    </button>
   );
 }
 
