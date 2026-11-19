@@ -78,7 +78,7 @@ export function SessionForm({ initial, suggestionWeek, warnCtx }: { initial: Ses
 
       <section className="card flex flex-col gap-4 p-5">
         <div className="eyebrow">Opcional</div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="form-row">
           <label className={label}>
             Distancia (km)
             <input name="distanceKm" inputMode="decimal" defaultValue={initial.distanceKm} placeholder="Ej.: 12" className={field} />

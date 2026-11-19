@@ -446,3 +446,34 @@ body {
     animation-duration: 2s;
   }
 }
+
+/* ── Formularios sin desbordes (iPhone estrecho) ──────────────────────
+   En iOS los campos de fecha y hora tienen un ancho propio que no encoge: en una fila de dos
+   columnas se salían por la derecha y montaban uno sobre otro. Se les quita ese mínimo y se
+   alinea el valor a la izquierda. */
+@layer base {
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input::-webkit-date-and-time-value {
+    text-align: left;
+  }
+}
+
+@layer components {
+  /* Fila de campos: columnas iguales si caben (≥ 9rem cada una); si no, uno debajo del otro. */
+  .form-row {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  }
+  .form-row > * {
+    min-width: 0;
+  }
+}

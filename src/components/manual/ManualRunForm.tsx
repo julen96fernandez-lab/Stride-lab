@@ -126,7 +126,7 @@ export function ManualRunForm({
       {/* Obligatorios */}
       <section className="card flex flex-col gap-4 p-5">
         <div className="eyebrow">Carrera</div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="form-row">
           <label className={label}>
             Fecha
             <input type="date" name="date" value={v.date} onChange={set("date")} required aria-invalid={!!err.date} className={field} />
@@ -190,7 +190,7 @@ export function ManualRunForm({
       {/* Opcionales */}
       <section className="card flex flex-col gap-4 p-5">
         <div className="eyebrow">Más datos (opcional)</div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
           <Num name="avgHr" label="Pulso medio" unit="ppm" v={v} set={set} err={err.avgHr} />
           <Num name="maxHr" label="Pulso máximo" unit="ppm" v={v} set={set} err={err.maxHr} />
           <Num name="elevationGainM" label="Desnivel +" unit="m" v={v} set={set} err={err.elevationGainM} />

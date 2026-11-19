@@ -648,6 +648,17 @@ de `src/components/ui/`; ninguna pantalla define su propio pulsado (una prueba l
 - Transición entre pantallas con `ViewTransition` de React (fundido de 180 ms); la barra
   inferior queda fija (`view-transition-name: tabbar`).
 
+### Formularios en iPhone estrecho
+En iOS los campos de fecha y hora tienen un ancho mínimo propio: en una fila de dos columnas se
+salían por la derecha y se montaban. Arreglo en `globals.css`: fecha/hora sin ancho mínimo
+(`min-width: 0`, `appearance: none`, valor alineado a la izquierda) y `.form-row` (columnas
+iguales de ≥ 9rem si caben; si no, uno debajo del otro). Se usa en Añadir carrera, Carrera
+objetivo, Sesión prevista y Perfil (pulso, lesiones). Prueba `tests/overflow.e2e.ts`
+(`npm run test:e2e` con la app en marcha, `E2E_URL` y `APP_PASSWORD`): 320, 375 y 390 px, claro y
+oscuro, imitando el ancho de iOS; comprueba que la página no se ensancha y que ningún campo se
+sale de la pantalla o de su tarjeta ni se monta sobre otro; un control confirma que sin el
+arreglo detecta el fallo.
+
 ## Diseño (tokens)
 
 | Token | Valor |
@@ -905,6 +916,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑19 — Formularios sin desbordes en iPhone estrecho (Fecha y Hora de «Añadir carrera»
+  y el resto), con prueba en navegador.
 - 2026‑11‑19 — Detalle, paso 1: «Resumen» en lenguaje claro con reglas (sin IA) bajo los
   números principales.
 - 2026‑11‑19 — Plan editable, paso 4: «Hoy» en Inicio usa mi sesión («Hoy te toca: …, lo

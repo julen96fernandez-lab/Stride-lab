@@ -36,7 +36,7 @@ export function TrainingSettingsForm({ zones, types }: { zones: HrZones; types: 
           Límite inferior de cada zona en ppm. Puedes escribirlos a mano o calcularlos con tu pulso máximo y en reposo.
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="form-row">
         <label className="flex flex-col gap-1.5 text-[12px] text-fg-2">
           Pulso máximo
           <input name="maxHr" inputMode="numeric" value={maxHr} onChange={(e) => setMaxHr(e.target.value)} className={field} />

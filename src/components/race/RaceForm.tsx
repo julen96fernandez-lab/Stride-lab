@@ -71,7 +71,7 @@ export function RaceForm({
           <input name="name" value={v.name} onChange={(e) => set("name", e.target.value)} maxLength={80} placeholder="Ej.: Media de Bilbao" className={field} />
         </label>
         {err.name && <Err>{err.name}</Err>}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="form-row">
           <label className={label}>
             Fecha
             <input type="date" name="date" value={v.date} onChange={(e) => set("date", e.target.value)} className={field} />

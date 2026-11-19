@@ -98,7 +98,7 @@ function InjuryEditor({ injury, today, onDone }: { injury?: InjuryRow; today: st
   return (
     <form action={action} className="flex flex-col gap-3 rounded-2xl border border-lime bg-inset p-3.5">
       {injury && <input type="hidden" name="id" value={injury.id} />}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="form-row">
         <label className="flex flex-col gap-1.5 text-[12px] text-fg-2">
           Inicio
           <input type="date" name="startDate" required max={today} defaultValue={injury?.startDate ?? today} className={field} />
