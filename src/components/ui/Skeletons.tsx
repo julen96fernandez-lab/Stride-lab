@@ -30,6 +30,13 @@ export function HomeSkeleton() {
         <Bar w="45%" h={24} />
         <Bar w="85%" h={12} />
       </div>
+      {/* Semana pasada */}
+      <div className="card flex flex-col gap-3 p-5">
+        <Bar w="40%" h={10} />
+        <Bar w="30%" h={26} />
+        <Bar w="80%" h={12} />
+        <Block h={44} />
+      </div>
       <div className="card flex flex-col gap-3 p-5">
         <Bar w="30%" h={10} />
         <div className="grid grid-cols-7 gap-1">
@@ -78,6 +85,13 @@ export function AnalysisSkeleton() {
     <div className="flex flex-col gap-4" aria-hidden="true">
       <ChartCard chart={210} title="45%" />
       <ChartCard chart={170} title="25%" pill />
+      {/* Últimas 12 semanas */}
+      <div className="card flex flex-col gap-3 p-5">
+        <Bar w="35%" h={10} />
+        {Array.from({ length: 4 }, (_, i) => (
+          <Bar key={i} w={`${90 - i * 12}%`} h={14} />
+        ))}
+      </div>
       <ChartCard chart={210} title="35%" pill />
     </div>
   );

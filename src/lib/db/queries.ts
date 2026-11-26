@@ -1473,3 +1473,30 @@ export async function getWeekReports(today: string, weekStarts: readonly string[
   return out;
 }
 const WEEK_PREV = 8;
+
+/** Fila compacta de una semana para el historial de Análisis y la tarjeta de Inicio. */
+export interface WeekRow {
+  start: string;
+  end: string;
+  inProgress: boolean;
+  km: number;
+  runs: number;
+  planTotal: number;
+  planDone: number;
+  goalPct: number | null;
+  /** frases (sin la del volumen, que ya va en cifras) */
+  lines: WeekSummary["lines"];
+}
+
+/** Las `n` últimas semanas (la en curso incluida), de la más reciente a la más antigua. */
+export async function getWeekHistory(today: string, n = 12, ctx: Ctx = makeCtx()): Promise<WeekRow[]> {
+  const cur = mondayOf(today);
+  const starts = Array.from({ length: n }, (_, k) => addDaysYmd(cur, -7 * k));
+  const reports = await getWeekReports(today, starts, ctx);
+  return starts.flatMap((w) => {
+    const s = reports[w]?.summary;
+    return s
+      ? [{ start: s.start, end: s.end, inProgress: s.inProgress, km: s.km, runs: s.runs, planTotal: s.plan.total, planDone: s.plan.done, goalPct: s.goal ? s.goal.pct : null, lines: s.lines.slice(1) }]
+      : [];
+  });
+}

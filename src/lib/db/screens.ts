@@ -15,8 +15,15 @@ export async function homeScreen(day: string) {
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
   const ctx = q.makeCtx();
-  const [home, overview, nextRace, mineToday] = await Promise.all([q.getHome(ctx), q.getHomeOverview(ctx), q.getNextRace(day, ctx), q.getMineOn(day, ctx)]);
-  return { home, overview, nextRace, mineToday };
+  const [home, overview, nextRace, mineToday, weeks] = await Promise.all([
+    q.getHome(ctx),
+    q.getHomeOverview(ctx),
+    q.getNextRace(day, ctx),
+    q.getMineOn(day, ctx),
+    q.getWeekHistory(day, 2, ctx),
+  ]);
+  // Tarjeta de Inicio: la semana pasada (ya cerrada).
+  return { home, overview, nextRace, mineToday, lastWeek: weeks[1] ?? null };
 }
 
 export async function activityScreen(day: string) {
@@ -32,7 +39,7 @@ export async function analysisScreen(day: string) {
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
   const ctx = q.makeCtx();
-  const [analysis, periods, fitness, insights, effRodaje, effAll, feelings] = await Promise.all([
+  const [analysis, periods, fitness, insights, effRodaje, effAll, feelings, weeks] = await Promise.all([
     q.getAnalysis(DEFAULT_HR_BAND, ctx),
     q.getPeriodsAll(ctx),
     q.getFitness(ctx),
@@ -40,8 +47,9 @@ export async function analysisScreen(day: string) {
     q.getEfficiency("rodaje", ctx),
     q.getEfficiency(null, ctx),
     q.getFeelingStats(day),
+    q.getWeekHistory(day, 12, ctx),
   ]);
-  return { analysis, periods, fitness, insights, effRodaje, effAll, feelings };
+  return { analysis, periods, fitness, insights, effRodaje, effAll, feelings, weeks };
 }
 
 export async function runScreen(id: string, day: string) {

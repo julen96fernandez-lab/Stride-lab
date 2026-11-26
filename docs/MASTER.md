@@ -635,6 +635,12 @@ las 8 anteriores, acordado) y con el cumplimiento por semana (incluidos los vín
   media de las 8 anteriores, objetivo); km por día; km por tipo; previsto frente a realizado
   (cada sesión con «Puesta por mí»/«Sugerida», «Hecha antes (…)», «vínculo a mano» y su estado)
   y las carreras de la semana con enlace al detalle. En la prueba de desbordes.
+- **Paso 7 · Accesos (hecho).** `getWeekHistory(today, n)` (filas compactas, sin la lista de
+  carreras). Inicio: tarjeta «Semana pasada» (km, carreras, previstas cumplidas, dos frases y «Ver
+  el resumen de la semana»), sin notificaciones. Análisis: «Últimas 12 semanas» (`#semanas`, tras
+  el volumen), de la más reciente a la más antigua, con barra de km, carreras, previstas
+  cumplidas y % del objetivo; cada fila abre su resumen. Esqueletos de Inicio y Análisis con su
+  forma. En la prueba de desbordes.
 
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
@@ -1051,6 +1057,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Resumen de la semana, paso 7: tarjeta «Semana pasada» en Inicio e historial de 12
+  semanas en Análisis.
 - 2026‑11‑26 — Resumen de la semana, paso 6: pantalla «Resumen de la semana».
 - 2026‑11‑26 — Resumen de la semana, paso 5: agregación y frases (sin pantalla todavía).
 - 2026‑11‑26 — Cumplimiento por semana, paso 4: vínculo manual («Vincular», «Desvincular»,

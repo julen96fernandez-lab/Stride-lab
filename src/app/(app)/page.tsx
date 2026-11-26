@@ -17,6 +17,7 @@ import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
 import { mineKindForToday, type MineKind } from "@/lib/plan/mine";
 import { splitToday, todayFromMine } from "@/lib/plan/today";
+import { LastWeekCard } from "@/components/analysis/WeekViews";
 import { DAY_SHIFT_LABEL, SHIFT_META } from "@/lib/plan/shifts";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
 
@@ -72,7 +73,7 @@ const MINE_STYLE: Record<MineKind, { color: string; icon: string }> = {
 async function HomeData() {
   await connection();
   const today = cacheDay();
-  const { home: h, overview: o, nextRace, mineToday } = await homeScreen(today);
+  const { home: h, overview: o, nextRace, mineToday, lastWeek } = await homeScreen(today);
 
   if (h.totalRuns === 0) {
     return (
@@ -229,6 +230,9 @@ async function HomeData() {
       {nextRace && <RaceCountdown race={nextRace} />}
 
       {o.fitness && <FitnessMini f={o.fitness} />}
+
+      {/* Semana pasada: su resumen al abrir la app (sin notificaciones) */}
+      {lastWeek && <LastWeekCard w={lastWeek} />}
 
       {/* 2) Semana */}
       <section className="card p-5" aria-label="Esta semana">
