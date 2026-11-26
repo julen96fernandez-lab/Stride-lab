@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignRuns, linkMine, mineMatches, mineStatus, unplannedRuns } from "@/lib/plan/linking";
+import { assignRuns, doneWhen, linkMine, mineMatches, mineStatus, runDayLabel, unplannedRuns } from "@/lib/plan/linking";
 import { weekOf } from "@/lib/plan/mine";
 
 const run = (id: string, date: string, type: string | null, h = 8) => ({ id, date, type, at: Date.parse(`${date}T0${h}:00:00Z`) });
@@ -129,5 +129,15 @@ describe("vinculación por semana (26‑nov‑2026)", () => {
     ];
     expect(link(slots, runs)).toEqual({ sab: ["r2", -4, true], mie: ["r1", 3, false] });
     expect(link([{ ...slots[0], manual: null }, slots[1]], runs)).toEqual({ mie: ["r2", -1, false] });
+  });
+});
+
+describe("«Hecha antes / después»", () => {
+  it("dice el día de la carrera; el mismo día, nada", () => {
+    expect(doneWhen({ offset: -2, run: { date: "2026-11-26" } })).toBe("Hecha antes (jueves 26)");
+    expect(doneWhen({ offset: 1, run: { date: "2026-11-23" } })).toBe("Hecha después (lunes 23)");
+    expect(doneWhen({ offset: 0, run: { date: "2026-11-26" } })).toBeNull();
+    expect(doneWhen(null)).toBeNull();
+    expect(runDayLabel("2027-01-03")).toBe("domingo 3");
   });
 });

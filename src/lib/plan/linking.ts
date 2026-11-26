@@ -17,7 +17,7 @@
  *   (o, si no hay del tipo, la primera de) la sugerencia visible de su semana. Ya cuenta para la
  *   alternancia de las semanas siguientes porque forma parte del historial de carreras.
  */
-import { dayNum, mondayOfDay } from "./shifts";
+import { dayNum, mondayOfDay, weekdayOf } from "./shifts";
 import { matchesSession } from "./compliance";
 import type { SessionKind } from "./weekly";
 
@@ -152,4 +152,16 @@ export function unplannedRuns<R extends LinkRun>(
     covers.add(hit.id);
   }
   return runs.filter((r) => !linked.has(r.id) && !covers.has(r.id));
+}
+
+const WEEKDAY = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+/** «jueves 26» */
+export const runDayLabel = (ymd: string) => `${WEEKDAY[weekdayOf(dayNum(ymd)!)]} ${Number(ymd.slice(8))}`;
+/**
+ * Cuándo se hizo una sesión respecto a su día: «Hecha antes (jueves 26)», «Hecha después (lunes 23)»
+ * o null si fue el mismo día (o no hay carrera).
+ */
+export function doneWhen(link: { offset: number; run: { date: string } } | null | undefined): string | null {
+  if (!link || link.offset === 0) return null;
+  return `Hecha ${link.offset < 0 ? "antes" : "después"} (${runDayLabel(link.run.date)})`;
 }

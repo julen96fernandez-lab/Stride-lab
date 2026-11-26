@@ -575,6 +575,16 @@ como máximo una sesión. Lo que vincule a mano manda.
   - `getPlan` y `getMineOn` (Inicio) usan el reparto; cada sesión mía guarda `doneOffset`
     (días de la carrera frente al día previsto) para «Hecha antes / después».
 
+- **Paso 2 · Cómo se ve (hecho).**
+  - Plan: la sesión de la semana y las semanas anteriores dicen qué carrera las cumplió («✓ Hecha
+    antes (jueves 26) · Tirada larga · 16 km · 5:38 /km ›», abre la carrera); mis sesiones,
+    «Hecha antes / después» en lugar de «Hecha el …», con la tabla prevista / realizada.
+  - Calendario: la sesión cubierta por una carrera de otro día de su semana se pinta hueca y gris
+    en su día (con su nota en la leyenda y en la etiqueta accesible); la hoja de ese día dice
+    «Tirada larga: ya cumplida · hecha antes (jueves 26)» y «No queda pendiente para este día», y
+    en «Previstas» la marca «✓ cumplida». `doneWhen` y `runDayLabel` en `lib/plan/linking.ts`
+    (con pruebas); `buildCalendar` lleva `covered` en cada sesión prevista.
+
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
 último año, todas), carga 95, temperatura y humedad 210; las antiguas tienen pulso escaso o
@@ -978,6 +988,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Cumplimiento por semana, paso 2: «Hecha antes / después» en Plan, calendario (punto
+  hueco) y hoja del día («ya cumplida», sin dejarla pendiente).
 - 2026‑11‑26 — Cumplimiento por semana, paso 1: una sesión prevista (mía o sugerida) se cumple con
   una carrera de su tipo en su semana, aunque sea otro día; una carrera cubre una sola sesión.
 - 2026‑11‑19 — Calendario, paso 2: hoja inferior del día con editar, mover y añadir; entrenamiento

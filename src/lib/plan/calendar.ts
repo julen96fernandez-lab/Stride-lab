@@ -4,6 +4,7 @@
  * - Sesiones previstas por tipo (calidad, tirada larga, rodaje suave, otro); la sugerencia de la
  *   app se distingue de la «puesta por mí» (se pinta más tenue).
  * - ✓ con km si hay carrera hecha, 🏁 en la carrera objetivo y banda si hay lesión abierta.
+ * - Una sesión ya cubierta por una carrera de otro día de su semana se pinta hueca y gris en su día.
  * - En semanas pasadas sin sugerencia guardada solo salen mis sesiones y las carreras hechas.
  */
 import { dayNum, mondayOfDay, ymdOf, type ShiftKind } from "./shifts";
@@ -83,6 +84,19 @@ export interface DayPlan {
   /** sugerencia: su semana (lunes) y la sesión, para editarla o moverla */
   week?: string;
   session?: SessionKind;
+  /** ya cubierta por una carrera de su semana (vinculación por semana) */
+  covered?: PlanDone | null;
+}
+/** Carrera que cubre una sesión prevista. */
+export interface PlanDone {
+  /** día de la carrera */
+  date: string;
+  /** días respecto al día previsto (negativo = hecha antes) */
+  offset: number;
+  /** del tipo previsto («Cumplida») o de otro («Hecha, otro tipo») */
+  matched: boolean;
+  /** «Hecha antes (jueves 26)»; null si fue el mismo día */
+  when: string | null;
 }
 export interface DayRun {
   id: string;
@@ -111,8 +125,8 @@ export function buildCalendar(o: {
   /** turno de una semana por su lunes (null sin ciclo) */
   shiftOf: ((monday: string) => ShiftKind) | null;
   /** sugerencias visibles (no quitadas ni sustituidas): día y sesión */
-  suggestions: readonly { day: string; session: SessionKind; week: string }[];
-  mine: readonly { id: string; date: string; kind: string; detail?: string | null; note?: string | null; distanceM?: number | null; durationS?: number | null; warnings?: string[] }[];
+  suggestions: readonly { day: string; session: SessionKind; week: string; covered?: PlanDone | null }[];
+  mine: readonly { id: string; date: string; kind: string; detail?: string | null; note?: string | null; distanceM?: number | null; durationS?: number | null; warnings?: string[]; covered?: PlanDone | null }[];
   runs: readonly { id: string; date: string; distanceM: number | null; type?: string | null; paceS?: number | null }[];
   races: readonly { name: string; date: string }[];
   injuries: readonly { startDate: string; endDate: string | null }[];
@@ -126,7 +140,7 @@ export function buildCalendar(o: {
 
   for (const s of o.suggestions) {
     const k = calKindOfSuggestion(s.session);
-    if (k && inRange(s.day)) cell(s.day).plans.push({ kind: k, mine: false, label: SESSION_LABEL[s.session], week: s.week, session: s.session });
+    if (k && inRange(s.day)) cell(s.day).plans.push({ kind: k, mine: false, label: SESSION_LABEL[s.session], week: s.week, session: s.session, ...(s.covered ? { covered: s.covered } : {}) });
   }
   for (const m of o.mine) {
     if (!inRange(m.date)) continue;
@@ -141,6 +155,7 @@ export function buildCalendar(o: {
       distanceM: m.distanceM ?? null,
       durationS: m.durationS ?? null,
       warnings: m.warnings ?? [],
+      ...(m.covered ? { covered: m.covered } : {}),
     });
   }
   for (const r of o.runs)
