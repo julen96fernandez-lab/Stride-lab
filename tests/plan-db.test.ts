@@ -70,3 +70,28 @@ d("cambios de turno de un día (base de datos)", () => {
     expect(await listShiftOverrides(db, "2026-01-01", "2027-12-31")).toEqual({ "2026-12-09": "mananas", "2027-01-02": "tardes" });
   });
 });
+
+d("vínculo manual guardado (base de datos)", () => {
+  const pool = new Pool({ connectionString: url });
+  const db = drizzle(pool, { schema: s }) as unknown as Db;
+  beforeEach(async () => {
+    execFileSync("node", ["scripts/migrate.mjs"], { env: { ...process.env, DATABASE_URL: url } });
+    await db.execute(sql`TRUNCATE planned_sessions, plan_weeks, imports, runs CASCADE`);
+  });
+  afterAll(() => pool.end());
+  it("al borrar la carrera vinculada a mano, la sesión vuelve al automático", async () => {
+    const { saveManualRun } = await import("@/lib/manual/manual-db");
+    const { getMine } = await import("@/lib/plan/plan-db");
+    const { eq } = await import("drizzle-orm");
+    const r = await saveManualRun({ db, putRoute: async (p: string) => `memory://${p}` }, {
+      startAt: new Date("2026-11-24T17:00:00Z"), distanceM: 8000, durationS: 2700, avgHr: null, maxHr: null, elevationGainM: null,
+      cadenceSpm: null, avgPowerW: null, temperatureC: null, sessionType: "series", isIndoor: false,
+    });
+    const runId = typeof r === "string" ? r : (r as { id: string }).id;
+    const id = await saveMine(db, { date: "2026-11-26", kind: "calidad", distanceM: null, durationS: null, note: null, replacesWeek: null });
+    await db.update(s.plannedSessions).set({ runId }).where(eq(s.plannedSessions.id, id));
+    expect((await getMine(db, id))!.runId).toBe(runId);
+    await db.delete(s.runs).where(eq(s.runs.id, runId));
+    expect(await getMine(db, id)).toMatchObject({ runId: null, unlinked: false });
+  });
+});

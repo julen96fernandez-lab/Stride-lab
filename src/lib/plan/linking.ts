@@ -165,3 +165,33 @@ export function doneWhen(link: { offset: number; run: { date: string } } | null 
   if (!link || link.offset === 0) return null;
   return `Hecha ${link.offset < 0 ? "antes" : "después"} (${runDayLabel(link.run.date)})`;
 }
+
+// ─── Vínculo manual ─────────────────────────────────────────────────────────
+
+export type LinkMode = "auto" | "manual" | "unlinked";
+
+/**
+ * Lo guardado de una sesión (o de la sugerencia de una semana) a lo que entiende `assignRuns`:
+ * una carrera → vínculo manual; «Desvincular» → null (sin carrera); nada → cálculo automático.
+ */
+export function manualOf(row: { runId?: string | null; unlinked?: boolean | null }): string | null | undefined {
+  if (row.runId) return row.runId;
+  return row.unlinked ? null : undefined;
+}
+export const linkMode = (row: { runId?: string | null; unlinked?: boolean | null }): LinkMode => (row.runId ? "manual" : row.unlinked ? "unlinked" : "auto");
+
+/**
+ * Estado de la sugerencia de una semana con vínculo manual: con carrera, cumplida si es de su tipo
+ * y «otra» si no; desvinculada, como si no se hubiera corrido nada (pendiente, día pasado…).
+ * `undefined` = sin vínculo manual (se usa el cálculo por semana de siempre).
+ */
+export function manualWeekStatus(
+  session: SessionKind,
+  manual: string | null | undefined,
+  linked: { type: string | null } | null | undefined,
+  fallbackNoRuns: () => import("./compliance").WeekStatus,
+): import("./compliance").WeekStatus | undefined {
+  if (manual === undefined) return undefined;
+  if (manual === null || !linked) return fallbackNoRuns();
+  return slotMatches(session, linked.type) ? "cumplida" : "otra";
+}

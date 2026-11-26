@@ -285,6 +285,10 @@ export const planWeeks = pgTable("plan_weeks", {
   rescheduledFrom: date("rescheduled_from"),
   /** sugerencia quitada por mí (no se muestra) */
   dismissed: boolean("dismissed").notNull().default(false),
+  /** vínculo manual de la sugerencia con una carrera (manda sobre el cálculo automático) */
+  runId: uuid("run_id").references(() => runs.id, { onDelete: "set null" }),
+  /** «Desvincular»: la sugerencia queda sin carrera aunque haya una que la cumpla */
+  unlinked: boolean("unlinked").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -340,6 +344,10 @@ export const plannedSessions = pgTable(
     note: text("note"),
     /** semana (lunes) cuya sugerencia sustituye, si se creó editando la sugerida */
     replacesWeek: date("replaces_week"),
+    /** vínculo manual con una carrera (manda sobre el cálculo automático) */
+    runId: uuid("run_id").references(() => runs.id, { onDelete: "set null" }),
+    /** «Desvincular»: sin carrera aunque haya una que la cumpla */
+    unlinked: boolean("unlinked").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

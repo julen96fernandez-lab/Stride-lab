@@ -141,3 +141,32 @@ describe("«Hecha antes / después»", () => {
     expect(runDayLabel("2027-01-03")).toBe("domingo 3");
   });
 });
+
+describe("vínculo manual guardado", () => {
+  it("lo guardado → lo que entiende el reparto: carrera (manual), null (desvinculada) o undefined (automático)", async () => {
+    const { manualOf, linkMode } = await import("@/lib/plan/linking");
+    expect(manualOf({ runId: "r1", unlinked: false })).toBe("r1");
+    expect(manualOf({ runId: null, unlinked: true })).toBeNull();
+    expect(manualOf({ runId: null, unlinked: false })).toBeUndefined();
+    expect([linkMode({ runId: "r1" }), linkMode({ unlinked: true }), linkMode({})]).toEqual(["manual", "unlinked", "auto"]);
+  });
+  it("estado de la sugerida con vínculo manual: manda sobre el cálculo", async () => {
+    const { manualWeekStatus } = await import("@/lib/plan/linking");
+    const none = () => "pendiente" as const;
+    expect(manualWeekStatus("tirada_larga", "r1", { type: "tirada_larga" }, none)).toBe("cumplida");
+    expect(manualWeekStatus("tirada_larga", "r1", { type: "rodaje" }, none)).toBe("otra");
+    expect(manualWeekStatus("suave", "r1", { type: "series" }, none)).toBe("cumplida");
+    expect(manualWeekStatus("calidad", null, { type: "series" }, none)).toBe("pendiente");
+    expect(manualWeekStatus("calidad", undefined, null, none)).toBeUndefined();
+  });
+  it("una carrera vinculada a mano a una sesión no se reparte a otra; desvincular deja la otra libre para el automático", () => {
+    const runs = [run("r1", "2026-11-24", "series")];
+    const a = linkMine([{ id: "x", date: "2026-11-24", kind: "calidad" }], runs);
+    expect(ids(a)).toEqual({ x: "r1" });
+    const slots = [
+      { id: "x", date: "2026-11-24", kind: "calidad", manual: null },
+      { id: "y", date: "2026-11-26", kind: "calidad" },
+    ];
+    expect(ids(linkMine(slots, runs))).toEqual({ y: "r1" });
+  });
+});

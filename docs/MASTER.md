@@ -601,6 +601,17 @@ como máximo una sesión. Lo que vincule a mano manda.
     exigente ya corrí, «Ya hiciste la exigente de esta semana (martes 24).», y se guarda igual.
     No avisa si esa carrera es justo la que cubre la sesión (los avisos reciben `covering` tras
     el reparto por semana), ni el mismo día de la carrera.
+- **Paso 4 · Vínculo manual (hecho).** Migración 0016: `run_id` (FK a runs, al borrar la carrera
+  queda en automático) y `unlinked` en `planned_sessions` y en `plan_weeks` (la sugerida de una
+  semana guardada). `manualOf`, `linkMode` y `manualWeekStatus` en linking.ts (con pruebas); el
+  reparto (`assignRuns`) ya daba prioridad a lo manual.
+  - En Plan, bajo cada sesión mía (de esta semana o anteriores), en la sesión de la semana y en
+    las semanas anteriores: «Vincular con una carrera de esta semana» (solo carreras ya hechas de
+    su semana), «Desvincular» (queda sin carrera aunque haya una que la cumpla) y «Volver al
+    automático». `linkSessionAction` valida que la carrera sea de esa semana y no futura.
+  - Lo manual manda: la carrera vinculada a mano no se reparte a otra sesión; la sugerida con
+    vínculo manual toma su estado de él (cumplida si es de su tipo, «otra» si no; desvinculada,
+    como sin carrera), y las carreras vinculadas a mano no salen como «Sesión no prevista».
 
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
@@ -1017,6 +1028,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Cumplimiento por semana, paso 4: vínculo manual («Vincular», «Desvincular»,
+  «Volver al automático»); aviso de exigente repetida.
 - 2026‑11‑26 — Cumplimiento por semana, paso 3: no más exigente en una semana ya cumplida,
   alternancia con lo corrido y «Hoy» que sabe si ya está hecha.
 - 2026‑11‑26 — Calendario, paso 3: cambio de turno de un día con efecto en el plan, los avisos y «Hoy».

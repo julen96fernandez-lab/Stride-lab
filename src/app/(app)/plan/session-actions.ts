@@ -152,3 +152,55 @@ export async function removeMineAction(id: string): Promise<Result> {
   refresh();
   return { ok: true, message: "Sesión quitada." };
 }
+
+/**
+ * Vínculo manual de una sesión prevista (mía o la sugerida de una semana) con una carrera de su
+ * semana. `to`: id de carrera (vincular), "desvincular" (sin carrera) o "auto" (cálculo automático).
+ * Lo manual manda sobre el reparto automático.
+ */
+export async function linkSessionAction(slot: { mine: string } | { week: string }, to: string): Promise<Result> {
+  const [{ eq, and, gte, lte }, s, { dayNum, mondayOfDay, ymdOf }] = await Promise.all([import("drizzle-orm"), import("@/lib/db/schema"), import("@/lib/plan/shifts")]);
+  if (to !== "auto" && to !== "desvincular" && !UUID.test(to)) return { ok: false, message: "Carrera no válida." };
+  // Semana (lunes–domingo) de la sesión.
+  let date: string;
+  if ("mine" in slot) {
+    if (!UUID.test(slot.mine)) return { ok: false, message: "Sesión no válida." };
+    const row = (await db().select({ date: s.plannedSessions.date }).from(s.plannedSessions).where(eq(s.plannedSessions.id, slot.mine)).limit(1))[0];
+    if (!row) return { ok: false, message: "Esa sesión ya no existe." };
+    date = row.date;
+  } else {
+    if (!YMD.test(slot.week)) return { ok: false, message: "Semana no válida." };
+    const row = (await db().select({ w: s.planWeeks.weekStart }).from(s.planWeeks).where(eq(s.planWeeks.weekStart, slot.week)).limit(1))[0];
+    if (!row) return { ok: false, message: "Esa semana no tiene plan guardado." };
+    date = slot.week;
+  }
+  const mon = mondayOfDay(dayNum(date)!);
+  let values: { runId: string | null; unlinked: boolean };
+  let message: string;
+  if (to === "auto") {
+    values = { runId: null, unlinked: false };
+    message = "Vuelve al cálculo automático.";
+  } else if (to === "desvincular") {
+    values = { runId: null, unlinked: true };
+    message = "Desvinculada: queda sin carrera.";
+  } else {
+    // Solo carreras válidas de esa semana y que ya se hayan corrido.
+    const run = (
+      await db()
+        .select({ id: s.runs.id, startAt: s.runs.startAt })
+        .from(s.runs)
+        .where(and(eq(s.runs.id, to), eq(s.runs.status, "valid"), gte(s.runs.startAt, new Date((mon - 1) * 86_400_000)), lte(s.runs.startAt, new Date((mon + 8) * 86_400_000))))
+        .limit(1)
+    )[0];
+    const { localDay } = await import("@/lib/analysis/periods");
+    const runDay = run ? ymdOf(localDay(run.startAt)) : null;
+    if (!run || !runDay || runDay < ymdOf(mon) || runDay > ymdOf(mon + 6) || runDay > cacheDay()) return { ok: false, message: "Solo carreras ya hechas de esa semana." };
+    values = { runId: run.id, unlinked: false };
+    message = `Vinculada con la carrera del ${fmtDay(runDay)}.`;
+  }
+  if ("mine" in slot) await db().update(s.plannedSessions).set({ ...values, updatedAt: new Date() }).where(eq(s.plannedSessions.id, slot.mine));
+  else await db().update(s.planWeeks).set({ ...values, updatedAt: new Date() }).where(eq(s.planWeeks.weekStart, slot.week));
+  dataChanged();
+  refresh();
+  return { ok: true, message };
+}

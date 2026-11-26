@@ -17,8 +17,9 @@ import { STATUS_LABEL, type WeekStatus } from "@/lib/plan/compliance";
 import { RescheduleButton } from "./RescheduleButton";
 import { RestoreSuggestion } from "./RestoreSuggestion";
 import { Warnings } from "@/components/plan/SessionForm";
+import { LinkControl } from "@/components/plan/LinkControl";
 import type { Hidden, MineView, RunBrief } from "@/lib/db/queries";
-import { MINE_STATUS_LABEL, type MineStatus } from "@/lib/plan/linking";
+import { MINE_STATUS_LABEL, type LinkMode, type MineStatus } from "@/lib/plan/linking";
 import type { MineKind } from "@/lib/plan/mine";
 
 export const metadata = { title: "Plan · Stride Lab" };
@@ -105,6 +106,7 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
     hidden,
     unplanned,
     overrides,
+    weekRuns,
   } = plan;
   // Días con el turno cambiado, por semana (lunes).
   const changedBy = new Map<string, string[]>();
@@ -173,13 +175,13 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
           Semana {current.pos + 1} de 5 del ciclo.
         </p>
         {changed(current.start)}
-        {cur && <SessionBlock s={cur} />}
+        {cur && <SessionBlock s={cur} options={weekRuns[cur.start] ?? []} />}
         {(mineBy.get(current.start) ?? []).length > 0 && (
           <div className="relative mt-3">
             <div className="text-[12px] text-fg-2">
               Tus sesiones esta semana
             </div>
-            <MineList items={mineBy.get(current.start)!} today={today} />
+            <MineList items={mineBy.get(current.start)!} today={today} weekRuns={weekRuns} />
           </div>
         )}
         {(unplanned[current.start] ?? []).length > 0 && (
@@ -235,7 +237,7 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
                   />
                 )}
                 {(mineBy.get(w.start) ?? []).length > 0 && (
-                  <MineList items={mineBy.get(w.start)!} today={today} />
+                  <MineList items={mineBy.get(w.start)!} today={today} weekRuns={weekRuns} />
                 )}
               </div>
             </li>
@@ -284,8 +286,9 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
                       )}
                     </div>
                     {w.sug?.done && !w.hidden && <DoneLine done={w.sug.done} />}
+                    {w.sug && !w.hidden && <LinkControl slot={{ week: w.start }} mode={w.sug.link} linkedRunId={w.sug.linkedRunId} options={weekRuns[w.start] ?? []} />}
                     {(mineBy.get(w.start) ?? []).length > 0 && (
-                      <MineList items={mineBy.get(w.start)!} today={today} />
+                      <MineList items={mineBy.get(w.start)!} today={today} weekRuns={weekRuns} />
                     )}
                     {(unplanned[w.start] ?? []).length > 0 && (
                       <UnplannedList items={unplanned[w.start]} />
@@ -330,7 +333,7 @@ const MINE_COLOR: Record<MineKind, string> = {
 };
 
 /** Mis sesiones: cada una abre su edición. */
-function MineList({ items, today }: { items: MineView[]; today: string }) {
+function MineList({ items, today, weekRuns = {} }: { items: MineView[]; today: string; weekRuns?: Record<string, RunBrief[]> }) {
   return (
     <ul className="mt-1.5 flex flex-col gap-1.5">
       {items.map((m) => (
@@ -368,6 +371,9 @@ function MineList({ items, today }: { items: MineView[]; today: string }) {
           ) : (
             m.warnings.length > 0 && <Warnings items={m.warnings} compact />
           )}
+          {m.date <= today || (weekRuns[m.week] ?? []).length ? (
+            <LinkControl slot={{ mine: m.id }} mode={m.link} linkedRunId={m.done?.id ?? null} options={weekRuns[m.week] ?? []} />
+          ) : null}
         </li>
       ))}
     </ul>
@@ -569,7 +575,9 @@ function SessionDot({ kind }: { kind: SessionKind }) {
 /** Sesión de la semana en curso: qué, cuándo, por qué y cómo va. */
 function SessionBlock({
   s,
+  options,
 }: {
+  options: RunBrief[];
   s: WeekSession & {
     status: WeekStatus;
     rescheduledFrom: string | null;
@@ -577,6 +585,8 @@ function SessionBlock({
     rescheduleTo: string | null;
     hidden: Hidden | null;
     done: { run: RunBrief; when: string | null } | null;
+    link: LinkMode;
+    linkedRunId: string | null;
   };
 }) {
   if (s.hidden) {
@@ -623,6 +633,7 @@ function SessionBlock({
       )}
       {s.race && <RaceMark race={s.race} />}
       {s.done && <DoneLine done={s.done} />}
+      <LinkControl slot={{ week: s.start }} mode={s.link} linkedRunId={s.linkedRunId} options={options} />
       <p className="mt-1.5 text-[12px] leading-snug text-fg-2">{s.reason}</p>
       {s.status === "dia_pasado" &&
         (s.canReschedule && s.rescheduleTo ? (
