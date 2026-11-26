@@ -16,7 +16,7 @@
  *   sugerencia evita los días junto a una exigente (mía o hecha), el día de una sesión mía y,
  *   tras una semana con exigente mía, repetir su tipo.
  */
-import { afterNights, dayNum, mondayOfDay, weekdayOf, ymdOf, type ShiftKind, type ShiftWeek } from "./shifts";
+import { afterNightOn, dayNum, demandingOkOn, mondayOfDay, weekdayOf, ymdOf, type ShiftKind, type ShiftOverrides, type ShiftWeek } from "./shifts";
 
 export type SessionKind = "tirada_larga" | "calidad" | "calidad_corta" | "suave" | "suave_opcional" | "suave_corto" | "solo_carrera";
 
@@ -72,6 +72,13 @@ export interface MineIn {
 }
 
 export const LOAD_HIGH = 1.3;
+/** Cuándo correr según el turno de ese día (para los días con el turno cambiado). */
+const WHEN_FOR: Record<ShiftKind, string | null> = {
+  mananas: "por la tarde, tras el turno",
+  tardes: "por la mañana, antes del turno",
+  noches: "si has dormido bien",
+  libre: null,
+};
 export const LONG_GAP_DAYS = 21;
 const WD = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 const fmtDay = (ymd: string) => {
@@ -113,6 +120,8 @@ export function planWeeks(o: {
   races?: readonly { name: string; date: string }[];
   /** sesiones puestas por mí (mandan; nunca se mueven) */
   mine?: readonly MineIn[];
+  /** días con el turno cambiado: las reglas usan el turno efectivo de cada día */
+  overrides?: ShiftOverrides;
 }): WeekSession[] {
   const races = (o.races ?? []).map((r) => ({ ...r, day: dayNum(r.date)! })).sort((a, b) => a.day - b.day);
   return planWeeksBase(o).map((s, i) => applyTaper(s, o.weeks[i], races, dayNum(o.today)!));
@@ -197,7 +206,10 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
       return close({ start: w.start, end: w.end, kind: w.kind, pos: w.pos, ...f, label: SESSION_LABEL[f.session], dayLabel: fmtDay(f.day) });
     }
     const current = i === 0 && today >= w.startDay && today <= w.startDay + 6;
-    const noQualityOn = (d: number) => !afterNights(o.anchor, d);
+    // Turno efectivo de cada día: ni exigente en un día de noche ni el día después de una noche.
+    const ov = o.overrides;
+    const noQualityOn = (d: number) => demandingOkOn(o.anchor, d, ov);
+    const notAfterNight = (d: number) => !afterNightOn(o.anchor, d, ov);
     let session: SessionKind;
     let day: number;
     let when: string | null = null;
@@ -212,7 +224,7 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
       // La tirada larga, salvo que la semana anterior ya tuviera una (mía): entonces, calidad.
       const long = prevWeek !== "long";
       session = long ? "tirada_larga" : "calidad";
-      day = pickDay(w, [5, 6], today, (d) => notNextToHard(d) && free(d), notNextToHard);
+      day = pickDay(w, [5, 6], today, (d) => noQualityOn(d) && notNextToHard(d) && free(d), (d) => noQualityOn(d) && notNextToHard(d), noQualityOn);
       reason = long
         ? "Semana de tardes: trabajas de lunes a viernes; el fin de semana, la tirada larga."
         : "Semana de tardes: el fin de semana, calidad (la semana anterior ya tuvo tirada larga).";
@@ -224,7 +236,7 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
       day =
         session === "calidad_corta"
           ? pickDay(w, [2, 3, 1], today, (d) => noQualityOn(d) && notNextToHard(d) && free(d), (d) => noQualityOn(d) && notNextToHard(d), noQualityOn)
-          : pickDay(w, [2, 3, 1], today, (d) => noQualityOn(d) && free(d), noQualityOn);
+          : pickDay(w, [2, 3, 1], today, (d) => notAfterNight(d) && free(d), notAfterNight);
       when = "por la tarde, tras el turno";
       reason =
         session === "calidad_corta"
@@ -238,15 +250,25 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
       if (next === prevWeek) next = next === "long" ? "quality" : "long";
       session = next === "long" ? "tirada_larga" : "calidad";
       const prefs = w.pos === 2 ? [2, 3, 5, 1] : [1, 2, 3, 5];
-      const okNight = (d: number) => !afterNights(o.anchor, d);
+      const okNight = noQualityOn;
       day = pickDay(w, [...prefs, 4, 6, 0].filter((x, k, a) => a.indexOf(x) === k), today, (d) => okNight(d) && notNextToHard(d) && free(d) && prefs.includes(d - w.startDay), (d) => okNight(d) && notNextToHard(d) && free(d), (d) => okNight(d) && notNextToHard(d), okNight);
       reason = `Semana libre${w.pos === 2 ? " tras noches (sin el lunes)" : ""}: la sesión exigente; toca ${next === "long" ? "tirada larga" : "calidad"} (${
         beforeTardes ? "la semana de tardes que viene lleva la tirada larga" : i === 0 ? lastTxt : "alterna con la anterior"
       }).`;
     }
 
-    // Rebajas por prudencia.
+    // Si los cambios de turno no dejan un día válido para la exigente, rodaje suave.
     let downgraded = false;
+    if (demandingOf(session) && !noQualityOn(day)) {
+      session = "suave";
+      downgraded = true;
+      reason = "Cambios de turno: esta semana no queda un día sin noche ni tras una noche para la sesión exigente; rodaje suave.";
+    }
+    // El momento del día sigue al turno cambiado de ese día, si lo hay.
+    const dayOv = ov?.[ymdOf(day)];
+    if (dayOv) when = WHEN_FOR[dayOv];
+
+    // Rebajas por prudencia.
     if (session !== "suave_opcional") {
       const cause = o.openInjury
         ? "lesión abierta"

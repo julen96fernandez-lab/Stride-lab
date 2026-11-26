@@ -9,7 +9,7 @@ import { CalendarView } from "@/components/plan/CalendarView";
 import { blockRange } from "@/lib/plan/calendar";
 import { choicesFromParams } from "@/lib/ui/choice";
 import { cacheDay } from "@/lib/cache/tags";
-import { SHIFT_META, dayNum, ymdOf } from "@/lib/plan/shifts";
+import { DAY_SHIFT_LABEL, SHIFT_META, dayNum, ymdOf } from "@/lib/plan/shifts";
 import { PredictionsCard } from "@/components/charts/PredictionsCard";
 import { RacesBlock } from "@/components/race/RaceCards";
 import { fmtDay, type SessionKind, type WeekSession } from "@/lib/plan/weekly";
@@ -104,7 +104,18 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
     mine,
     hidden,
     unplanned,
+    overrides,
   } = plan;
+  // Días con el turno cambiado, por semana (lunes).
+  const changedBy = new Map<string, string[]>();
+  for (const [ymd, k] of Object.entries(overrides).sort()) {
+    const w = ymdOf(dayNum(ymd)! - ((new Date(`${ymd}T00:00:00Z`).getUTCDay() + 6) % 7));
+    changedBy.set(w, [...(changedBy.get(w) ?? []), `${fmtDay(ymd)}: ${DAY_SHIFT_LABEL[k].toLowerCase()}`]);
+  }
+  const changed = (week: string) =>
+    changedBy.has(week) ? (
+      <div className="relative mt-1 text-[12px] text-fg-2">Turno cambiado · {changedBy.get(week)!.join(" · ")}</div>
+    ) : null;
   const preds = (
     <PredictionsCard
       now={predictions.now}
@@ -161,6 +172,7 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
             : `Quedan ${left} ${left === 1 ? "día" : "días"} de este bloque.`}{" "}
           Semana {current.pos + 1} de 5 del ciclo.
         </p>
+        {changed(current.start)}
         {cur && <SessionBlock s={cur} />}
         {(mineBy.get(current.start) ?? []).length > 0 && (
           <div className="relative mt-3">
@@ -212,6 +224,7 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
                   </div>
                   <ShiftPill kind={w.kind} />
                 </div>
+                {changed(w.start)}
                 {sessionsBy.get(w.start)?.race && (
                   <RaceMark race={sessionsBy.get(w.start)!.race!} />
                 )}

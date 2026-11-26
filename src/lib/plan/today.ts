@@ -27,10 +27,17 @@ export interface TodayFromMine {
   injury: string | null;
   /** «La estimación de la app era: Descanso.» (si difiere) */
   appNote: string | null;
+  /** aviso de turnos (noche hoy o ayer) si lo que puse es exigente; se mantiene igual */
+  shiftWarning: string | null;
   kind: MineKind;
 }
 
-export function todayFromMine(mine: readonly TodayMine[], advice: { label: string }, openInjury: boolean): TodayFromMine | null {
+export function todayFromMine(
+  mine: readonly TodayMine[],
+  advice: { label: string },
+  openInjury: boolean,
+  shift?: { night: boolean; afterNight: boolean } | null,
+): TodayFromMine | null {
   if (!mine.length) return null;
   const first = mine[0];
   const labels = mine.map((m, i) => (i === 0 ? MINE_LABEL[m.kind] : MINE_LABEL[m.kind].toLowerCase()));
@@ -52,6 +59,12 @@ export function todayFromMine(mine: readonly TodayMine[], advice: { label: strin
         : "Tienes una lesión abierta: hazlo suave y para si molesta."
       : null,
     appNote: advice.label.toLowerCase() !== title.toLowerCase() ? `La estimación de la app era: ${advice.label}.` : null,
+    shiftWarning:
+      exigente && shift?.night
+        ? "Hoy tienes noche: la regla es solo suave u opcional (lo dejo como lo pusiste)."
+        : exigente && shift?.afterNight
+          ? "Ayer tuviste noche: la regla es nada exigente hoy (lo dejo como lo pusiste)."
+          : null,
     kind: first.kind,
   };
 }

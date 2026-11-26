@@ -50,3 +50,23 @@ d("plan editable (base de datos)", () => {
     expect(rows.map((r) => [r.weekStart, r.dismissed])).toEqual([["2026-11-16", false]]);
   });
 });
+
+d("cambios de turno de un día (base de datos)", () => {
+  const pool = new Pool({ connectionString: url });
+  const db = drizzle(pool, { schema: s }) as unknown as Db;
+  beforeEach(async () => {
+    execFileSync("node", ["scripts/migrate.mjs"], { env: { ...process.env, DATABASE_URL: url } });
+    await db.execute(sql`TRUNCATE shift_overrides`);
+  });
+  afterAll(() => pool.end());
+  it("poner, cambiar, listar por fechas y quitar", async () => {
+    const { listShiftOverrides, setShiftOverride } = await import("@/lib/plan/shifts-db");
+    await setShiftOverride(db, "2026-12-09", "noches");
+    await setShiftOverride(db, "2026-12-31", "libre");
+    await setShiftOverride(db, "2027-01-02", "tardes");
+    await setShiftOverride(db, "2026-12-09", "mananas");
+    expect(await listShiftOverrides(db, "2026-12-01", "2026-12-31")).toEqual({ "2026-12-09": "mananas", "2026-12-31": "libre" });
+    await setShiftOverride(db, "2026-12-31", null);
+    expect(await listShiftOverrides(db, "2026-01-01", "2027-12-31")).toEqual({ "2026-12-09": "mananas", "2027-01-02": "tardes" });
+  });
+});

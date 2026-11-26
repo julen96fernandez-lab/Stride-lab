@@ -17,6 +17,7 @@ import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
 import { mineKindForToday, type MineKind } from "@/lib/plan/mine";
 import { todayFromMine } from "@/lib/plan/today";
+import { DAY_SHIFT_LABEL, SHIFT_META } from "@/lib/plan/shifts";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
 
 const MONTH_NAME = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -97,7 +98,15 @@ async function HomeData() {
   const vo2 = h.vo2;
   const latestVo2 = vo2.at(-1) ?? null;
   const st = TODAY_STYLE[o.advice.kind];
-  const mine = todayFromMine(mineToday, o.advice, !!o.openInjury);
+  const mine = todayFromMine(mineToday, o.advice, !!o.openInjury, o.todayShift);
+  // Turno de hoy (el del ciclo o el cambiado para hoy).
+  const shiftLine = o.todayShift ? (
+    <p className="relative mt-1 flex items-center gap-1.5 text-[12px] text-fg-2">
+      <span className="h-2 w-2 rounded-full" style={{ background: SHIFT_META[o.todayShift.kind].color }} aria-hidden="true" />
+      Turno de hoy: {DAY_SHIFT_LABEL[o.todayShift.kind].toLowerCase()}
+      {o.todayShift.changed ? " (cambiado para hoy)" : ""}
+    </p>
+  ) : null;
   const mst = MINE_STYLE[mine?.kind ?? "suave"];
   const w = o.week;
   const m = o.month;
@@ -132,6 +141,7 @@ async function HomeData() {
             <div className="eyebrow">Hoy</div>
             <span className="rounded-full border border-lime/40 bg-lime/10 px-2 py-0.5 text-[11px] font-semibold text-lime-text">Puesta por mí</span>
           </div>
+          {shiftLine}
           <div className="relative mt-3 flex items-center gap-3">
             <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${mst.color} 18%, transparent)`, color: mst.color }} aria-hidden="true">
               <svg width="26" height="26" viewBox="0 0 24 24">
@@ -157,6 +167,15 @@ async function HomeData() {
               {mine.injury}
             </p>
           )}
+          {mine.shiftWarning && (
+            <p
+              role="status"
+              className="relative mt-2 rounded-2xl px-3.5 py-2.5 text-[13px] leading-snug"
+              style={{ background: "color-mix(in srgb, var(--load-mod) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--load-mod) 40%, transparent)" }}
+            >
+              ⚠ {mine.shiftWarning}
+            </p>
+          )}
           {mine.appNote && <p className="relative mt-2 text-[12px] text-fg-2">{mine.appNote}</p>}
           <Link href={`/plan/sesion/${mineToday[0].id}`} className="relative mt-3 flex min-h-[44px] items-center justify-center rounded-2xl border border-line-strong text-[14px] font-semibold">
             {mineToday.length > 1 ? "Ver o cambiar la primera" : "Ver o cambiar"}
@@ -168,6 +187,7 @@ async function HomeData() {
             <div className="eyebrow">Hoy</div>
             <span className="text-[11px] text-fg-2">Estimación, no un plan</span>
           </div>
+          {shiftLine}
           <div className="relative mt-3 flex items-center gap-3">
             <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${st.color} 18%, transparent)`, color: st.color }} aria-hidden="true">
               <svg width="26" height="26" viewBox="0 0 24 24">

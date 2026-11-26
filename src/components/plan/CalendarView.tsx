@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { calendarBlockAction } from "@/app/(app)/plan/calendar-actions";
 import { toast } from "@/components/ui/Toaster";
 import { CAL_KINDS, CAL_LABEL, addMonths, covers, mergeBlocks, monthGrid, type CalKind, type CalendarBlock, type DayCell } from "@/lib/plan/calendar";
-import { SHIFT_META, dayNum, mondayOfDay, ymdOf, type ShiftKind } from "@/lib/plan/shifts";
+import { DAY_SHIFT_LABEL, SHIFT_META, dayNum, mondayOfDay, ymdOf, type ShiftKind } from "@/lib/plan/shifts";
 import { DaySheet } from "./DaySheet";
 
 export const CAL_COLOR: Record<CalKind, string> = {
@@ -122,7 +122,7 @@ export function CalendarView({ initial, today }: { initial: CalendarBlock; today
                 </span>
                 {w.days.map((d) =>
                   ready ? (
-                    <Day key={d.ymd} ymd={d.ymd} d={d.d} inMonth={d.inMonth} today={d.ymd === today} cell={block.days[d.ymd]} onOpen={setOpen} />
+                    <Day key={d.ymd} ymd={d.ymd} d={d.d} inMonth={d.inMonth} today={d.ymd === today} cell={block.days[d.ymd]} override={block.overrides?.[d.ymd]} onOpen={setOpen} />
                   ) : (
                     <div key={d.ymd} role="gridcell" className="skel h-[54px] rounded-xl" aria-hidden="true" />
                   ),
@@ -138,6 +138,7 @@ export function CalendarView({ initial, today }: { initial: CalendarBlock; today
         ymd={open}
         cell={open ? block.days[open] : undefined}
         shift={open ? (block.shifts[ymdOf(mondayOfDay(dayNum(open)!))] as ShiftKind | undefined) : undefined}
+        override={open ? (block.overrides?.[open] ?? null) : null}
         today={today}
         onClose={() => setOpen(null)}
       />
@@ -145,10 +146,28 @@ export function CalendarView({ initial, today }: { initial: CalendarBlock; today
   );
 }
 
-function Day({ ymd, d, inMonth, today, cell, onOpen }: { ymd: string; d: number; inMonth: boolean; today: boolean; cell?: DayCell; onOpen: (ymd: string) => void }) {
+function Day({
+  ymd,
+  d,
+  inMonth,
+  today,
+  cell,
+  override,
+  onOpen,
+}: {
+  ymd: string;
+  d: number;
+  inMonth: boolean;
+  today: boolean;
+  cell?: DayCell;
+  /** turno cambiado para este día */
+  override?: ShiftKind;
+  onOpen: (ymd: string) => void;
+}) {
   const label = [
     new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`)),
     today ? "hoy" : null,
+    override ? `turno cambiado: ${DAY_SHIFT_LABEL[override].toLowerCase()}` : null,
     ...(cell?.plans.map((p) => `${CAL_LABEL[p.kind]}${p.mine ? " (puesta por mí)" : " (sugerida)"}`) ?? []),
     ...(cell?.runs.map((r) => `corrida${r.km !== null ? ` ${kmText(r.km)} km` : ""}`) ?? []),
     cell?.race ? `carrera objetivo: ${cell.race}` : null,
@@ -164,7 +183,12 @@ function Day({ ymd, d, inMonth, today, cell, onOpen }: { ymd: string; d: number;
       onClick={() => onOpen(ymd)}
       className={`relative flex h-[54px] min-w-0 flex-col items-center overflow-hidden rounded-xl pt-1 ${inMonth ? "bg-inset" : "opacity-40"} ${today ? "ring-2 ring-lime" : ""}`}
     >
-      <span className={`text-[12px] leading-none ${today ? "font-bold text-lime-text" : "text-fg"}`}>{d}</span>
+      {override && (
+        <span className="absolute top-0 left-1/2 flex h-[13px] min-w-[13px] -translate-x-1/2 items-center justify-center rounded-b-md px-0.5 text-[8px] font-bold leading-none text-[var(--bg)]" style={{ background: SHIFT_META[override].color }} aria-hidden="true">
+          {SHIFT_LETTER[override]}
+        </span>
+      )}
+      <span className={`text-[12px] leading-none ${override ? "mt-2.5" : ""} ${today ? "font-bold text-lime-text" : "text-fg"}`}>{d}</span>
       {cell?.race && (
         <span className="absolute top-0.5 right-0.5 text-[9px] leading-none" aria-hidden="true">
           🏁
@@ -213,7 +237,7 @@ function Legend() {
         ))}
       </div>
       <p>
-        Punto tenue: sugerencia de la app; fuerte: puesta por ti. <span className="font-semibold text-[var(--load-low)]">✓</span> corrida (km) · 🏁 carrera objetivo ·{" "}
+        Letra arriba del día: turno cambiado solo ese día. Punto tenue: sugerencia de la app; fuerte: puesta por ti. <span className="font-semibold text-[var(--load-low)]">✓</span> corrida (km) · 🏁 carrera objetivo ·{" "}
         <span className="inline-block h-[3px] w-3 rounded-full bg-danger align-middle opacity-70" /> lesión
       </p>
     </div>

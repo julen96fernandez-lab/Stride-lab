@@ -1,7 +1,7 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
-import { isMonday } from "./shifts";
+import { isMonday, isShiftKind, type ShiftKind } from "./shifts";
 
 const KEY = "shift_anchor";
 
@@ -18,4 +18,23 @@ export async function saveShiftAnchor(db: Db, ymd: string): Promise<void> {
     .insert(s.appSettings)
     .values({ key: KEY, value: ymd })
     .onConflictDoUpdate({ target: s.appSettings.key, set: { value: ymd, updatedAt: sql`now()` } });
+}
+
+// ─── Cambios de turno de un día ─────────────────────────────────────────────
+
+export async function listShiftOverrides(db: Db, from: string, to: string): Promise<Record<string, ShiftKind>> {
+  const rows = await db.select().from(s.shiftOverrides).where(and(gte(s.shiftOverrides.date, from), lte(s.shiftOverrides.date, to)));
+  return Object.fromEntries(rows.filter((r) => isShiftKind(r.kind)).map((r) => [r.date, r.kind as ShiftKind]));
+}
+
+/** Cambia el turno de un día (null quita el cambio y vuelve al del ciclo). */
+export async function setShiftOverride(db: Db, date: string, kind: ShiftKind | null): Promise<void> {
+  if (kind === null) {
+    await db.delete(s.shiftOverrides).where(eq(s.shiftOverrides.date, date));
+    return;
+  }
+  await db
+    .insert(s.shiftOverrides)
+    .values({ date, kind })
+    .onConflictDoUpdate({ target: s.shiftOverrides.date, set: { kind, updatedAt: sql`now()` } });
 }

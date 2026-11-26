@@ -15,7 +15,7 @@ import { decouplingEligible, z2Band, type DecouplingCheck } from "@/lib/analysis
 import { ensureTrack } from "@/lib/analysis/track-db";
 import { memoOnce } from "@/lib/cache/memo";
 import { getFeeling } from "@/lib/feelings/feelings-db";
-import { getShiftAnchor } from "@/lib/plan/shifts-db";
+import { getShiftAnchor, listShiftOverrides } from "@/lib/plan/shifts-db";
 import { listRaces } from "@/lib/race/race-db";
 
 const TZ = "Europe/Madrid";
@@ -37,6 +37,8 @@ export function makeCtx() {
     zones: () => once("zones", () => getZones(db())),
     typeSettings: () => once("typeSettings", () => getTypeSettings(db())),
     shiftAnchor: () => once("shiftAnchor", () => getShiftAnchor(db())),
+    /** días con el turno cambiado (todos: son pocos) */
+    shiftOverrides: () => once("shiftOverrides", () => listShiftOverrides(db(), "1900-01-01", "2999-12-31")),
     races: () => once("races", () => listRaces(db())),
   };
 }
@@ -803,24 +805,32 @@ export async function getManualForEdit(id: string) {
 /** Todo lo de Inicio en una llamada: hoy, semana, mes, lesión abierta, récords y eficiencia. */
 export async function getHomeOverview(ctx: Ctx = makeCtx()) {
   const now = new Date();
-  const [runs, goals, injuries, records, efficiency] = await Promise.all([
+  const [runs, goals, injuries, records, efficiency, anchor, overrides] = await Promise.all([
     ctx.runs(),
     ctx.goals(),
     ctx.injuries(),
     getRecords(ctx),
     getEfficiency("rodaje", ctx),
+    ctx.shiftAnchor(),
+    ctx.shiftOverrides(),
   ]);
   const { recommendToday, weekDays } = await import("@/lib/analysis/home");
   const today = new Date(localDay(now) * 86_400_000).toISOString().slice(0, 10);
   const openInjury = injuries.find((i) => i.startDate <= today && (i.endDate === null || i.endDate >= today)) ?? null;
   const recent = runs.filter((r) => r.startAt.getTime() >= now.getTime() - 60 * 86_400_000);
   const fitness = buildFitnessView(fitnessRuns(runs), now, !!openInjury);
+  // Turno efectivo de hoy (con los cambios de día).
+  const td = dayNum(today)!;
+  const todayShift = anchor
+    ? { kind: shiftOn(anchor, today, overrides), changed: today in overrides, night: nightOn(anchor, td, overrides), afterNight: afterNightOn(anchor, td, overrides) }
+    : null;
   const cur = fitness.current;
   const advice = recommendToday({
     runs: recent,
     openInjury: !!openInjury,
     now,
     fitness: cur ? { ratio: cur.ratio, form: cur.form, chronic: cur.chronic, enough: !cur.warmup } : null,
+    shift: todayShift ? { night: todayShift.night, afterNight: todayShift.afterNight } : null,
   });
 
   const week = buildPeriods(runs, "week", 1, now)[0];
@@ -829,6 +839,7 @@ export async function getHomeOverview(ctx: Ctx = makeCtx()) {
   return {
     openInjury: openInjury ? { startDate: openInjury.startDate, note: openInjury.note } : null,
     advice,
+    todayShift,
     week: {
       days: weekDays(runs, now),
       km: week.km,
@@ -879,7 +890,7 @@ export async function getFitness(ctx: Ctx = makeCtx()) {
 
 // ─── Plan ────────────────────────────────────────────────────────────────────
 
-import { dayNum, mondayOfDay, shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
+import { afterNightOn, dayNum, mondayOfDay, nightOn, shiftOn, shiftWeek, shiftWeeks, ymdOf, type ShiftWeek } from "@/lib/plan/shifts";
 import { buildCalendar, type CalendarBlock } from "@/lib/plan/calendar";
 import { pickSources, predictAt, predictionHistory } from "@/lib/plan/predict";
 import { SESSION_LABEL, demandingOf, fmtDay, planWeeks, type SessionKind } from "@/lib/plan/weekly";
@@ -971,12 +982,12 @@ export async function getMineOn(day: string, ctx: Ctx = makeCtx()): Promise<(Min
  * muestran (quitadas o sustituidas por una sesión mía).
  */
 async function planCore(today: string, ctx: Ctx, o: { weeksAhead: number; from?: string }) {
-  const [anchor, runs, fitness, raceRows] = await Promise.all([ctx.shiftAnchor(), ctx.runs(), getFitness(ctx), ctx.races()]);
+  const [anchor, runs, fitness, raceRows, overrides] = await Promise.all([ctx.shiftAnchor(), ctx.runs(), getFitness(ctx), ctx.races(), ctx.shiftOverrides()]);
   const raceList = raceRows.map((r) => ({ name: r.name, date: r.date }));
   const madrid = (d: Date) => new Date(localDay(d) * 86_400_000).toISOString().slice(0, 10);
   const history = runs.map((r) => ({ date: madrid(r.startAt), type: r.type }));
   const weeks: ShiftWeek[] = anchor ? shiftWeeks(anchor, today, Math.max(1, o.weeksAhead)) : [];
-  if (!anchor || !weeks.length) return { anchor: null, runs, raceRows, raceList, history, madrid } as const;
+  if (!anchor || !weeks.length) return { anchor: null, runs, raceRows, raceList, history, madrid, overrides } as const;
   const pastStart = ymdOf(weeks[0].startDay - 28);
   const from = o.from && o.from < pastStart ? o.from : pastStart;
   const [stored, mineRows] = await Promise.all([getStoredWeeks(db(), from, weeks[weeks.length - 1].start), listMine(db(), from, ymdOf(dayNum(today)! + 365))]);
@@ -999,15 +1010,16 @@ async function planCore(today: string, ctx: Ctx, o: { weeksAhead: number; from?:
     fixed,
     races: raceList,
     mine: mine.map((m) => ({ id: m.id, date: m.date, kind: m.kind })),
+    overrides,
   });
   // Una exigente mía ocupa el sitio de la sugerencia de su semana.
   for (const w of sessions) if (w.occupiedBy && !hidden[w.start]) hidden[w.start] = { by: "replaced", id: w.occupiedBy };
-  return { anchor, runs, raceRows, raceList, history, madrid, weeks, pastStart, stored, byStart, mine, hidden, sessions } as const;
+  return { anchor, runs, raceRows, raceList, history, madrid, weeks, pastStart, stored, byStart, mine, hidden, sessions, overrides } as const;
 }
 
 /** Contexto de avisos: otras exigentes (mías, sugeridas visibles desde hoy y corridas), carreras y ciclo. */
 function warnContext(core: Extract<Awaited<ReturnType<typeof planCore>>, { weeks: unknown }>, today: string): WarnCtx {
-  const { anchor, mine, sessions, hidden, history, pastStart, raceList } = core;
+  const { anchor, mine, sessions, hidden, history, pastStart, raceList, overrides } = core;
   const exigentes: Exigente[] = [
     ...mineExigentes(mine),
     ...sessions.flatMap((w) => {
@@ -1019,7 +1031,7 @@ function warnContext(core: Extract<Awaited<ReturnType<typeof planCore>>, { weeks
       return k && r.date >= pastStart && r.date <= today ? [{ date: r.date, kind: k, what: RUN_WHAT[k] }] : [];
     }),
   ];
-  return { anchor, races: raceList, exigentes };
+  return { anchor, races: raceList, exigentes, overrides };
 }
 
 /** Calendario: marcas de cada día entre `from` y `to` (lunes y domingo de las cuadrículas). */
@@ -1030,7 +1042,7 @@ export async function getCalendar(today: string, from: string, to: string, ctx: 
   const runs = core.runs.map((r) => ({ id: r.id, date: core.madrid(r.startAt), distanceM: r.distanceM, type: r.type, paceS: r.isSpecial ? null : r.avgPaceSPerKm }));
   if (!core.anchor) {
     const mine = (await listMine(db(), from, to)).map(mineView);
-    return buildCalendar({ from, to, shiftOf: null, suggestions: [], mine, runs, races: core.raceList, injuries, today });
+    return buildCalendar({ from, to, shiftOf: null, suggestions: [], mine, runs, races: core.raceList, injuries, today, overrides: core.overrides });
   }
   const { anchor, sessions, stored, hidden, mine } = core;
   const warnCtx = warnContext(core, today);
@@ -1044,7 +1056,7 @@ export async function getCalendar(today: string, from: string, to: string, ctx: 
       .map((r) => ({ day: r.day, session: r.session as SessionKind, week: r.weekStart })),
     ...sessions.filter((w) => !hidden[w.start]).map((w) => ({ day: w.day, session: w.session, week: w.start })),
   ];
-  return buildCalendar({ from, to, shiftOf: (m) => shiftWeek(anchor, m).kind, suggestions, mine, runs, races: core.raceList, injuries, today });
+  return buildCalendar({ from, to, shiftOf: (m) => shiftWeek(anchor, m).kind, suggestions, mine, runs, races: core.raceList, injuries, today, overrides: core.overrides });
 }
 
 export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
@@ -1056,7 +1068,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
     const mine = (await listMine(db(), today, ymdOf(dayNum(today)! + 365))).map(mineView);
     const warnCtx: WarnCtx = { anchor: null, races: raceList, exigentes: mineExigentes(mine) };
     for (const m of mine) m.warnings = mineWarnings(m, warnCtx);
-    return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx, unplanned: {} as Record<string, RunBrief[]> };
+    return { anchor, today, weeks, sessions: [], current: null, past: [], predictions, races, mine, hidden: {} as Record<string, Hidden>, warnCtx, unplanned: {} as Record<string, RunBrief[]>, overrides: core.overrides };
   }
 
   const { madrid, history, pastStart, byStart, mine, hidden, sessions } = core;
@@ -1071,7 +1083,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const nowRow = byStart.get(now.start);
   const status = weekStatus({ session: now.session, day: now.day, weekStart: now.start, today, runs: history });
   const latest = now.race ? ymdOf(dayNum(now.race.date)! - 2) : null;
-  const newDay = status === "dia_pasado" ? rescheduleDay({ anchor, kind: now.kind, session: now.session, weekStart: now.start, today, latest }) : null;
+  const newDay = status === "dia_pasado" ? rescheduleDay({ anchor, kind: now.kind, session: now.session, weekStart: now.start, today, latest, overrides: core.overrides }) : null;
   const current = { ...now, status, rescheduledFrom: nowRow?.rescheduledFrom ?? null, canReschedule: newDay !== null && newDay !== now.day, rescheduleTo: newDay, hidden: hidden[now.start] ?? null };
 
   // Las 4 semanas anteriores, con la sugerencia guardada (si la hubo) y su resultado.
@@ -1115,7 +1127,7 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
   const unplanned: Record<string, RunBrief[]> = {};
   for (const r of unplannedRuns(lite, new Set([...links.values()].map((x) => x.id)), sugBy, weekOf)) (unplanned[weekOf(r.date)] ??= []).push(brief(r));
 
-  return { anchor, today, weeks, sessions, current, past, predictions, races, mine, hidden, warnCtx, unplanned };
+  return { anchor, today, weeks, sessions, current, past, predictions, races, mine, hidden, warnCtx, unplanned, overrides: core.overrides };
 }
 
 /** Predicción de marcas de hoy y su evolución mensual (24 meses), con los datos de cada momento. */

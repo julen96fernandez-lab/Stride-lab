@@ -1,14 +1,14 @@
 /**
  * Avisos de una sesión puesta por mí: si choca con una regla, se dice el motivo, pero se puede
  * guardar igual (mis sesiones nunca se mueven). Lógica pura, con pruebas. Reglas:
- * - Tras una noche, nada exigente (el lunes que sigue a la semana de noches).
- * - Semana de noches: solo suave u opcional.
+ * - Turno efectivo de cada día (el del ciclo o el cambiado ese día): en un día de noche, solo
+ *   suave u opcional; tras una noche (el día anterior de noche), nada exigente.
  * - Nunca dos exigentes en días consecutivos (con otra mía, la sugerida o una ya corrida).
  * - Nunca el mismo tipo exigente dos veces seguidas (con la exigente anterior, mía, sugerida o hecha).
  * - Afinado de una carrera objetivo: dos semanas antes, nada de tirada larga; la semana anterior,
  *   solo suave; la semana de la carrera, solo un rodaje suave corto y no en los 2 días previos.
  */
-import { afterNights, dayNum, mondayOfDay, shiftWeek } from "./shifts";
+import { afterNightOn, dayNum, mondayOfDay, nightOn, type ShiftOverrides } from "./shifts";
 import { RACE_GAP_DAYS, demandingOf, fmtDay, type Demanding } from "./weekly";
 
 export interface Exigente {
@@ -22,6 +22,8 @@ export interface Exigente {
 
 export interface WarnCtx {
   anchor: string | null;
+  /** días con el turno cambiado (las reglas usan el turno efectivo de cada día) */
+  overrides?: ShiftOverrides;
   races: readonly { name: string; date: string }[];
   /** otras sesiones exigentes: mías, sugeridas visibles y corridas */
   exigentes: readonly Exigente[];
@@ -37,8 +39,9 @@ export function mineWarnings(m: { id?: string; date: string; kind: string }, ctx
   const others = ctx.exigentes.filter((e) => !(m.id && e.id === m.id));
 
   if (ctx.anchor && dem) {
-    if (afterNights(ctx.anchor, d)) out.push("Tras una noche: nada exigente ese día (regla de turnos).");
-    else if (shiftWeek(ctx.anchor, m.date).kind === "noches") out.push("Semana de noches: solo rodaje suave u opcional.");
+    const ov = ctx.overrides;
+    if (nightOn(ctx.anchor, d, ov)) out.push(ov?.[m.date] === "noches" ? "Día de noche (turno cambiado): solo rodaje suave u opcional." : "Semana de noches: solo rodaje suave u opcional.");
+    else if (afterNightOn(ctx.anchor, d, ov)) out.push("Tras una noche: nada exigente ese día (regla de turnos).");
   }
 
   if (dem) {

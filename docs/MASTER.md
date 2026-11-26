@@ -618,6 +618,18 @@ punto fuerte = mi sesión, tenue = sugerencia.
   - **Descanso**: tipo nuevo de sesión mía (`descanso`): marca el día sin sesión; no lleva km ni
     duración, no ocupa el sitio de la sugerencia ni cuenta para alternar, no se vincula con
     carreras (estado «Descanso») y la sugerencia evita ese día. En el calendario, un aro.
+- **Paso 3 · Cambio de turno de un día (hecho).** Tabla `shift_overrides` (migración 0015: fecha,
+  turno). En la hoja del día, «Cambiar el turno de este día»: Mañana, Tarde, Noche o Libre (solo
+  ese día) y «Quitar el cambio». Turno efectivo de cada día (`shiftOn`, `nightOn`, `afterNightOn`,
+  `demandingOkOn` en shifts.ts, con pruebas): en un día de noche, solo suave u opcional; el
+  siguiente, nada exigente; un «Libre» dentro de noches quita las restricciones salvo que el día
+  anterior fuera noche. Sin cambios, todo igual que antes (prueba de equivalencia).
+  - Lo usan las sugerencias (la exigente esquiva noches y días tras noche; si la semana no deja
+    un día válido, rodaje suave «Cambios de turno…»; el «cuándo» sigue al turno del día), los
+    avisos de mis sesiones («Día de noche (turno cambiado)…»), «Reorganizar» y «Hoy» (en noche,
+    como mucho suave; tras una noche, nada exigente; con sesión mía exigente, aviso sin cambiarla).
+  - Se ve en el calendario (letra del turno arriba del día), en Resumen («Turno cambiado · …» en
+    su semana) y en Inicio («Turno de hoy: noche (cambiado para hoy)»).
 
 ## Rendimiento
 
@@ -960,6 +972,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Calendario, paso 3: cambio de turno de un día con efecto en el plan, los avisos y «Hoy».
 - 2026‑11‑19 — Calendario, paso 2: hoja inferior del día con editar, mover y añadir; entrenamiento
   del día con un toque y «Descanso».
 - 2026‑11‑19 — Calendario, paso 1: selector Resumen | Calendario y cuadrícula mensual con marcas.

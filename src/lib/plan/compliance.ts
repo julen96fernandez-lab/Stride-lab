@@ -7,7 +7,7 @@
  * - Día pasado: el día previsto pasó sin correr y la semana sigue → se ofrece reorganizar.
  * - No cumplida: la semana acabó sin correr. Opcional (noches): sin correr no es un fallo.
  */
-import { afterNights, dayNum, weekdayOf, ymdOf, type ShiftKind } from "./shifts";
+import { dayNum, demandingOkOn, weekdayOf, ymdOf, type ShiftKind, type ShiftOverrides } from "./shifts";
 import type { SessionKind } from "./weekly";
 
 export type WeekStatus = "cumplida" | "otra" | "pendiente" | "dia_pasado" | "no_cumplida" | "opcional";
@@ -57,7 +57,7 @@ export function weekStatus(o: {
  * nunca calidad el día después de una noche. Desde hoy (si hoy es válido) hasta el domingo.
  * null si no queda ningún día válido esta semana.
  */
-export function rescheduleDay(o: { anchor: string; kind: ShiftKind; session: SessionKind; weekStart: string; today: string; /** último día válido (semana de carrera: 2 días antes) */ latest?: string | null }): string | null {
+export function rescheduleDay(o: { anchor: string; kind: ShiftKind; session: SessionKind; weekStart: string; today: string; /** último día válido (semana de carrera: 2 días antes) */ latest?: string | null; /** días con el turno cambiado */ overrides?: ShiftOverrides }): string | null {
   if (o.session === "solo_carrera" || o.session === "suave_opcional") return null;
   const start = dayNum(o.weekStart)!;
   const today = dayNum(o.today)!;
@@ -66,7 +66,8 @@ export function rescheduleDay(o: { anchor: string; kind: ShiftKind; session: Ses
   const last = Math.min(start + 6, o.latest ? dayNum(o.latest)! : Infinity);
   for (let d = Math.max(start, today); d <= last; d++) {
     if (!allowedWd.includes(weekdayOf(d))) continue;
-    if (afterNights(o.anchor, d) && (o.kind === "libre" || quality)) continue;
+    // Turno efectivo: nada exigente en un día de noche ni tras una noche.
+    if (!demandingOkOn(o.anchor, d, o.overrides) && (o.kind === "libre" || quality || o.session === "tirada_larga")) continue;
     return ymdOf(d);
   }
   return null;

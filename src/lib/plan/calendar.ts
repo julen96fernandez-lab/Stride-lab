@@ -101,6 +101,8 @@ export interface CalendarBlock {
   to: string;
   /** turno de cada semana (lunes → turno) */
   shifts: Record<string, ShiftKind>;
+  /** días con el turno cambiado (AAAA-MM-DD → turno) */
+  overrides: Record<string, ShiftKind>;
   /** solo los días con algo */
   days: Record<string, DayCell>;
 }
@@ -117,6 +119,7 @@ export function buildCalendar(o: {
   races: readonly { name: string; date: string }[];
   injuries: readonly { startDate: string; endDate: string | null }[];
   today: string;
+  overrides?: Readonly<Record<string, ShiftKind>>;
 }): CalendarBlock {
   const from = dayNum(o.from)!;
   const to = dayNum(o.to)!;
@@ -157,17 +160,19 @@ export function buildCalendar(o: {
 
   const shifts: Record<string, ShiftKind> = {};
   if (o.shiftOf) for (let mon = mondayOfDay(from); mon <= to; mon += 7) shifts[ymdOf(mon)] = o.shiftOf(ymdOf(mon));
-  return { from: o.from, to: o.to, shifts, days };
+  const overrides = Object.fromEntries(Object.entries(o.overrides ?? {}).filter(([ymd]) => inRange(ymd)));
+  return { from: o.from, to: o.to, shifts, overrides, days };
 }
 
 /** Une dos bloques contiguos o solapados; en su rango manda el segundo (más reciente). */
 export function mergeBlocks(a: CalendarBlock, b: CalendarBlock): CalendarBlock {
-  const keepA = Object.fromEntries(Object.entries(a.days).filter(([ymd]) => ymd < b.from || ymd > b.to));
+  const outside = ([ymd]: [string, unknown]) => ymd < b.from || ymd > b.to;
   return {
     from: a.from < b.from ? a.from : b.from,
     to: a.to > b.to ? a.to : b.to,
     shifts: { ...a.shifts, ...b.shifts },
-    days: { ...keepA, ...b.days },
+    overrides: { ...Object.fromEntries(Object.entries(a.overrides ?? {}).filter(outside)), ...b.overrides },
+    days: { ...Object.fromEntries(Object.entries(a.days).filter(outside)), ...b.days },
   };
 }
 

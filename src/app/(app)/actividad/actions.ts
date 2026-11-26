@@ -109,11 +109,18 @@ export async function rescheduleWeekAction(weekStart: string): Promise<{ ok: boo
   const { listRaces } = await import("@/lib/race/race-db");
   const race = (await listRaces(d)).find((r) => r.date >= w.start && r.date <= w.end);
   const latest = race ? new Date(Date.parse(`${race.date}T00:00:00Z`) - 2 * 86_400_000).toISOString().slice(0, 10) : null;
-  const day = rescheduleDay({ anchor, kind: w.kind, session, weekStart, today, latest });
+  const { listShiftOverrides } = await import("@/lib/plan/shifts-db");
+  const overrides = await listShiftOverrides(d, ymdShift(weekStart, -1), w.end);
+  const day = rescheduleDay({ anchor, kind: w.kind, session, weekStart, today, latest, overrides });
   if (!day) return { ok: false, message: "No queda ningún día válido esta semana para esa sesión." };
   if (day === row.day) return { ok: true, message: `Sigue siendo el ${fmtDay(day)}.` };
   await moveWeekDay(d, weekStart, day, row.day, row.rescheduledFrom);
   dataChanged();
   refresh();
   return { ok: true, message: `${SESSION_LABEL[session as keyof typeof SESSION_LABEL]}: ahora el ${fmtDay(day)}.` };
+}
+
+/** AAAA-MM-DD desplazado n días. */
+function ymdShift(ymd: string, n: number): string {
+  return new Date(Date.parse(`${ymd}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 }

@@ -345,3 +345,11 @@ export const plannedSessions = pgTable(
   },
   (t) => [index("planned_sessions_date_idx").on(t.date)],
 );
+
+/** Cambio de turno de un día concreto (sobre el ciclo): mañanas, tardes, noches o libre. */
+export const shiftOverrides = pgTable("shift_overrides", {
+  date: date("date").primaryKey(),
+  kind: text("kind").notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});

@@ -10,7 +10,8 @@ import { toast } from "@/components/ui/Toaster";
 import { TYPE_META, isSessionType } from "@/lib/analysis/session-type";
 import type { DayCell, DayPlan } from "@/lib/plan/calendar";
 import { MINE_KINDS, MINE_LABEL, MINE_NOTE_MAX, MINE_PAST_DAYS, durationField, type MineKind } from "@/lib/plan/mine";
-import { SHIFT_META, dayNum, mondayOfDay, ymdOf, type ShiftKind } from "@/lib/plan/shifts";
+import { DAY_SHIFT_LABEL, SHIFT_META, dayNum, mondayOfDay, ymdOf, type ShiftKind } from "@/lib/plan/shifts";
+import { setDayShiftAction } from "@/app/(app)/plan/calendar-actions";
 
 const COLOR: Record<string, string> = {
   tirada_larga: "var(--t-tirada_larga)",
@@ -23,7 +24,22 @@ const pace = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).
 const btn = "flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl px-3 text-[14px] font-semibold";
 
 /** Hoja del día: turno, sesiones previstas (editar, mover), carreras hechas y añadir. */
-export function DaySheet({ ymd, cell, shift, today, onClose }: { ymd: string | null; cell?: DayCell; shift?: ShiftKind; today: string; onClose: () => void }) {
+export function DaySheet({
+  ymd,
+  cell,
+  shift,
+  override,
+  today,
+  onClose,
+}: {
+  ymd: string | null;
+  cell?: DayCell;
+  shift?: ShiftKind;
+  /** turno cambiado para este día (si lo hay) */
+  override?: ShiftKind | null;
+  today: string;
+  onClose: () => void;
+}) {
   if (!ymd) return null;
   const d = dayNum(ymd)!;
   const title = new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`));
@@ -46,20 +62,8 @@ export function DaySheet({ ymd, cell, shift, today, onClose }: { ymd: string | n
       }
     >
       <div className="flex flex-col gap-4" key={ymd}>
-        {/* Turno */}
-        <div className="flex flex-wrap items-center gap-2 text-[14px]">
-          {shift ? (
-            <>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: SHIFT_META[shift].color }} aria-hidden="true" />
-              <span>
-                Semana de <b>{SHIFT_META[shift].label.toLowerCase()}</b>
-                <span className="text-fg-2"> · desde el lunes {Number(ymdOf(mondayOfDay(d)).slice(8))}</span>
-              </span>
-            </>
-          ) : (
-            <span className="text-fg-2">Sin ciclo de turnos (se indica en Perfil).</span>
-          )}
-        </div>
+        {/* Turno: el de la semana y, si lo hay, el cambiado para este día */}
+        {shift ? <DayShift key={ymd} ymd={ymd} week={shift} override={override ?? null} weekStartDay={Number(ymdOf(mondayOfDay(d)).slice(8))} /> : <span className="text-[14px] text-fg-2">Sin ciclo de turnos (se indica en Perfil).</span>}
         {cell?.race && (
           <div className="rounded-2xl px-3.5 py-2.5 text-[14px] font-semibold text-[var(--t-competicion)]" style={{ background: "color-mix(in srgb, var(--t-competicion) 14%, transparent)" }}>
             🏁 {cell.race}
@@ -364,5 +368,111 @@ function Details({ id, kind, primary }: { id: string; kind: MineKind; primary: D
         {pending ? "Guardando…" : "Guardar detalles"}
       </button>
     </div>
+  );
+}
+
+const SHIFT_ORDER: ShiftKind[] = ["mananas", "tardes", "noches", "libre"];
+
+/**
+ * Turno del día: el de la semana o el cambiado solo para este día. «Cambiar el turno de este día»
+ * lo sobreescribe (Mañana, Tarde, Noche o Libre) y el plan se recalcula con él; «Quitar el
+ * cambio» vuelve al del ciclo.
+ */
+function DayShift({ ymd, week, override, weekStartDay }: { ymd: string; week: ShiftKind; override: ShiftKind | null; weekStartDay: number }) {
+  const [opt, setOpt] = useState<ShiftKind | "none" | null>(null);
+  const [seen, setSeen] = useState(override ?? "");
+  if ((override ?? "") !== seen) {
+    setSeen(override ?? "");
+    setOpt(null);
+  }
+  const cur = opt === "none" ? null : (opt ?? override);
+  const eff = cur ?? week;
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const set = (k: ShiftKind | null) => {
+    if (pending) return;
+    if (k !== null && k === cur) return;
+    // Elegir el turno de la semana es quitar el cambio.
+    if (k === week) k = null;
+    if (k === null && !cur) return;
+    setOpt(k ?? "none");
+    setBusy(k ?? "none");
+    start(async () => {
+      try {
+        const r = await setDayShiftAction(ymd, k);
+        if (r.ok) toast.success(r.message);
+        else {
+          setOpt(null);
+          toast.error(r.message);
+        }
+      } catch {
+        setOpt(null);
+        toast.error("No se pudo cambiar el turno. Inténtalo de nuevo.");
+      } finally {
+        setBusy(null);
+      }
+    });
+  };
+  return (
+    <section aria-label="Turno del día" className="flex flex-col gap-2">
+      <div className="flex items-start gap-2 text-[14px]">
+        <span className="mt-[5px] h-2.5 w-2.5 flex-none rounded-full" style={{ background: SHIFT_META[eff].color }} aria-hidden="true" />
+        {cur ? (
+          <span>
+            Turno de este día: <b>{DAY_SHIFT_LABEL[cur].toLowerCase()}</b>
+            <span className="text-fg-2">
+              {" "}
+              · cambiado (la semana es de {SHIFT_META[week].label.toLowerCase()})
+            </span>
+          </span>
+        ) : (
+          <span>
+            Semana de <b>{SHIFT_META[week].label.toLowerCase()}</b>
+            <span className="text-fg-2"> · desde el lunes {weekStartDay}</span>
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="-ml-1 inline-flex min-h-[44px] items-center self-start px-1 text-[13px] font-semibold text-fg underline-offset-2 hover:underline"
+      >
+        Cambiar el turno de este día {open ? "▴" : "▾"}
+      </button>
+      {open && (
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Turno de este día">
+            {SHIFT_ORDER.map((k) => {
+              const on = eff === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  aria-busy={busy === k || undefined}
+                  onClick={() => set(k)}
+                  className={`flex min-h-[48px] items-center justify-center gap-1 rounded-xl border px-1 text-[13px] font-semibold ${on ? "text-[var(--bg)]" : "border-line-strong text-fg"}`}
+                  style={on ? { background: SHIFT_META[k].color, borderColor: SHIFT_META[k].color } : undefined}
+                >
+                  {busy === k ? <Spinner size={12} /> : DAY_SHIFT_LABEL[k]}
+                </button>
+              );
+            })}
+          </div>
+          {cur && (
+            <button type="button" onClick={() => set(null)} disabled={pending} className={`${btn} border border-line-strong text-fg-2`}>
+              {busy === "none" && <Spinner size={12} />}
+              Quitar el cambio (volver a {SHIFT_META[week].label.toLowerCase()})
+            </button>
+          )}
+          <p className="text-[11px] leading-snug text-fg-3">
+            Solo este día. Las sugerencias, los avisos y «Hoy» usan este turno: un día de noche, solo suave u opcional; el siguiente, nada exigente.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }

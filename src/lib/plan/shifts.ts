@@ -8,6 +8,7 @@ export type ShiftKind = "tardes" | "noches" | "libre" | "mananas";
 
 export const CYCLE: readonly ShiftKind[] = ["tardes", "noches", "libre", "mananas", "libre"];
 export const CYCLE_WEEKS = CYCLE.length;
+export const isShiftKind = (k: unknown): k is ShiftKind => typeof k === "string" && (CYCLE as readonly string[]).includes(k);
 
 export const SHIFT_META: Record<ShiftKind, { label: string; hint: string; color: string }> = {
   tardes: { label: "Tardes", hint: "Trabajas de lunes a viernes; corres el fin de semana.", color: "var(--t-tempo)" },
@@ -73,3 +74,29 @@ export function shiftWeeks(anchor: string, fromYmd: string, count: number): Shif
 export function afterNights(anchor: string, day: number): boolean {
   return weekdayOf(day) === 0 && shiftWeek(anchor, ymdOf(day - 1)).kind === "noches";
 }
+
+// ─── Cambios de turno de un día concreto ─────────────────────────────────────
+
+/** Días con el turno cambiado (AAAA-MM-DD → turno), sobre el ciclo. */
+export type ShiftOverrides = Readonly<Record<string, ShiftKind>>;
+
+/** Turno efectivo de un día: el cambiado ese día o, si no, el de su bloque. */
+export function shiftOn(anchor: string, ymd: string, ov?: ShiftOverrides | null): ShiftKind {
+  return ov?.[ymd] ?? shiftWeek(anchor, ymd).kind;
+}
+
+/** Día de noche (turno efectivo): ese día solo suave u opcional. */
+export const nightOn = (anchor: string, day: number, ov?: ShiftOverrides | null) => shiftOn(anchor, ymdOf(day), ov) === "noches";
+
+/**
+ * Día después de una noche: el día anterior fue de noche (turno efectivo) → nada exigente.
+ * Sin cambios equivale a `afterNights` (el lunes que sigue a la semana de noches); con cambios,
+ * un «Libre» dentro de una semana de noches solo queda libre si el día anterior no fue de noche.
+ */
+export const afterNightOn = (anchor: string, day: number, ov?: ShiftOverrides | null) => nightOn(anchor, day - 1, ov) && !nightOn(anchor, day, ov);
+
+/** ¿Vale este día para una sesión exigente? (ni de noche ni tras una noche) */
+export const demandingOkOn = (anchor: string, day: number, ov?: ShiftOverrides | null) => !nightOn(anchor, day, ov) && !nightOn(anchor, day - 1, ov);
+
+/** Nombre de un día de turno (en singular). */
+export const DAY_SHIFT_LABEL: Record<ShiftKind, string> = { mananas: "Mañana", tardes: "Tarde", noches: "Noche", libre: "Libre" };

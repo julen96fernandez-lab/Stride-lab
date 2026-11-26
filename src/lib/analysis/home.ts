@@ -63,11 +63,35 @@ export interface FitnessForToday {
 }
 
 /**
+ * Turnos: en un día de noche, como mucho rodaje suave (si se ha dormido bien); tras una noche,
+ * nada exigente. El descanso se queda como está.
+ */
+export function shiftAdvice(base: TodayAdvice, shift?: { night: boolean; afterNight: boolean } | null): TodayAdvice {
+  if (!shift || base.kind === "descanso") return base;
+  if (shift.night) {
+    return base.kind === "suave"
+      ? { ...base, reason: `${base.reason} Hoy tienes noche: solo si has dormido bien.` }
+      : { kind: "suave", label: TODAY_LABEL.suave, reason: "Hoy tienes turno de noche: como mucho un rodaje suave, y solo si has dormido bien." };
+  }
+  if (shift.afterNight && (base.kind === "calidad" || base.kind === "libre")) {
+    return { kind: "suave", label: TODAY_LABEL.suave, reason: "Ayer tuviste noche: hoy nada exigente; rodaje suave." };
+  }
+  return base;
+}
+
+/**
  * Recomendación: solo las reglas de siempre. El ratio aguda/crónica no cambia la
  * recomendación; con ratio > 1,3 (y 28 días de historial) añade un aviso informativo.
  */
-export function recommendToday(input: { runs: readonly RunForToday[]; openInjury: boolean; now?: Date; fitness?: FitnessForToday | null }): TodayAdvice {
-  const base = baseAdvice(input);
+export function recommendToday(input: {
+  runs: readonly RunForToday[];
+  openInjury: boolean;
+  now?: Date;
+  fitness?: FitnessForToday | null;
+  /** turno efectivo de hoy (con los cambios de día): noche hoy o ayer */
+  shift?: { night: boolean; afterNight: boolean } | null;
+}): TodayAdvice {
+  const base = shiftAdvice(baseAdvice(input), input.shift);
   const f = input.fitness;
   // Con ~1 carrera por semana la aguda de 7 días es una carrera o cero y el ratio oscila mucho:
   // no decide nada, solo avisa cuando pasa de 1,3.
