@@ -168,7 +168,9 @@ function Day({
     new Intl.DateTimeFormat("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`)),
     today ? "hoy" : null,
     override ? `turno cambiado: ${DAY_SHIFT_LABEL[override].toLowerCase()}` : null,
-    ...(cell?.plans.map((p) => `${CAL_LABEL[p.kind]}${p.mine ? " (puesta por mí)" : " (sugerida)"}`) ?? []),
+    ...(cell?.plans.map(
+      (p) => `${CAL_LABEL[p.kind]}${p.mine ? " (puesta por mí)" : " (sugerida)"}${p.covered && p.covered.offset !== 0 ? `, ya cumplida otro día: ${p.covered.when?.toLowerCase() ?? ""}` : ""}`,
+    ) ?? []),
     ...(cell?.runs.map((r) => `corrida${r.km !== null ? ` ${kmText(r.km)} km` : ""}`) ?? []),
     cell?.race ? `carrera objetivo: ${cell.race}` : null,
     cell?.injury ? "lesión" : null,
@@ -200,7 +202,14 @@ function Day({
             <span
               key={i}
               className="h-[7px] w-[7px] rounded-full"
-              style={p.kind === "descanso" ? { border: "1.5px solid var(--fg-2)" } : { background: CAL_COLOR[p.kind], opacity: p.mine ? 1 : 0.35 }}
+              style={
+                p.kind === "descanso"
+                  ? { border: "1.5px solid var(--fg-2)" }
+                  : p.covered && p.covered.offset !== 0
+                    ? // ya cumplida otro día de su semana: hueca y gris (no queda pendiente)
+                      { border: "1.5px solid var(--fg-3)" }
+                    : { background: CAL_COLOR[p.kind], opacity: p.mine ? 1 : 0.35 }
+              }
             />
           ))}
         </span>
@@ -237,7 +246,9 @@ function Legend() {
         ))}
       </div>
       <p>
-        Letra arriba del día: turno cambiado solo ese día. Punto tenue: sugerencia de la app; fuerte: puesta por ti. <span className="font-semibold text-[var(--load-low)]">✓</span> corrida (km) · 🏁 carrera objetivo ·{" "}
+        Letra arriba del día: turno cambiado solo ese día. Punto tenue: sugerencia de la app; fuerte: puesta por ti;{" "}
+        <span className="inline-block h-[7px] w-[7px] rounded-full align-middle" style={{ border: "1.5px solid var(--fg-3)" }} /> hueco gris: ya cumplida
+        otro día de su semana. <span className="font-semibold text-[var(--load-low)]">✓</span> corrida (km) · 🏁 carrera objetivo ·{" "}
         <span className="inline-block h-[3px] w-3 rounded-full bg-danger align-middle opacity-70" /> lesión
       </p>
     </div>

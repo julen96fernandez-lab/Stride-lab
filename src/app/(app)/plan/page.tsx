@@ -283,6 +283,7 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
                         "Sin sugerencia guardada"
                       )}
                     </div>
+                    {w.sug?.done && !w.hidden && <DoneLine done={w.sug.done} />}
                     {(mineBy.get(w.start) ?? []).length > 0 && (
                       <MineList items={mineBy.get(w.start)!} today={today} />
                     )}
@@ -301,8 +302,9 @@ function PlanSummary({ plan }: { plan: Awaited<ReturnType<typeof planScreen>> })
           <p className="mt-2 text-[12px] text-fg-2">
             Sugerencia cumplida: una carrera del tipo previsto en esa semana
             (tirada larga; calidad = series, tempo o competición; suave =
-            cualquier carrera). Tus sesiones se vinculan con la carrera del
-            mismo día o de ±1 día.
+            cualquier carrera). Tus sesiones también: vale una carrera de su
+            tipo en la misma semana, aunque sea otro día. Una carrera cubre una
+            sola sesión.
           </p>
         </section>
       )}
@@ -383,7 +385,7 @@ function Compare({ m, run }: { m: MineView; run: RunBrief }) {
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[12px] text-fg-2">
-          Hecha el {run.date === m.date ? "mismo día" : run.dayLabel} ›
+          {m.doneWhen ?? `Hecha el ${run.date === m.date ? "mismo día" : run.dayLabel}`} ›
         </span>
         <MineStatusPill status={m.status} />
       </div>
@@ -574,6 +576,7 @@ function SessionBlock({
     canReschedule: boolean;
     rescheduleTo: string | null;
     hidden: Hidden | null;
+    done: { run: RunBrief; when: string | null } | null;
   };
 }) {
   if (s.hidden) {
@@ -619,6 +622,7 @@ function SessionBlock({
         </div>
       )}
       {s.race && <RaceMark race={s.race} />}
+      {s.done && <DoneLine done={s.done} />}
       <p className="mt-1.5 text-[12px] leading-snug text-fg-2">{s.reason}</p>
       {s.status === "dia_pasado" &&
         (s.canReschedule && s.rescheduleTo ? (
@@ -640,6 +644,23 @@ function SessionBlock({
         Editar, mover o quitar ›
       </Link>
     </div>
+  );
+}
+
+/** La carrera que cumplió la sugerencia de la semana (otro día: «Hecha antes / después»). */
+function DoneLine({ done }: { done: { run: RunBrief; when: string | null } }) {
+  const r = done.run;
+  return (
+    <Link
+      href={`/actividad/${r.id}`}
+      aria-label={`Ver la carrera del ${r.dayLabel}`}
+      className="mt-1 inline-flex min-h-[44px] items-center text-[13px] text-fg-2 underline-offset-2 hover:underline"
+    >
+      <span className="font-semibold text-[var(--load-low)]">✓&nbsp;</span>
+      {done.when ?? `Hecha el ${r.dayLabel}`} · {r.typeLabel}
+      {r.km ? ` · ${r.km} km` : ""}
+      {r.pace ? ` · ${r.pace} /km` : ""} ›
+    </Link>
   );
 }
 

@@ -101,3 +101,19 @@ describe("marcas de cada día", () => {
     expect(m).toMatchObject({ from: "2026-10-26", to: "2026-12-06" });
   });
 });
+
+describe("sesión ya cubierta por una carrera de otro día de su semana", () => {
+  const base = { from: "2026-11-23", to: "2026-11-29", shiftOf: null, mine: [], runs: [], races: [], injuries: [], today: "2026-11-26" };
+  it("la sesión del sábado lleva la carrera del jueves («Hecha antes (jueves 26)») y la del día sigue igual", () => {
+    const covered = { date: "2026-11-26", offset: -2, matched: true, when: "Hecha antes (jueves 26)" };
+    const c = buildCalendar({
+      ...base,
+      suggestions: [{ day: "2026-11-28", session: "tirada_larga", week: "2026-11-23", covered }],
+      mine: [{ id: "m", date: "2026-11-25", kind: "suave" }],
+      runs: [{ id: "r", date: "2026-11-26", distanceM: 16000, type: "tirada_larga" }],
+    });
+    expect(c.days["2026-11-28"].plans[0].covered).toEqual(covered);
+    expect(c.days["2026-11-25"].plans[0].covered).toBeUndefined();
+    expect(c.days["2026-11-26"].runs[0].km).toBe(16);
+  });
+});

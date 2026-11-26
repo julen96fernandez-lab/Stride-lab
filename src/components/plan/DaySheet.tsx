@@ -71,6 +71,31 @@ export function DaySheet({
         )}
         {cell?.injury && <p className="text-[13px] text-danger">Día dentro de un periodo de lesión.</p>}
 
+        {/* Sesiones de este día ya cubiertas por una carrera de su semana (aunque fuera otro día) */}
+        {all.some((p) => p.covered) && (
+          <ul className="flex flex-col gap-1.5" aria-label="Ya cumplidas">
+            {all
+              .filter((p) => p.covered)
+              .map((p, i) => (
+                <li
+                  key={p.id ?? `c${i}`}
+                  className="rounded-2xl px-3.5 py-2.5 text-[14px]"
+                  style={{
+                    color: p.covered!.matched ? "var(--load-low)" : "var(--load-mod)",
+                    background: `color-mix(in srgb, ${p.covered!.matched ? "var(--load-low)" : "var(--load-mod)"} 12%, transparent)`,
+                  }}
+                >
+                  <b>
+                    {p.covered!.matched ? "✓ " : ""}
+                    {p.label}: {p.covered!.matched ? "ya cumplida" : "hecha, otro tipo"}
+                  </b>
+                  {p.covered!.when ? <span> · {p.covered!.when.charAt(0).toLowerCase() + p.covered!.when.slice(1)}</span> : null}
+                  {p.covered!.offset !== 0 && <span className="block text-[12px] text-fg-2">No queda pendiente para este día.</span>}
+                </li>
+              ))}
+          </ul>
+        )}
+
         {/* Entrenamiento del día con un toque */}
         {canAddSession ? (
           <QuickDay key={ymd} ymd={ymd} primary={primary} />
@@ -164,9 +189,14 @@ function PlanItem({ p, day, onDone }: { p: DayPlan; day: string; onDone: () => v
   return (
     <li className="rounded-2xl border border-line bg-inset px-3.5 py-2.5">
       <div className="flex items-center gap-2.5">
-        <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: COLOR[p.kind], opacity: p.mine ? 1 : 0.4 }} aria-hidden="true" />
+        <span
+          className="h-2.5 w-2.5 flex-none rounded-full"
+          style={p.covered && p.covered.offset !== 0 ? { border: "1.5px solid var(--fg-3)" } : { background: COLOR[p.kind], opacity: p.mine ? 1 : 0.4 }}
+          aria-hidden="true"
+        />
         <span className="min-w-0 flex-1 text-[14px]">
           <b>{p.label}</b>
+          {p.covered?.matched && <span className="font-semibold text-[var(--load-low)]"> · ✓ cumplida</span>}
           {p.detail ? <span className="text-fg-2"> · {p.detail}</span> : null}
           {p.note && <span className="block truncate text-[12px] text-fg-2">{p.note}</span>}
         </span>
