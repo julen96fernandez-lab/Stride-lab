@@ -27,12 +27,20 @@ const UNDO_FIX = `${IOS_DATE}
   .form-row > * { min-width: auto !important; }`;
 
 // Perfil: sus campos (pulso máximo) están visibles sin tocar nada; se abre además el de lesión.
+/** Lunes de la semana pasada (para «Resumen de la semana»). */
+const LAST_MONDAY = (() => {
+  const d = new Date();
+  const mon = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - ((d.getUTCDay() + 6) % 7) * 86_400_000 - 7 * 86_400_000;
+  return new Date(mon).toISOString().slice(0, 10);
+})();
+
 const FORMS: { name: string; path: string; ready?: string; open?: (p: Page) => Promise<void> }[] = [
   { name: "Añadir carrera", path: "/actividad/nueva" },
   { name: "Sesión prevista", path: "/plan/sesion/nueva" },
   { name: "Carrera objetivo", path: "/plan/carrera/nueva" },
   { name: "Perfil (con el formulario de lesión abierto)", path: "/perfil", open: async (p) => p.getByRole("button", { name: /Añadir periodo/ }).first().click() },
   { name: "Plan · Calendario", path: "/plan?vista=calendario", ready: "section[aria-label='Calendario'] [role=grid]" },
+  { name: "Resumen de la semana (la anterior)", path: `/analisis/semana/${LAST_MONDAY}`, ready: "section[aria-label='Resumen']" },
   {
     name: "Plan · Calendario (hoja del día, con «Mover a…» abierto si hay sesión)",
     path: "/plan?vista=calendario",

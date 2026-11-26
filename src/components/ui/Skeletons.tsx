@@ -116,3 +116,30 @@ export function ProfileSkeleton({ rows = 3 }: { rows?: number }) {
     </div>
   );
 }
+
+/** «Resumen de la semana»: cabecera con flechas, frases, cifras, barras por día y listas. */
+export function WeekSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-hidden="true">
+      <div className="flex items-center justify-between">
+        <span className="skel block h-11 w-11 rounded-full" />
+        <Bar w="45%" h={14} />
+        <span className="skel block h-11 w-11 rounded-full" />
+      </div>
+      <div className="card flex flex-col gap-3 p-5">
+        <Bar w="25%" h={10} />
+        <Bar w="90%" h={12} />
+        <Bar w="80%" h={12} />
+        <Bar w="70%" h={12} />
+      </div>
+      <div className="card grid grid-cols-2 gap-3 p-5">
+        <Bar h={40} />
+        <Bar h={40} />
+        <Bar h={40} />
+        <Bar h={40} />
+      </div>
+      <Block h={150} className="card" />
+      <Block h={180} className="card" />
+    </div>
+  );
+}

@@ -628,6 +628,13 @@ las 8 anteriores, acordado) y con el cumplimiento por semana (incluidos los vín
   larga (con 2 o más); sensaciones (con 2 valoradas); no previstas (si hubo plan); lesión como
   coincidencia. `getWeekReports(today, lunes[])` en queries.ts: mismo reparto por semana que
   Plan (mis sesiones y la sugerida visible, con vínculos manuales y su estado).
+- **Paso 6 · Pantalla «Resumen de la semana» (hecho).** `/analisis/semana/[lunes]` (de la semana
+  en curso hacia atrás; otra fecha → no encontrada), con esqueleto propio y caché (`weekScreen`,
+  etiqueta de datos: se invalida al guardar, importar o reprocesar). Flechas a la semana anterior
+  y siguiente; frases con su color; cifras (km, carreras, tiempo, carga con cuántas tienen dato,
+  media de las 8 anteriores, objetivo); km por día; km por tipo; previsto frente a realizado
+  (cada sesión con «Puesta por mí»/«Sugerida», «Hecha antes (…)», «vínculo a mano» y su estado)
+  y las carreras de la semana con enlace al detalle. En la prueba de desbordes.
 
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
@@ -1044,6 +1051,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Resumen de la semana, paso 6: pantalla «Resumen de la semana».
 - 2026‑11‑26 — Resumen de la semana, paso 5: agregación y frases (sin pantalla todavía).
 - 2026‑11‑26 — Cumplimiento por semana, paso 4: vínculo manual («Vincular», «Desvincular»,
   «Volver al automático»); aviso de exigente repetida.

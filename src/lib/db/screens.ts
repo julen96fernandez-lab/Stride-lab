@@ -89,3 +89,11 @@ export async function planScreen(day: string) {
   cacheLife(DATA_LIFE);
   return q.getPlan(day);
 }
+
+/** «Resumen de la semana» de un lunes (la en curso como mucho). */
+export async function weekScreen(start: string, day: string) {
+  "use cache: remote";
+  cacheTag(DATA_TAG);
+  cacheLife(DATA_LIFE);
+  return (await q.getWeekReports(day, [start]))[start] ?? null;
+}
