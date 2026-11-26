@@ -1,6 +1,7 @@
 "use client";
 
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { shoeLabel } from "@/lib/shoes/shoes";
 import { useActionToast } from "@/components/ui/Toaster";
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
@@ -31,11 +32,14 @@ export function ManualRunForm({
   id,
   existingFile,
   initialFeeling,
+  shoes,
 }: {
   initial: ManualValues;
   id?: string;
   existingFile?: string | null;
   initialFeeling?: Feeling | null;
+  /** zapatillas activas y la elegida (nueva: la habitual; edición: la que tenga) */
+  shoes?: { options: { id: string; name: string; brand: string | null; model: string | null; retired: boolean }[]; selected: string | null };
 }) {
   const [state, action] = useActionState<ManualState, FormData>(manualRunAction, {});
   useActionToast(state);
@@ -185,6 +189,21 @@ export function ManualRunForm({
             ))}
           </select>
         </label>
+        {shoes && shoes.options.length > 0 && (
+          <label className={label}>
+            Zapatilla
+            <input type="hidden" name="shoeField" value="1" />
+            <select name="shoeId" defaultValue={shoes.selected ?? ""} className={field}>
+              <option value="">Sin zapatilla</option>
+              {shoes.options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {shoeLabel(o)}
+                  {o.retired ? " · retirada" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </section>
 
       {/* Opcionales */}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { profileScreen } from "@/lib/db/screens";
+import { profileScreen, shoesScreen } from "@/lib/db/screens";
 import { ProfileSkeleton } from "@/components/ui/Skeletons";
 import { cacheDay } from "@/lib/cache/tags";
 import { InjuriesForm } from "./InjuriesForm";
@@ -50,9 +50,10 @@ export default function ProfilePage() {
       <Suspense fallback={<ProfileSkeleton rows={2} />}>
         <TypeSettingsCard />
       </Suspense>
-      <Card>
-        <div className="eyebrow">Zapatillas</div>
-        <p className="mt-3 text-[14px] text-fg-2">Aún no has añadido zapatillas.</p>
+      <Card className="py-2">
+        <Suspense fallback={<Row href="/perfil/zapatillas" title="Zapatillas" detail="…" />}>
+          <ShoesRow />
+        </Suspense>
       </Card>
       <form action={logout}>
         <button
@@ -89,4 +90,14 @@ async function ShiftCard() {
   const day = cacheDay();
   const { shiftAnchor } = await profileScreen(day);
   return <ShiftForm anchor={shiftAnchor} today={day} />;
+}
+
+async function ShoesRow() {
+  await connection();
+  const shoes = (await shoesScreen(cacheDay())).filter((x) => !x.retiredAt);
+  const near = shoes.filter((x) => x.usage.warn).length;
+  const detail = !shoes.length
+    ? "Aún no has añadido zapatillas"
+    : `${shoes.length === 1 ? "1 activa" : `${shoes.length} activas`}${near ? ` · ${near === 1 ? "1 cerca" : `${near} cerca`} de su límite` : ""}`;
+  return <Row href="/perfil/zapatillas" title="Zapatillas" detail={detail} />;
 }

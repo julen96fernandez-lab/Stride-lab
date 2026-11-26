@@ -636,6 +636,25 @@ zip no reciben la habitual (solo el formulario manual la preselecciona).
   «Muestras cada varios minutos: precisión menor»; detalle: aviso, «Mejor con muestras finas: …»,
   historial de récords con «≈», cuántas marcas son «≈» y «≈» en el gráfico. Predicciones de Plan
   sin cambios.
+- **Mejora 3 · Garaje de zapatillas (hecho).** Migración 0018: `shoes` + `limit_km` (700),
+  `is_default` (habitual, solo una), `count_treadmill` (sí) y `updated_at`; tabla `run_shoes`
+  (`run_id` PK → runs, borrado en cascada; `shoe_id` → shoes, cascada). Al estar aparte y ligada al
+  id de la carrera sobrevive a «Reprocesar» (conserva el id) y `replaceManualRuns` la pasa a la del
+  zip con `moveShoe` (como la sensación). `runs.shoe_id` queda sin uso (la migración copia lo que
+  hubiera). Lógica pura en `lib/shoes/shoes.ts` (formulario, `shoeKm`: iniciales + carreras válidas
+  asignadas, sin cinta si el interruptor está apagado; `shoeUsage`: aviso suave desde el 80 % y «ha
+  llegado a su límite»), base de datos en `lib/shoes/shoes-db.ts` (con pruebas: km, límite,
+  habitual, retirada, borrado, asignación masiva, Reprocesar y sustitución manual → zip).
+  Pantallas: Perfil → «Zapatillas» (resumen: activas y cuántas cerca del límite) →
+  `/perfil/zapatillas`: activas con barra de uso, aviso, editar, retirar (deja de ser la habitual;
+  se puede reactivar), borrar con doble toque (se quita de sus carreras, que se quedan), retiradas
+  aparte y «Asignar a todas las carreras entre dos fechas» (solo válidas; solo sin zapatilla salvo
+  «También las que ya tienen otra»; sin cinta si la zapatilla no la cuenta). Detalle: tarjeta
+  «Zapatilla» (un toque guarda; activas y la que tenga). Formulario manual: «Zapatilla», con la
+  habitual preseleccionada al añadir (los imports del zip no la reciben). Actividad: filtro por
+  zapatilla («Sin zapatilla» incluido) que se combina con el de tipo; se aplica en el móvil sobre la
+  lista ya cargada (no se repite la lista por zapatilla). La prueba de desbordes cubre Zapatillas y
+  Actividad (destapó 4 px de más en las fichas de Actividad, ya corregido).
 
 ### Resumen de la semana
 Sin especificación previa en el repositorio: diseño de esta sesión, a revisar. Sin notificaciones
@@ -948,7 +967,7 @@ aunque tardara más, se reanuda sola.
 ## Esquema de base de datos
 
 Ver `src/lib/db/schema.ts` (fuente de verdad) y `drizzle/*.sql`. Tablas:
-`app_settings`, `imports` (+ `lease_until`), `shoes`, `runs` (+ `in_injury`), `run_routes`, `run_splits`
+`app_settings`, `imports` (+ `lease_until`), `shoes` (+ límite, habitual, cinta), `run_shoes`, `runs` (+ `in_injury`), `run_routes`, `run_splits`
 (+ `basis`), `run_series` (hr | power | speed | distance), `import_samples` (temporal
 durante la importación), `vo2max_readings`, `injuries`, `run_efforts` (mejor esfuerzo por
 carrera y distancia).
@@ -1081,6 +1100,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Mejora 3: garaje de zapatillas (km, límite y aviso, habitual, retirada, asignación masiva, filtro en Actividad).
 - 2026‑11‑26 — Mejora 2: «≈» en récords y marcas de muestras gruesas (hueco > 60 s en el tramo).
 - 2026‑11‑26 — Mejora 1: «Intensidad» en Análisis (reparto por zonas, guía neutra del 80 % suave).
 - 2026‑11‑26 — Resumen de la semana, paso 7: tarjeta «Semana pasada» en Inicio e historial de 12

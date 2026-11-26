@@ -10,7 +10,9 @@ import { type RunListItem } from "@/lib/db/queries";
 import { activityScreen } from "@/lib/db/screens";
 import { ActivitySkeleton } from "@/components/ui/Skeletons";
 import { cacheDay } from "@/lib/cache/tags";
-import { TZ, cap, km } from "@/lib/format";
+import { TZ, cap } from "@/lib/format";
+import { shoeLabel } from "@/lib/shoes/shoes";
+import { RunGroups } from "@/components/shoes/RunGroups";
 
 export const metadata = { title: "Actividad · Stride Lab" };
 
@@ -45,9 +47,13 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
   await connection();
   const sp = await searchParams;
   const initial = isSessionType(sp.tipo) || sp.tipo === "con_nota" ? (sp.tipo as string) : "todas";
-  const { items, counts, hiddenDuplicates, hiddenInvalid } = await activityScreen(cacheDay());
+  const { items, counts, hiddenDuplicates, hiddenInvalid, shoes } = await activityScreen(cacheDay());
   const total = counts.reduce((a, c) => a + c.runs, 0);
   const withFeeling = items.filter((r) => r.hasFeeling);
+  // Filtro por zapatilla (solo si hay alguna): se aplica en el móvil sobre cada lista.
+  const shoeKeys = shoes.length ? ["todas", ...shoes.map((x) => x.id), "sin"] : ["todas"];
+  const initialShoe = typeof sp.zapatilla === "string" && shoeKeys.includes(sp.zapatilla) ? sp.zapatilla : "todas";
+  const shoeNames = shoes.map((x) => ({ id: x.id, name: x.name }));
 
   if (total === 0) {
     return (
@@ -65,9 +71,9 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
 
   // Todas las listas llegan ya preparadas: el filtro cambia al instante, sin ir al servidor.
   return (
-    <ChoiceProvider initial={{ tipo: initial }} defaults={{ tipo: "todas" }}>
+    <ChoiceProvider initial={{ tipo: initial, zapatilla: initialShoe }} defaults={{ tipo: "todas", zapatilla: "todas" }}>
       <div className="flex flex-col gap-4">
-        <nav aria-label="Filtrar por tipo">
+        <nav aria-label="Filtrar por tipo" className="px-1">
           <ChoiceSelector
             name="tipo"
             variant="chips"
@@ -106,8 +112,30 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
             ]}
           />
         </nav>
+        {shoes.length > 0 && (
+          <nav aria-label="Filtrar por zapatilla" className="px-1">
+            <ChoiceSelector
+              name="zapatilla"
+              variant="chips"
+              label="Filtrar por zapatilla"
+              items={shoeKeys.map((k) => {
+                const n = k === "sin" ? items.filter((r) => !r.shoeId).length : items.filter((r) => r.shoeId === k).length;
+                const sh = shoes.find((x) => x.id === k);
+                return {
+                  key: k,
+                  label: (
+                    <span className={`flex items-center gap-1.5 ${n === 0 && k !== "todas" ? "opacity-45" : ""}`}>
+                      {k === "todas" ? "Todas las zapatillas" : k === "sin" ? "Sin zapatilla" : `${shoeLabel(sh!)}${sh!.retiredAt ? " · retirada" : ""}`}
+                      {k !== "todas" && <span className="opacity-70">{n}</span>}
+                    </span>
+                  ),
+                };
+              })}
+            />
+          </nav>
+        )}
         <ChoicePanel when={{ tipo: "con_nota" }}>
-          <FilteredRuns items={withFeeling} filter={null} label="con sensación" hidden={0} hiddenDuplicates={0} hiddenInvalid={0} />
+          <FilteredRuns items={withFeeling} filter={null} label="con sensación" hidden={0} hiddenDuplicates={0} hiddenInvalid={0} shoes={shoeNames} />
         </ChoicePanel>
         {(["todas", ...SESSION_TYPES] as const).map((f) => (
           <ChoicePanel key={f} when={{ tipo: f }}>
@@ -117,6 +145,7 @@ async function RunList({ searchParams }: { searchParams: Promise<Record<string, 
               hidden={f === "todas" ? hiddenDuplicates + hiddenInvalid : 0}
               hiddenDuplicates={hiddenDuplicates}
               hiddenInvalid={hiddenInvalid}
+              shoes={shoeNames}
             />
           </ChoicePanel>
         ))}
@@ -132,6 +161,7 @@ function FilteredRuns({
   hidden,
   hiddenDuplicates,
   hiddenInvalid,
+  shoes,
 }: {
   items: RunListItem[];
   filter: SessionType | null;
@@ -140,56 +170,16 @@ function FilteredRuns({
   hidden: number;
   hiddenDuplicates: number;
   hiddenInvalid: number;
+  shoes: { id: string; name: string }[];
 }) {
-  const groups: { key: string; runs: RunListItem[] }[] = [];
-  for (const r of items) {
-    const k = monthKey(r.startAt);
-    const g = groups.at(-1);
-    if (g && g.key === k) g.runs.push(r);
-    else groups.push({ key: k, runs: [r] });
-  }
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-[13px] text-fg-2">
-        {filter
-          ? `${items.length} ${items.length === 1 ? "carrera" : "carreras"} de ${TYPE_META[filter].label.toLowerCase()} · ${km(
-              items.reduce((a, r) => a + (r.distanceM ?? 0), 0),
-              0,
-            )} km`
-          : `${items.length} ${items.length === 1 ? "carrera" : "carreras"}${label ? ` ${label}` : ""}`}
-        {hidden > 0 && ` · ocultas: ${hiddenDuplicates} duplicadas de Strava y ${hiddenInvalid} de menos de 0,5 km`}
-      </p>
-
-      {items.length === 0 && (
-        <Card>
-          <p className="text-[14px] text-fg-2">
-            {label ? "Ninguna carrera con sensación todavía: añádela en el detalle de una carrera." : "Ninguna carrera de este tipo todavía."}
-          </p>
-        </Card>
-      )}
-
-      <div className="stagger flex flex-col gap-4">
-        {groups.map((g, gi) => {
-          const sum = g.runs.reduce((a, r) => a + (r.distanceM ?? 0), 0);
-          return (
-            <section key={g.key} className={`card px-4 py-3 ${gi > 1 ? "cv-auto" : ""}`}>
-              <div className="flex items-baseline justify-between px-1 pt-1 pb-1">
-                <h2 className="font-display text-[17px] font-bold tracking-[-0.01em]">{g.key}</h2>
-                <span className="text-[12px] text-fg-2">
-                  {g.runs.length} · {km(sum, 1)} km
-                </span>
-              </div>
-              <ul className="divide-y divide-line">
-                {g.runs.map((r) => (
-                  <li key={r.id}>
-                    <RunRow run={r} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-      </div>
-    </div>
+    <RunGroups
+      rows={items.map((r) => ({ id: r.id, shoeId: r.shoeId, month: monthKey(r.startAt), distanceM: r.distanceM, node: <RunRow run={r} /> }))}
+      typeLabel={filter ? `de ${TYPE_META[filter].label.toLowerCase()}` : null}
+      label={label ?? null}
+      hiddenText={hidden > 0 ? `ocultas: ${hiddenDuplicates} duplicadas de Strava y ${hiddenInvalid} de menos de 0,5 km` : null}
+      emptyText={label ? "Ninguna carrera con sensación todavía: añádela en el detalle de una carrera." : "Ninguna carrera de este tipo todavía."}
+      shoes={shoes}
+    />
   );
 }

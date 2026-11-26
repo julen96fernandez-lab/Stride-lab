@@ -31,7 +31,8 @@ export async function activityScreen(day: string) {
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
   void day;
-  return q.listRuns(null);
+  const [list, shoes] = await Promise.all([q.listRuns(null), q.getShoes()]);
+  return { ...list, shoes };
 }
 
 export async function analysisScreen(day: string) {
@@ -58,7 +59,8 @@ export async function runScreen(id: string, day: string) {
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
   void day;
-  return q.getRun(id);
+  const [run, shoe] = await Promise.all([q.getRun(id), q.getShoePicker(id)]);
+  return run ? { ...run, shoe } : null;
 }
 
 export async function profileScreen(day: string) {
@@ -74,6 +76,15 @@ export async function profileScreen(day: string) {
     ctx.shiftAnchor(),
   ]);
   return { settings, goals, injuries, shiftAnchor };
+}
+
+/** Perfil → Zapatillas. */
+export async function shoesScreen(day: string) {
+  "use cache: remote";
+  cacheTag(DATA_TAG);
+  cacheLife(DATA_LIFE);
+  void day;
+  return q.getShoes();
 }
 
 export async function recordsScreen(day: string) {

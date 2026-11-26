@@ -127,6 +127,13 @@
       "when": 1795039000000,
       "tag": "0017_effort_gaps",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795040000000,
+      "tag": "0018_shoes",
+      "breakpoints": true
     }
   ]
 }

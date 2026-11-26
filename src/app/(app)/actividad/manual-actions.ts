@@ -9,6 +9,7 @@ import { saveFeeling } from "@/lib/feelings/feelings-db";
 import { putPrivate } from "@/lib/import/blob";
 import { ActivityFileError } from "@/lib/import/activity-file";
 import { parseManualForm, type ManualErrors } from "@/lib/manual/manual";
+import { assignShoe } from "@/lib/shoes/shoes-db";
 import { deleteManualRun, previewManual, saveManualRun, type ManualPreview } from "@/lib/manual/manual-db";
 
 export type ManualState = {
@@ -71,6 +72,11 @@ export async function manualRunAction(_prev: ManualState, fd: FormData): Promise
     return { error: e instanceof Error ? e.message : "No se pudo guardar la carrera." };
   }
   await saveFeeling(db(), saved, fp.feeling); // vacía → no se guarda (o se borra al editar)
+  // Zapatilla (si el formulario la mostraba): vacía = sin zapatilla.
+  if (fd.get("shoeField")) {
+    const shoeId = String(fd.get("shoeId") ?? "");
+    await assignShoe(db(), saved, UUID.test(shoeId) ? shoeId : null);
+  }
   dataChanged();
   refresh();
   redirect(`/actividad/${saved}?aviso=${id ? "carrera-actualizada" : "carrera-guardada"}`);

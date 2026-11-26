@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/primitives";
 import { Tag } from "@/components/ui/RunRow";
 import { TypePicker } from "@/components/ui/TypePicker";
 import { FeelingsCard } from "@/components/feelings/FeelingsCard";
+import { ShoePicker } from "@/components/shoes/ShoePicker";
 import { ZonesCard } from "@/components/ui/ZonesCard";
 import { SummaryCard } from "@/components/detail/SummaryCard";
 import { SameRouteCard } from "@/components/detail/SameRouteCard";
@@ -49,7 +50,7 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = /^[0-9a-f-]{36}$/i.test(id) ? await runScreen(id, cacheDay()) : null;
   if (!data) notFound();
-  const { run, route, durability, decoupling, zones, explorer, prevId, nextId, feeling, summary, sameRoute, similar, similarLabel } = data;
+  const { run, route, durability, decoupling, zones, explorer, prevId, nextId, feeling, summary, sameRoute, similar, similarLabel, shoe } = data;
 
   return (
     <div className="stagger flex flex-col gap-4">
@@ -104,6 +105,9 @@ async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Sensaciones: se guardan al tocar (tabla aparte, no se pierden al reprocesar) */}
       {run.status === "valid" && <FeelingsCard key={run.id} runId={run.id} initial={feeling} />}
+
+      {/* Zapatilla: un toque la guarda (tabla aparte, sobrevive a Reprocesar) */}
+      {run.status === "valid" && <ShoePicker key={run.id} runId={run.id} options={shoe.options} current={shoe.current} />}
 
       {/* Mapa, gráficos sincronizados y parciales */}
       {!route && (

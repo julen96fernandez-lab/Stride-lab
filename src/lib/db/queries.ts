@@ -98,6 +98,8 @@ export interface RunListItem {
   /** sensación: valoración (si la hay) y si hay alguna (valoración, nota o etiquetas) */
   feelRating: number | null;
   hasFeeling: boolean;
+  /** zapatilla asignada */
+  shoeId: string | null;
 }
 
 function listColumns() {
@@ -118,6 +120,7 @@ function listColumns() {
     loadEstimated: s.runs.loadEstimated,
     feelRating: s.runFeelings.rating,
     hasFeeling: sql<boolean>`${s.runFeelings.runId} IS NOT NULL`,
+    shoeId: sql<string | null>`(SELECT rs.shoe_id FROM run_shoes rs WHERE rs.run_id = ${s.runs.id})`,
   };
 }
 
@@ -219,6 +222,22 @@ export async function listRuns(filter: SessionType | null, ctx: Ctx = makeCtx())
   const items: RunListItem[] = rows.map((r) => toItem(r));
   const h = Object.fromEntries((hidden.rows as { status: string; n: number }[]).map((x) => [x.status, x.n]));
   return { items, counts, hiddenDuplicates: h.duplicate ?? 0, hiddenInvalid: h.invalid ?? 0 };
+}
+
+// ─── Zapatillas ──────────────────────────────────────────────────────────────
+
+import { defaultShoeId, getRunShoe, listShoes } from "@/lib/shoes/shoes-db";
+
+export async function getShoes() {
+  return listShoes(db());
+}
+
+/** Selector de zapatilla de una carrera: las activas y, si es otra, la que ya tiene. */
+export async function getShoePicker(runId: string | null) {
+  const d = db();
+  const [all, current, def] = await Promise.all([listShoes(d), runId ? getRunShoe(d, runId) : null, defaultShoeId(d)]);
+  const options = all.filter((x) => !x.retiredAt || x.id === current).map((x) => ({ id: x.id, name: x.name, brand: x.brand, model: x.model, retired: !!x.retiredAt }));
+  return { options, current, defaultId: def };
 }
 
 // ─── Detalle ─────────────────────────────────────────────────────────────────

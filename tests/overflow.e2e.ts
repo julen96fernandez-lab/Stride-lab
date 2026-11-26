@@ -45,6 +45,16 @@ const FORMS: { name: string; path: string; ready?: string; open?: (p: Page) => P
   { name: "Récords (con la evolución abierta)", path: "/analisis/records?d=10k", ready: "#evolucion" },
   { name: "Análisis (con «Intensidad» y «Últimas 12 semanas»)", path: "/analisis", ready: "section[aria-label='Intensidad']" },
   {
+    name: "Zapatillas (con el formulario abierto)",
+    path: "/perfil/zapatillas",
+    ready: "section[aria-label='Zapatillas activas']",
+    open: async (p) => {
+      const b = p.getByRole("button", { name: /Añadir zapatilla/ });
+      if (await b.count()) await b.first().click();
+    },
+  },
+  { name: "Actividad (con el filtro de zapatilla si hay)", path: "/actividad", ready: "nav[aria-label='Filtrar por tipo']" },
+  {
     name: "Plan · Calendario (hoja del día, con «Mover a…» abierto si hay sesión)",
     path: "/plan?vista=calendario",
     ready: "section[aria-label='Calendario'] [role=grid]",

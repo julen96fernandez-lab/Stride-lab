@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ManualRunForm } from "@/components/manual/ManualRunForm";
 import { PageHeader } from "@/components/ui/primitives";
-import { getManualForEdit } from "@/lib/db/queries";
+import { getManualForEdit, getShoePicker } from "@/lib/db/queries";
 
 export const metadata = { title: "Editar carrera · Stride Lab" };
 
@@ -23,8 +23,8 @@ export default function EditRunPage({ params }: PageProps<"/actividad/[id]/edita
 async function EditForm({ params }: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await params;
-  const run = await getManualForEdit(id);
-  if (!run) notFound();
+  const [run, shoes] = await Promise.all([getManualForEdit(id), /^[0-9a-f-]{36}$/i.test(id) ? getShoePicker(id) : null]);
+  if (!run || !shoes) notFound();
   return (
     <>
       <Link href={`/actividad/${run.id}`} className="-mt-2 inline-flex min-h-[44px] items-center gap-1 text-[14px] text-fg-2">
@@ -33,7 +33,7 @@ async function EditForm({ params }: { params: Promise<{ id: string }> }) {
         </svg>
         Volver a la carrera
       </Link>
-      <ManualRunForm id={run.id} initial={run.values} existingFile={run.existingFile} initialFeeling={run.feeling} />
+      <ManualRunForm id={run.id} initial={run.values} existingFile={run.existingFile} initialFeeling={run.feeling} shoes={{ options: shoes.options, selected: shoes.current }} />
     </>
   );
 }

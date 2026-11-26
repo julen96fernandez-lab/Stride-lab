@@ -3,11 +3,12 @@ import type { Db } from "@/lib/db/client";
 import * as s from "@/lib/db/schema";
 import { matchManualRuns } from "./manual";
 import { moveFeeling } from "@/lib/feelings/feelings-db";
+import { moveShoe } from "@/lib/shoes/shoes-db";
 
 /**
  * Al importar el zip: cada manual con pareja en el zip (mismo día, inicio a < 30 min y
  * distancia ±5 %) se sustituye por ella. La del zip conserva el tipo elegido a mano, la
- * sensación y el calzado de la manual. Las manuales sin pareja se quedan como están.
+ * sensación y la zapatilla de la manual. Las manuales sin pareja se quedan como están.
  */
 export async function replaceManualRuns(db: Db): Promise<number> {
   const all = await db
@@ -40,6 +41,7 @@ export async function replaceManualRuns(db: Db): Promise<number> {
     });
     // La sensación de la manual pasa a la del zip (antes de borrar la manual: borrarla la arrastra).
     await moveFeeling(db, mId, zId);
+    await moveShoe(db, mId, zId);
     await db.delete(s.runs).where(eq(s.runs.id, mId));
   }
   return pairs.size;

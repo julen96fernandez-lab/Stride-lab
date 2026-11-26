@@ -64,7 +64,14 @@ export const shoes = pgTable("shoes", {
   retiredAt: date("retired_at"),
   initialKm: real("initial_km").notNull().default(0),
   notes: text("notes"),
+  /** límite de km (aviso suave desde el 80 %) */
+  limitKm: real("limit_km").notNull().default(700),
+  /** la habitual: preseleccionada en el formulario manual */
+  isDefault: boolean("is_default").notNull().default(false),
+  /** las carreras en cinta suman km a esta zapatilla */
+  countTreadmill: boolean("count_treadmill").notNull().default(true),
   createdAt: createdAt(),
+  updatedAt: updatedAt(),
 });
 
 export type RunSource = "apple_watch" | "strava" | "other" | "manual";
@@ -363,3 +370,21 @@ export const shiftOverrides = pgTable("shift_overrides", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * Zapatilla de cada carrera (tabla aparte ligada a la carrera: sobrevive a «Reprocesar», que
+ * conserva el id, y pasa a la del zip si sustituye a una manual).
+ */
+export const runShoes = pgTable(
+  "run_shoes",
+  {
+    runId: uuid("run_id")
+      .primaryKey()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    shoeId: uuid("shoe_id")
+      .notNull()
+      .references(() => shoes.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("run_shoes_shoe_idx").on(t.shoeId)],
+);

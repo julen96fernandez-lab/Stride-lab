@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { ManualRunForm } from "@/components/manual/ManualRunForm";
 import { emptyValues } from "@/lib/manual/form-values";
 import { PageHeader } from "@/components/ui/primitives";
+import { getShoePicker } from "@/lib/db/queries";
 
 export const metadata = { title: "Añadir carrera · Stride Lab" };
 
@@ -36,5 +37,7 @@ async function NewForm({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const v = emptyValues();
   const f = typeof sp.fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sp.fecha) && sp.fecha <= v.date ? sp.fecha : null;
-  return <ManualRunForm initial={f ? { ...v, date: f } : v} />;
+  // Nueva: preseleccionada la habitual.
+  const shoes = await getShoePicker(null);
+  return <ManualRunForm initial={f ? { ...v, date: f } : v} shoes={{ options: shoes.options, selected: shoes.defaultId }} />;
 }
