@@ -512,7 +512,8 @@ sugerencia ocupa su sitio; si es suave u otro, la sugerencia se queda. «No repe
 nunca dos exigentes en días consecutivos y nunca el mismo tipo exigente dos veces seguidas en la
 alternancia, siempre como sugerencia y aviso: **mis sesiones no se mueven nunca**. El
 cumplimiento de la sugerencia semanal sigue siendo por semana; la vinculación ±1 día es solo
-para mis sesiones.
+para mis sesiones. **Desde el 26‑nov‑2026, mis sesiones también se cumplen por semana** (ver
+«Cumplimiento por semana»).
 - **Paso 1 · Añadir, editar, mover y borrar (hecho).** Tabla `planned_sessions` (migración 0014:
   fecha, tipo tirada larga / calidad / rodaje suave / otro, distancia y duración opcionales,
   nota ≤ 200, `replaces_week`) y `plan_weeks.dismissed`. `lib/plan/mine.ts` (con pruebas):
@@ -556,6 +557,23 @@ para mis sesiones.
   y «✓ Cumplida» cuando ya la corrí (misma vinculación ±1 día). Con lesión abierta avisa también
   (más fuerte si la sesión es exigente). La estimación de la app queda como nota si es otra.
   Sin sesión mía, la estimación de siempre y «Voy a correr hoy».
+
+### Cumplimiento por semana
+Decisión (26‑nov‑2026): una sesión prevista (mía o la sugerida) se da por cumplida si en su
+semana (lunes a domingo) corro una carrera de su tipo, aunque sea otro día. Una carrera cubre
+como máximo una sesión. Lo que vincule a mano manda.
+- **Paso 1 · Vinculación por semana (hecho).** `assignRuns` en `lib/plan/linking.ts` (con
+  pruebas): un único reparto de carreras entre mis sesiones y la sugerencia visible de cada semana.
+  1. Vínculos manuales (y «Desvincular»: la sesión queda sin carrera).
+  2. Exigentes (tirada larga; calidad = series, tempo o competición) con una carrera compatible:
+     mismo día, luego ±1 día y luego el resto de su semana.
+  3. Suave, otro y sugerencias suaves con cualquier carrera, en el mismo orden.
+  4. Exigente sin compatible: una de otro tipo del mismo día o ±1 («Hecha, otro tipo»).
+  - El margen de ±1 día puede cruzar el domingo, como antes; «el resto de la semana», no.
+  - «Pendiente» dura hasta el domingo de su semana (o el lunes si es domingo).
+  - La sugerida se juzga (`weekStatus`) sin las carreras que ya cubren mis sesiones.
+  - `getPlan` y `getMineOn` (Inicio) usan el reparto; cada sesión mía guarda `doneOffset`
+    (días de la carrera frente al día previsto) para «Hecha antes / después».
 
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
@@ -960,6 +978,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Cumplimiento por semana, paso 1: una sesión prevista (mía o sugerida) se cumple con
+  una carrera de su tipo en su semana, aunque sea otro día; una carrera cubre una sola sesión.
 - 2026‑11‑19 — Calendario, paso 2: hoja inferior del día con editar, mover y añadir; entrenamiento
   del día con un toque y «Descanso».
 - 2026‑11‑19 — Calendario, paso 1: selector Resumen | Calendario y cuadrícula mensual con marcas.
