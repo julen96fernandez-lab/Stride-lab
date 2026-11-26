@@ -251,7 +251,7 @@ async function recomputeOne(db: Db, id: string, input: ManualInput, d: ReturnTyp
   await db.delete(s.runEfforts).where(eq(s.runEfforts.runId, id));
   if (by.distance && d.status === "valid") {
     const eff = bestEfforts(by.distance.t, by.distance.v);
-    if (eff.length) await db.insert(s.runEfforts).values(eff.map((e) => ({ runId: id, key: e.key, distanceM: e.distanceM, timeS: e.timeS, startS: e.startS })));
+    if (eff.length) await db.insert(s.runEfforts).values(eff.map((e) => ({ runId: id, key: e.key, distanceM: e.distanceM, timeS: e.timeS, startS: e.startS, maxGapS: e.maxGapS })));
   }
   await applyInjuryFlags(db);
 }

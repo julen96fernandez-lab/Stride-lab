@@ -61,6 +61,19 @@ export interface Effort {
   timeS: number;
   /** Segundos desde el inicio de la carrera en que empieza el esfuerzo. */
   startS: number;
+  /** mayor hueco entre muestras dentro del tramo del esfuerzo (s) */
+  maxGapS: number;
+}
+
+/** Por encima de este hueco entre muestras dentro del tramo, el esfuerzo se marca «≈». */
+export const COARSE_GAP_S = 60;
+export const isCoarse = (maxGapS: number | null | undefined) => maxGapS != null && maxGapS > COARSE_GAP_S;
+
+/** Mayor hueco entre muestras consecutivas que se solapan con el tramo (startS, startS + timeS). */
+export function maxGapIn(t: readonly number[], startS: number, timeS: number): number {
+  let gap = 0;
+  for (let i = 1; i < t.length; i++) if (t[i] > startS && t[i - 1] < startS + timeS) gap = Math.max(gap, t[i] - t[i - 1]);
+  return gap;
 }
 
 /**
@@ -152,7 +165,7 @@ export function bestEfforts(t: readonly number[], v: readonly number[]): Effort[
       if (!b || b.timeS / (dist.m / 1000) < MIN_PACE_S_PER_KM) continue;
       if (!best || b.timeS < best.timeS) best = b;
     }
-    if (best) out.push({ key: dist.key, distanceM: dist.m, timeS: best.timeS, startS: best.startS });
+    if (best) out.push({ key: dist.key, distanceM: dist.m, timeS: best.timeS, startS: best.startS, maxGapS: maxGapIn(t, best.startS, best.timeS) });
   }
   return out;
 }
@@ -188,4 +201,16 @@ export function improvementPct(points: RecordPoint[]): number | null {
   const recs = points.filter((p) => p.isRecord);
   if (recs.length < 2) return null;
   return ((recs[0].timeS - recs[recs.length - 1].timeS) / recs[0].timeS) * 100;
+}
+
+/**
+ * Récord de una distancia y, si viene de muestras gruesas («≈»), el mejor con muestras finas (si
+ * lo hay). Los récords con «≈» siguen siendo récords: solo llevan la marca.
+ */
+export function recordWithFine<T extends { timeS: number; maxGapS: number | null }>(efforts: readonly T[]): { best: (T & { coarse: boolean }) | null; bestFine: T | null } {
+  const best = efforts.reduce<T | null>((b, e) => (!b || e.timeS < b.timeS ? e : b), null);
+  if (!best) return { best: null, bestFine: null };
+  const coarse = isCoarse(best.maxGapS);
+  const bestFine = coarse ? efforts.filter((e) => !isCoarse(e.maxGapS)).reduce<T | null>((b, e) => (!b || e.timeS < b.timeS ? e : b), null) : null;
+  return { best: { ...best, coarse }, bestFine };
 }

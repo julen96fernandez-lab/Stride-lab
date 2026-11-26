@@ -208,3 +208,39 @@ describe("muestras anómalas (velocidad implícita imposible)", () => {
     expect(e.find((x) => x.key === "1k")!.timeS).toBeGreaterThan(380); // 2,6 m/s → ~6:25 /km
   });
 });
+
+describe("«≈» en esfuerzos de muestras gruesas", () => {
+  it("mayor hueco entre muestras dentro del tramo (no la media de la carrera)", async () => {
+    const { maxGapIn } = await import("@/lib/analysis/best-efforts");
+    // muestras cada 3 s salvo un hueco de 306 s entre 600 y 906
+    const t = [...Array.from({ length: 201 }, (_, i) => i * 3), 906, 909, 912];
+    expect(maxGapIn(t, 0, 300)).toBe(3); // el tramo no toca el hueco
+    expect(maxGapIn(t, 500, 376)).toBe(306); // el tramo cruza el hueco
+    expect(maxGapIn(t, 906, 6)).toBe(3);
+  });
+  it("umbral: más de 60 s → «≈»", async () => {
+    const { isCoarse, COARSE_GAP_S } = await import("@/lib/analysis/best-efforts");
+    expect(COARSE_GAP_S).toBe(60);
+    expect([isCoarse(3), isCoarse(60), isCoarse(61), isCoarse(306), isCoarse(null)]).toEqual([false, false, true, true, false]);
+  });
+  it("el récord con «≈» sigue siendo récord y trae el mejor con muestras finas", async () => {
+    const { recordWithFine } = await import("@/lib/analysis/best-efforts");
+    const r = recordWithFine([
+      { id: "a", timeS: 232, maxGapS: 278 },
+      { id: "b", timeS: 240, maxGapS: 3 },
+      { id: "c", timeS: 238, maxGapS: 290 },
+    ]);
+    expect(r.best).toMatchObject({ id: "a", coarse: true });
+    expect(r.bestFine).toMatchObject({ id: "b" });
+    const fine = recordWithFine([{ id: "x", timeS: 2755, maxGapS: 3 }, { id: "y", timeS: 2800, maxGapS: 300 }]);
+    expect(fine.best).toMatchObject({ id: "x", coarse: false });
+    expect(fine.bestFine).toBeNull();
+    expect(recordWithFine([{ id: "z", timeS: 200, maxGapS: 300 }]).bestFine).toBeNull();
+  });
+  it("bestEfforts guarda el mayor hueco del tramo de cada esfuerzo", () => {
+    const { t, v } = samples([[1500, 4]], 3);
+    const e = bestEfforts(t, v);
+    expect(e.length).toBeGreaterThan(0);
+    for (const x of e) expect(x.maxGapS).toBe(3);
+  });
+});

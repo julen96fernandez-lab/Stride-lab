@@ -42,6 +42,7 @@ const FORMS: { name: string; path: string; ready?: string; open?: (p: Page) => P
   { name: "Plan · Calendario", path: "/plan?vista=calendario", ready: "section[aria-label='Calendario'] [role=grid]" },
   { name: "Resumen de la semana (la anterior)", path: `/analisis/semana/${LAST_MONDAY}`, ready: "section[aria-label='Resumen']" },
   { name: "Inicio (con «Semana pasada»)", path: "/", ready: "section[aria-label='Semana pasada']" },
+  { name: "Récords (con la evolución abierta)", path: "/analisis/records?d=10k", ready: "#evolucion" },
   { name: "Análisis (con «Intensidad» y «Últimas 12 semanas»)", path: "/analisis", ready: "section[aria-label='Intensidad']" },
   {
     name: "Plan · Calendario (hoja del día, con «Mover a…» abierto si hay sesión)",

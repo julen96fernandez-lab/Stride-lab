@@ -626,6 +626,16 @@ zip no reciben la habitual (solo el formulario manual la preselecciona).
   «Carga y forma»: barras apiladas al 100 % con la línea neutra «80 % suave» (guía habitual), %
   del periodo y «Tu reparto: …» solo con 5 o más carreras válidas (si no, «no se sacan
   conclusiones» y los % en gris). En producción hoy entran 25 carreras (24 de 2026).
+- **Mejora 2 · «≈» en récords (hecho).** Migración 0017: `run_efforts.max_gap_s` (mayor hueco entre
+  muestras que se solapa con el tramo del esfuerzo), rellenada en SQL para lo guardado y calculada
+  en `bestEfforts` para lo nuevo (`maxGapIn`, `isCoarse`, `COARSE_GAP_S = 60`, `recordWithFine`;
+  con pruebas). Se mira el hueco dentro del tramo y no la media de la carrera (el récord de la
+  milla sale de una carrera con media de 13 s pero un hueco de 306 s en su tramo). Medido en
+  producción antes de aplicarlo: 3 de 5 récords pasan a «≈» (1 km 3:52 y 1 milla 6:16 de 2021,
+  5 km 21:30 de 2021; mejores finos: 3:53, 6:58 y 22:14) y 461 de 561 marcas. Lista: «≈» y
+  «Muestras cada varios minutos: precisión menor»; detalle: aviso, «Mejor con muestras finas: …»,
+  historial de récords con «≈», cuántas marcas son «≈» y «≈» en el gráfico. Predicciones de Plan
+  sin cambios.
 
 ### Resumen de la semana
 Sin especificación previa en el repositorio: diseño de esta sesión, a revisar. Sin notificaciones
@@ -1071,6 +1081,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Mejora 2: «≈» en récords y marcas de muestras gruesas (hueco > 60 s en el tramo).
 - 2026‑11‑26 — Mejora 1: «Intensidad» en Análisis (reparto por zonas, guía neutra del 80 % suave).
 - 2026‑11‑26 — Resumen de la semana, paso 7: tarjeta «Semana pasada» en Inicio e historial de 12
   semanas en Análisis.

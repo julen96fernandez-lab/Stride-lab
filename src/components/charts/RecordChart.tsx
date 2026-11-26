@@ -29,7 +29,7 @@ export function RecordChart({
   distanceKm,
   nowMs,
 }: {
-  points: RecordPoint[];
+  points: (RecordPoint & { coarse?: boolean })[];
   bands: InjuryBand[];
   distanceKm: number;
   nowMs: number;
@@ -57,7 +57,7 @@ export function RecordChart({
         formatter: (e: { seriesIndex: number; dataIndex: number }) => {
           if (e.seriesIndex !== 0) return "";
           const p = points[e.dataIndex];
-          return tipHead(`${fmtDate(p.startAt)}${p.isRecord ? " · récord" : ""}`) + tipRow(clock(p.timeS), `${clock(p.timeS / distanceKm)} /km`);
+          return tipHead(`${fmtDate(p.startAt)}${p.isRecord ? " · récord" : ""}`) + tipRow(`${p.coarse ? "≈" : ""}${clock(p.timeS)}`, `${clock(p.timeS / distanceKm)} /km`);
         },
       }),
       // Marcas regulares (mismo paso de calendario) con fechas en español.

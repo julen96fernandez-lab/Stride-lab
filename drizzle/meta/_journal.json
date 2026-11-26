@@ -120,6 +120,13 @@
       "when": 1795038000000,
       "tag": "0016_manual_links",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795039000000,
+      "tag": "0017_effort_gaps",
+      "breakpoints": true
     }
   ]
 }

@@ -65,12 +65,17 @@ async function Records({ searchParams }: { searchParams: Promise<Record<string, 
                   <>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <span className="num text-[26px]">{clock(r.best.timeS)}</span>
+                        <span className="num text-[26px]">
+                          {r.best.coarse && <span aria-hidden="true">≈</span>}
+                          {clock(r.best.timeS)}
+                          {r.best.coarse && <span className="sr-only"> (aproximado)</span>}
+                        </span>
                         {r.recent && <span className="rounded-full bg-lime px-2 py-0.5 text-[10px] font-bold text-lime-ink">12 MESES</span>}
                       </div>
                       <div className="text-[12px] text-fg-2">
                         {clock(r.best.timeS / (r.m / 1000))} /km · {cap(date(r.best.startAt))}
                       </div>
+                      {r.best.coarse && <div className="mt-0.5 text-[11px] text-[var(--load-mod)]">Muestras cada varios minutos: precisión menor.</div>}
                     </div>
                     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" className={`flex-none text-fg-3 transition ${active ? "rotate-90" : ""}`}>
                       <path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -92,14 +97,19 @@ async function Records({ searchParams }: { searchParams: Promise<Record<string, 
         Las pausas (más de 15 s sin distancia) parten la carrera: un esfuerzo nunca las cruza. Se descartan esfuerzos más rápidos de
         2:30 /km. Las carreras en periodos de lesión sí cuentan.
       </p>
+      <p className="text-[12px] leading-relaxed text-fg-2">
+        «≈»: el tramo tiene algún hueco de más de 60 s entre muestras (muchas carreras antiguas guardan la distancia cada ~5 min), así que
+        el tiempo exacto del tramo es menos preciso. Sigue contando como récord; las marcas con muestras finas no cambian.
+      </p>
     </div>
   );
 }
 
 async function Evolution({ k }: { k: EffortKey }) {
   const d = EFFORT_DISTANCES.find((x) => x.key === k)!;
-  const { points, improvement, injuries, recentRecords, nowMs } = await getRecordHistory(k);
+  const [{ points, improvement, injuries, recentRecords, nowMs }, all] = await Promise.all([getRecordHistory(k), recordsScreen(cacheDay())]);
   const records = points.filter((p) => p.isRecord);
+  const cur = all.find((r) => r.key === k);
   return (
     <section id="evolucion" className="card scroll-mt-6 p-5">
       <div className="flex items-baseline justify-between gap-3">
@@ -121,6 +131,42 @@ async function Evolution({ k }: { k: EffortKey }) {
             {records.length} {records.length === 1 ? "récord" : "récords"} en total
             {recentRecords ? `, ${recentRecords} en los últimos 12 meses` : ", ninguno en los últimos 12 meses"}.
           </p>
+          {cur?.best?.coarse && (
+            <p className="mt-2 rounded-xl border border-line-strong bg-inset px-3 py-2 text-[13px] leading-snug">
+              <b>≈ Récord con muestras gruesas</b> (huecos de más de 60 s en su tramo): su tiempo exacto es menos preciso.{" "}
+              {cur.bestFine ? (
+                <>
+                  Mejor con muestras finas: <b className="num">{clock(cur.bestFine.timeS)}</b> ({clock(cur.bestFine.timeS / (d.m / 1000))} /km ·{" "}
+                  <Link href={`/actividad/${cur.bestFine.runId}`} className="underline-offset-2 hover:underline">
+                    {date(cur.bestFine.startAt)}
+                  </Link>
+                  ).
+                </>
+              ) : (
+                "No hay ninguna marca con muestras finas en esta distancia."
+              )}
+            </p>
+          )}
+          {/* Historial de récords, con «≈» en los de muestras gruesas */}
+          <ol className="mt-3 divide-y divide-line">
+            {[...records].reverse().map((p) => (
+              <li key={`${p.runId}-${p.startAt.getTime()}`}>
+                <Link href={`/actividad/${p.runId}`} className="flex min-h-[44px] items-center justify-between gap-3 text-[13px]">
+                  <span className="text-fg-2">{cap(date(p.startAt))}</span>
+                  <span className="num text-[15px]">
+                    {p.coarse ? "≈" : ""}
+                    {clock(p.timeS)}
+                    {p.coarse && <span className="sr-only"> (aproximado)</span>}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+          {cur && cur.coarseAttempts > 0 && (
+            <p className="mt-2 text-[11px] text-fg-2">
+              {cur.coarseAttempts} de {cur.attempts} marcas de esta distancia salen de muestras gruesas («≈»).
+            </p>
+          )}
         </>
       )}
     </section>

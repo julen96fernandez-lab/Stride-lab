@@ -265,6 +265,8 @@ export const runEfforts = pgTable(
     distanceM: real("distance_m").notNull(),
     timeS: real("time_s").notNull(),
     startS: real("start_s").notNull(),
+    /** mayor hueco entre muestras dentro del tramo (s): > 60 → «≈» */
+    maxGapS: real("max_gap_s"),
   },
   (t) => [primaryKey({ columns: [t.runId, t.key] }), index("run_efforts_key_time_idx").on(t.key, t.timeS)],
 );

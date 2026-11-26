@@ -224,6 +224,7 @@ export async function listRuns(filter: SessionType | null, ctx: Ctx = makeCtx())
 // ─── Detalle ─────────────────────────────────────────────────────────────────
 
 import { hrReliable, pickSimilar, runSummary } from "@/lib/analysis/summary";
+import { isCoarse, recordWithFine } from "@/lib/analysis/best-efforts";
 import { ROUTE_RULES, sameRoute } from "@/lib/analysis/route-match";
 import { compareSimilar } from "@/lib/analysis/similar";
 
@@ -725,24 +726,27 @@ export async function getRecords(ctx: Ctx = makeCtx()) {
       startAt: s.runs.startAt,
       runDistanceM: s.runs.distanceM,
       inInjury: s.runs.inInjury,
+      maxGapS: s.runEfforts.maxGapS,
     })
     .from(s.runEfforts)
     .innerJoin(s.runs, and(eq(s.runs.id, s.runEfforts.runId), valid));
   return EFFORT_DISTANCES.map((d) => {
     const mine = rows.filter((r) => r.key === d.key);
-    const best = mine.reduce<(typeof mine)[number] | null>((b, r) => (!b || r.timeS < b.timeS ? r : b), null);
+    // El récord sigue siendo el más rápido; si viene de muestras gruesas lleva «≈» y el mejor fino.
+    const { best, bestFine } = recordWithFine(mine);
     const recent = !!best && best.startAt.getTime() >= Date.now() - 365 * 86_400_000;
-    return { ...d, best, attempts: mine.length, recent };
+    return { ...d, best, bestFine, attempts: mine.length, coarseAttempts: mine.filter((r) => isCoarse(r.maxGapS)).length, recent };
   });
 }
 
 export async function getRecordHistory(key: EffortKey) {
   const rows = await db()
-    .select({ runId: s.runEfforts.runId, timeS: s.runEfforts.timeS, startAt: s.runs.startAt, inInjury: s.runs.inInjury })
+    .select({ runId: s.runEfforts.runId, timeS: s.runEfforts.timeS, startAt: s.runs.startAt, inInjury: s.runs.inInjury, maxGapS: s.runEfforts.maxGapS })
     .from(s.runEfforts)
     .innerJoin(s.runs, and(eq(s.runs.id, s.runEfforts.runId), valid))
     .where(eq(s.runEfforts.key, key));
-  const points = recordProgression(rows.map((r) => ({ ...r, key })));
+  const coarseBy = new Map(rows.map((r) => [r.runId, isCoarse(r.maxGapS)]));
+  const points = recordProgression(rows.map((r) => ({ ...r, key }))).map((p) => ({ ...p, coarse: coarseBy.get(p.runId) ?? false }));
   const injuries = await listInjuries(db());
   const nowMs = Date.now();
   const recentRecords = points.filter((p) => p.isRecord && p.startAt.getTime() >= nowMs - 365 * 86_400_000).length;

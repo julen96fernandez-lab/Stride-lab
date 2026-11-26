@@ -13,7 +13,7 @@ export async function recomputeEfforts(db: Db): Promise<number> {
     .from(s.runSeries)
     .innerJoin(s.runs, and(eq(s.runs.id, s.runSeries.runId), eq(s.runs.status, "valid")))
     .where(eq(s.runSeries.metric, "distance"));
-  const values = rows.flatMap((r) => bestEfforts(r.t, r.v).map((e) => ({ runId: r.runId, key: e.key, distanceM: e.distanceM, timeS: e.timeS, startS: e.startS })));
+  const values = rows.flatMap((r) => bestEfforts(r.t, r.v).map((e) => ({ runId: r.runId, key: e.key, distanceM: e.distanceM, timeS: e.timeS, startS: e.startS, maxGapS: e.maxGapS })));
   await db.transaction(async (tx) => {
     await tx.delete(s.runEfforts);
     for (let i = 0; i < values.length; i += 500) await tx.insert(s.runEfforts).values(values.slice(i, i + 500));
