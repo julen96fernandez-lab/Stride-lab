@@ -1,6 +1,6 @@
 import "server-only";
 import { EFFORT_DISTANCES, improvementPct, recordProgression, type EffortKey } from "@/lib/analysis/best-efforts";
-import { and, asc, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db, schema as s } from "./client";
 import { decodePolyline } from "@/lib/import/gpx";
@@ -1358,3 +1358,118 @@ async function withRaceResults(races: RaceView[], runs: Awaited<ReturnType<typeo
     };
   });
 }
+
+// ─── Resumen de la semana ────────────────────────────────────────────────────
+
+import { summarizeWeek, type WeekPlanItem, type WeekRun, type WeekSummary } from "@/lib/analysis/week-summary";
+import { addDaysYmd, mondayOf } from "@/lib/analysis/week-dates";
+
+export interface WeekReport {
+  summary: WeekSummary;
+  plan: WeekPlanItem[];
+  runs: (WeekRun & { pace: string | null; dayLabel: string })[];
+}
+
+/**
+ * Resumen de cada semana pedida (lunes; la en curso como mucho): cifras, frases y previsto
+ * frente a realizado con el mismo cumplimiento por semana que Plan (mis sesiones y la sugerida,
+ * con los vínculos manuales).
+ */
+export async function getWeekReports(today: string, weekStarts: readonly string[], ctx: Ctx = makeCtx()): Promise<Record<string, WeekReport>> {
+  const current = mondayOf(today);
+  const weeks = [...new Set(weekStarts.map(mondayOf))].filter((w) => w <= current).sort();
+  if (!weeks.length) return {};
+  const from = addDaysYmd(weeks[0], -7 * WEEK_PREV);
+  const [core, goals, injuries] = await Promise.all([planCore(today, ctx, { weeksAhead: 1, from: weeks[0] }), ctx.goals(), ctx.injuries()]);
+  const madrid = core.madrid;
+  const allRuns = core.runs.map((r) => ({ r, date: madrid(r.startAt) })).filter((x) => x.date >= from && x.date <= today);
+  const ids = allRuns.filter((x) => x.date >= weeks[0]).map((x) => x.r.id);
+  const ratings = new Map(
+    ids.length
+      ? (await db().select({ id: s.runFeelings.runId, rating: s.runFeelings.rating }).from(s.runFeelings).where(inArray(s.runFeelings.runId, ids))).map((x) => [x.id, x.rating])
+      : [],
+  );
+  const kmOf = (w: string) => allRuns.filter((x) => x.date >= w && x.date <= addDaysYmd(w, 6)).reduce((a, x) => a + (x.r.distanceM ?? 0), 0) / 1000;
+  const weekRun = (x: (typeof allRuns)[number]): WeekReport["runs"][number] => ({
+    id: x.r.id,
+    date: x.date,
+    dayLabel: fmtDay(x.date),
+    distanceM: x.r.distanceM,
+    durationS: x.r.durationS,
+    type: x.r.type,
+    typeLabel: x.r.type && isRunType(x.r.type) ? RUN_TYPE_META[x.r.type].label : "Sin tipo",
+    load: x.r.trainingLoad,
+    rating: ratings.get(x.r.id) ?? null,
+    pace: x.r.distanceM && !x.r.isSpecial ? fmtPace(x.r.durationS / (x.r.distanceM / 1000)) : null,
+  });
+
+  // Previsto frente a realizado (por semana).
+  const items: Record<string, WeekPlanItem[]> = Object.fromEntries(weeks.map((w) => [w, []]));
+  const unplannedBy: Record<string, number> = {};
+  const mineIn = (w: string) => (core.anchor ? core.mine : []).filter((m) => m.date >= w && m.date <= addDaysYmd(w, 6));
+  if (core.anchor) {
+    const { sessions, hidden, byStart } = core;
+    const sugOf = (w: string) => {
+      if (hidden[w]) return null;
+      if (w === sessions[0].start) return { week: w, day: sessions[0].day, session: sessions[0].session };
+      const r = byStart.get(w);
+      return r ? { week: w, day: r.day, session: r.session as SessionKind } : null;
+    };
+    const sugManual = (w: string) => (byStart.get(w) ? manualOf(byStart.get(w)!) : undefined);
+    const sugs = weeks.flatMap((w) => {
+      const g = sugOf(w);
+      return g ? [{ ...g, manual: sugManual(w) }] : [];
+    });
+    const { lite, assigned, mineRunIds } = planLinks(core, today, from, sugs);
+    const sugHistory = lite.filter((r) => !mineRunIds.has(r.id)).map((r) => ({ date: r.date, type: r.type }));
+    for (const w of weeks) {
+      for (const m of mineIn(w)) {
+        const l = assigned.get(m.id);
+        items[w].push({ label: m.label, mine: true, day: m.date, status: mineStatus(m, l?.run, today), doneWhen: doneWhen(l), manual: m.link === "manual", runId: l?.run.id ?? null });
+      }
+      const g = sugs.find((x) => x.week === w);
+      if (g) {
+        const l = assigned.get(`sug:${w}`);
+        const status =
+          manualWeekStatus(g.session, g.manual, l?.run, () => weekStatus({ session: g.session, day: g.day, weekStart: w, today, runs: [] })) ??
+          weekStatus({ session: g.session, day: g.day, weekStart: w, today, runs: sugHistory });
+        items[w].push({
+          label: SESSION_LABEL[g.session],
+          mine: false,
+          day: g.day,
+          status,
+          doneWhen: status === "cumplida" ? doneWhen(l) : null,
+          manual: g.manual !== undefined && g.manual !== null,
+          runId: l?.run.id ?? null,
+        });
+      }
+    }
+    const sugBy = new Map(sugs.filter((g) => g.manual === undefined).map((g) => [g.week, g.session]));
+    const linkedIds = new Set([...mineRunIds, ...[...assigned].filter(([k, l]) => k.startsWith("sug:") && l.manual).map(([, l]) => l.run.id)]);
+    for (const r of unplannedRuns(lite, linkedIds, sugBy, weekOf)) unplannedBy[weekOf(r.date)] = (unplannedBy[weekOf(r.date)] ?? 0) + 1;
+  }
+
+  const goalKm = goals.week.km && !goals.week.paused ? goals.week.km : null;
+  const out: Record<string, WeekReport> = {};
+  for (const w of weeks) {
+    const end = addDaysYmd(w, 6);
+    const runs = allRuns.filter((x) => x.date >= w && x.date <= end).sort((a, b) => a.r.startAt.getTime() - b.r.startAt.getTime()).map(weekRun);
+    const injury = injuries.some((i) => i.startDate <= end && (i.endDate === null || i.endDate >= w) && i.startDate <= today);
+    out[w] = {
+      summary: summarizeWeek({
+        start: w,
+        today,
+        runs,
+        prevKm: Array.from({ length: WEEK_PREV }, (_, k) => kmOf(addDaysYmd(w, -7 * (k + 1)))),
+        goalKm,
+        plan: items[w],
+        unplanned: unplannedBy[w] ?? 0,
+        injury,
+      }),
+      plan: items[w].sort((a, b) => a.day.localeCompare(b.day)),
+      runs,
+    };
+  }
+  return out;
+}
+const WEEK_PREV = 8;

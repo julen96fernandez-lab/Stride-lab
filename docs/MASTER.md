@@ -613,6 +613,22 @@ como máximo una sesión. Lo que vincule a mano manda.
     vínculo manual toma su estado de él (cumplida si es de su tipo, «otra» si no; desvinculada,
     como sin carrera), y las carreras vinculadas a mano no salen como «Sesión no prevista».
 
+### Resumen de la semana
+Sin especificación previa en el repositorio: diseño de esta sesión, a revisar. Sin notificaciones
+(solo se ve al abrirlo), sin causas, sin alertas de volumen (la semana se compara con la media de
+las 8 anteriores, acordado) y con el cumplimiento por semana (incluidos los vínculos manuales).
+- **Paso 5 · Agregación y frases (hecho).** `lib/analysis/week-summary.ts` (con pruebas; reglas
+  en `WEEK_RULES`): cifras de la semana (km, carreras, tiempo, carga con dato, la más larga, km
+  por tipo y por día, media de las 8 anteriores, objetivo semanal, previsto frente a realizado,
+  no previstas, sensaciones) y de 1 a 5 frases por prioridad: volumen («Llevas…» en curso);
+  previsto frente a realizado («cumpliste las 2 sesiones previstas (1 en otro día…)» o «1 de 3
+  cumplidas; 1 hecha con otro tipo; 1 sin hacer»; los descansos y los opcionales sin correr no
+  cuentan; en curso, el día pasado sigue pendiente); objetivo; volumen frente a la media de las 8
+  anteriores (solo semanas cerradas y con al menos 2 con datos; sin tono de alerta); la más
+  larga (con 2 o más); sensaciones (con 2 valoradas); no previstas (si hubo plan); lesión como
+  coincidencia. `getWeekReports(today, lunes[])` en queries.ts: mismo reparto por semana que
+  Plan (mis sesiones y la sugerida visible, con vínculos manuales y su estado).
+
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
 último año, todas), carga 95, temperatura y humedad 210; las antiguas tienen pulso escaso o
@@ -1028,6 +1044,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Resumen de la semana, paso 5: agregación y frases (sin pantalla todavía).
 - 2026‑11‑26 — Cumplimiento por semana, paso 4: vínculo manual («Vincular», «Desvincular»,
   «Volver al automático»); aviso de exigente repetida.
 - 2026‑11‑26 — Cumplimiento por semana, paso 3: no más exigente en una semana ya cumplida,
