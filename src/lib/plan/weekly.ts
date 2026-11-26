@@ -192,17 +192,41 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
   return o.weeks.map((w, i) => {
     const mineExig = mine.filter((m) => dayNum(m.date)! >= w.startDay && dayNum(m.date)! <= w.startDay + 6 && demandingOf(m.kind));
     const occupiedBy = mineExig[0]?.id ?? null;
-    /** Cierra la semana: lo exigente que cuenta para alternar es lo mío si ocupa su sitio. */
+    // Lo exigente ya corrido esta semana (hasta hoy): manda sobre lo previsto para alternar.
+    const doneExig = past.filter((r) => dayNum(r.date)! >= w.startDay && dayNum(r.date)! <= w.startDay + 6 && demandingOf(r.type)).at(-1) ?? null;
+    /** Cierra la semana: cuenta lo corrido; si no, lo mío si ocupa su sitio; si no, la sugerencia. */
     const close = (ws: WeekSession): WeekSession => {
-      const dem = mineExig.length ? demandingOf(mineExig.at(-1)!.kind) : demandingOf(ws.session);
+      const dem = doneExig ? demandingOf(doneExig.type) : mineExig.length ? demandingOf(mineExig.at(-1)!.kind) : demandingOf(ws.session);
       if (dem) lastDemanding = dem;
       // Solo una exigente mía obliga a no repetir el tipo la semana siguiente; el ciclo por
       // defecto (tardes = tirada larga, libre previa = calidad) ya alterna a su manera.
-      prevWeek = mineExig.length ? dem : null;
+      prevWeek = mineExig.length || doneExig ? dem : null;
       return occupiedBy ? { ...ws, occupiedBy } : ws;
+    };
+    /** Si la exigente de la semana ya está hecha, la sesión de la semana es esa (no se sugiere otra). */
+    const doneSession = (session: SessionKind, ymd: string): WeekSession | null => {
+      if (!doneExig || !demandingOf(session)) return null;
+      const dk = demandingOf(doneExig.type)!;
+      const k: SessionKind = dk === "long" ? "tirada_larga" : session === "calidad_corta" ? "calidad_corta" : "calidad";
+      if (k === session && doneExig.date > ymd) return null;
+      return {
+        start: w.start,
+        end: w.end,
+        kind: w.kind,
+        pos: w.pos,
+        session: k,
+        label: SESSION_LABEL[k],
+        day: doneExig.date,
+        dayLabel: fmtDay(doneExig.date),
+        when: null,
+        reason: `La exigente de esta semana ya está hecha (${dk === "long" ? "tirada larga" : "calidad"} el ${fmtDay(doneExig.date)}): no toca otra esta semana.`,
+        downgraded: false,
+      };
     };
     const f = o.fixed?.[w.start];
     if (f) {
+      const done = doneSession(f.session, f.day);
+      if (done) return close(done);
       return close({ start: w.start, end: w.end, kind: w.kind, pos: w.pos, ...f, label: SESSION_LABEL[f.session], dayLabel: fmtDay(f.day) });
     }
     const current = i === 0 && today >= w.startDay && today <= w.startDay + 6;
@@ -256,6 +280,10 @@ function planWeeksBase(o: Parameters<typeof planWeeks>[0]): WeekSession[] {
         beforeTardes ? "la semana de tardes que viene lleva la tirada larga" : i === 0 ? lastTxt : "alterna con la anterior"
       }).`;
     }
+
+    // La exigente de esta semana ya está hecha: no se sugiere otra; la de la semana es esa.
+    const done = doneSession(session, ymdOf(day));
+    if (done) return close(done);
 
     // Si los cambios de turno no dejan un día válido para la exigente, rodaje suave.
     let downgraded = false;

@@ -68,3 +68,30 @@ export function todayFromMine(
     kind: first.kind,
   };
 }
+
+/** Mi sesión de hoy con lo que la cubrió (reparto por semana, como en Plan). */
+export interface TodayMineDone extends TodayMine {
+  /** días de la carrera respecto a hoy (negativo = la corrí antes) */
+  doneOffset?: number | null;
+  done?: { dayLabel: string; typeLabel: string; km: string | null } | null;
+}
+
+/**
+ * Separa mis sesiones de hoy: las que siguen pendientes (o las corrí hoy) y las que ya cubrió una
+ * carrera anterior de su semana. De estas, una frase para «Hoy»: «Tu tirada larga de esta semana
+ * ya está hecha: martes 24 (Tirada larga · 16 km).»
+ */
+export function splitToday<T extends TodayMineDone>(mine: readonly T[]): { pending: T[]; doneBefore: string[] } {
+  const before = (m: T) => (m.status === "cumplida" || m.status === "otra") && m.doneOffset != null && m.doneOffset < 0 && !!m.done;
+  return {
+    pending: mine.filter((m) => !before(m)),
+    doneBefore: mine.filter(before).map((m) => {
+      const d = m.done!;
+      const what = `${d.typeLabel}${d.km ? ` · ${d.km} km` : ""}`;
+      const name = MINE_LABEL[m.kind].toLowerCase();
+      return m.status === "cumplida"
+        ? `Tu ${name} de esta semana ya está hecha: ${d.dayLabel} (${what}).`
+        : `Tu ${name} de esta semana ya la cubrió otra sesión: ${d.dayLabel} (${what}).`;
+    }),
+  };
+}

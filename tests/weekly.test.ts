@@ -174,11 +174,11 @@ describe("recálculo alrededor de mis sesiones", () => {
     expect(ws["2026-12-28"].session).toBe("calidad");
     expect(ws["2026-12-28"].reason).toMatch(/ya tuvo tirada larga/);
   });
-  it("nunca una exigente sugerida el día después de una exigente hecha", () => {
-    // hoy martes 8-dic, tirada larga corrida hoy: la calidad de la libre no va el miércoles 9
+  it("con la exigente de la semana ya corrida, no se sugiere otra esa semana: la de la semana es la corrida", () => {
+    // hoy martes 8-dic (libre), tirada larga corrida hoy: no hay calidad el jueves 10
     const w = plan("2026-12-08", [{ date: "2026-12-08", type: "tirada_larga" }])[0];
-    expect(w.session).toBe("calidad");
-    expect(w.day).toBe("2026-12-10");
+    expect(w).toMatchObject({ session: "tirada_larga", day: "2026-12-08" });
+    expect(w.reason).toMatch(/ya está hecha .*no toca otra esta semana/);
   });
   it("se mantienen las reglas de turnos: noches suave opcional; nunca calidad el lunes tras noches", () => {
     const ws = plan("2026-11-23", H, { mine: [{ id: "m1", date: "2026-12-02", kind: "suave" }, { id: "m2", date: "2026-12-26", kind: "tirada_larga" }] });
@@ -202,5 +202,36 @@ describe("descanso puesto por mí", () => {
     expect(w.occupiedBy).toBeUndefined();
     expect(w.session).toBe(base.session);
     expect(w.day).not.toBe(base.day);
+  });
+});
+
+describe("cumplimiento por semana: efecto en el plan", () => {
+  const H: PastRun[] = [{ date: "2026-10-17", type: "tirada_larga" }];
+  const by = (ws: ReturnType<typeof plan>) => Object.fromEntries(ws.map((w) => [w.start, w]));
+  it("exigente corrida antes del día sugerido, del mismo tipo: la de la semana es la corrida (queda cumplida)", () => {
+    // libre 7–13 dic: toca calidad (tras la tirada larga de octubre); series el lunes 7
+    const w = by(plan("2026-12-08", [...H, { date: "2026-12-07", type: "series" }]))["2026-12-07"];
+    expect(w).toMatchObject({ session: "calidad", day: "2026-12-07" });
+  });
+  it("alternancia con lo corrido: si la exigente de la semana se cubrió con otro tipo, la siguiente alterna con lo corrido", () => {
+    // tardes 23–29 nov (tirada larga prevista) cubierta con series el martes 24: la libre siguiente (7–13 dic) es tirada larga
+    const base = by(plan("2026-11-25", [...H]))["2026-12-07"].session;
+    const ws = by(plan("2026-11-25", [...H, { date: "2026-11-24", type: "series" }]));
+    expect(ws["2026-11-23"]).toMatchObject({ session: "calidad", day: "2026-11-24" });
+    expect(base).toBe("calidad");
+    expect(ws["2026-12-07"].session).toBe("tirada_larga");
+  });
+  it("una suave corrida no cambia nada", () => {
+    expect(plan("2026-12-08", [...H, { date: "2026-12-07", type: "rodaje" }])).toEqual(plan("2026-12-08", [...H, { date: "2026-12-06", type: "rodaje" }]).map((w) => w));
+  });
+});
+
+describe("cumplimiento por semana: semana ya guardada", () => {
+  it("la semana guardada con tirada larga el sábado y series el martes: la de la semana pasa a ser la calidad del martes", () => {
+    const fixed = { "2026-11-23": { session: "tirada_larga" as const, day: "2026-11-28", when: null, reason: "Guardada", downgraded: false } };
+    const w = plan("2026-11-25", [{ date: "2026-11-24", type: "series" }], { fixed })[0];
+    expect(w).toMatchObject({ session: "calidad", day: "2026-11-24" });
+    // sin carrera exigente, la guardada se respeta tal cual
+    expect(plan("2026-11-25", [{ date: "2026-11-24", type: "rodaje" }], { fixed })[0]).toMatchObject({ session: "tirada_larga", day: "2026-11-28", reason: "Guardada" });
   });
 });

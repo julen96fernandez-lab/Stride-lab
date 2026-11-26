@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { todayFromMine, type TodayMine } from "@/lib/plan/today";
+import { splitToday, todayFromMine, type TodayMineDone } from "@/lib/plan/today";
 
-const m = (o: Partial<TodayMine> = {}): TodayMine => ({ id: "a", kind: "suave", distanceM: null, durationS: null, note: null, status: "pendiente", ...o });
+const m = (o: Partial<TodayMineDone> = {}): TodayMineDone => ({ id: "a", kind: "suave", distanceM: null, durationS: null, note: null, status: "pendiente", ...o });
 
 describe("«Hoy» con mi sesión", () => {
   it("sin sesión mía, null (manda la estimación de siempre)", () => {
@@ -35,5 +35,23 @@ describe("«Hoy» con descanso", () => {
     const t = todayFromMine([m({ kind: "descanso" })], { label: "Rodaje suave" }, true)!;
     expect(t).toMatchObject({ title: "Descanso", sub: "lo pusiste tú" });
     expect(t.injury).toMatch(/buen día para descansar/);
+  });
+});
+
+describe("«Hoy»: ya hecha antes en su semana", () => {
+  const done = { dayLabel: "martes 24", typeLabel: "Tirada larga", km: "16" };
+  it("la cubierta por una carrera anterior sale de «Hoy te toca» con su frase", () => {
+    const r = splitToday([m({ kind: "tirada_larga", status: "cumplida", doneOffset: -2, done }), m({ id: "b", kind: "suave" })]);
+    expect(r.pending.map((x) => x.id)).toEqual(["b"]);
+    expect(r.doneBefore).toEqual(["Tu tirada larga de esta semana ya está hecha: martes 24 (Tirada larga · 16 km)."]);
+  });
+  it("cubierta con otro tipo lo dice así", () => {
+    const r = splitToday([m({ kind: "calidad", status: "otra", doneOffset: -1, done: { dayLabel: "miércoles 25", typeLabel: "Rodaje", km: null } })]);
+    expect(r.doneBefore).toEqual(["Tu calidad de esta semana ya la cubrió otra sesión: miércoles 25 (Rodaje)."]);
+    expect(r.pending).toEqual([]);
+  });
+  it("corrida hoy (o pendiente) sigue en «Hoy te toca»", () => {
+    expect(splitToday([m({ status: "cumplida", doneOffset: 0, done })]).pending).toHaveLength(1);
+    expect(splitToday([m({ status: "pendiente" })]).doneBefore).toEqual([]);
   });
 });

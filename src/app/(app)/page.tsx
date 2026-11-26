@@ -16,7 +16,7 @@ import { RaceCountdown } from "@/components/race/RaceCards";
 import { rangeLabel } from "@/lib/analysis/periods";
 import type { TodayKind } from "@/lib/analysis/home";
 import { mineKindForToday, type MineKind } from "@/lib/plan/mine";
-import { todayFromMine } from "@/lib/plan/today";
+import { splitToday, todayFromMine } from "@/lib/plan/today";
 import { DAY_SHIFT_LABEL, SHIFT_META } from "@/lib/plan/shifts";
 import { DASH, cap, date, dec, duration, int, km, pace } from "@/lib/format";
 
@@ -98,7 +98,21 @@ async function HomeData() {
   const vo2 = h.vo2;
   const latestVo2 = vo2.at(-1) ?? null;
   const st = TODAY_STYLE[o.advice.kind];
-  const mine = todayFromMine(mineToday, o.advice, !!o.openInjury, o.todayShift);
+  // Lo de hoy que ya cubrió una carrera anterior de su semana deja de ser «Hoy te toca».
+  const { pending, doneBefore } = splitToday(mineToday);
+  const mine = todayFromMine(pending, o.advice, !!o.openInjury, o.todayShift);
+  const doneLines = doneBefore.length ? (
+    <ul className="relative mt-3 flex flex-col gap-1.5">
+      {doneBefore.map((t) => (
+        <li key={t} className="flex gap-2 rounded-2xl border border-line bg-inset px-3.5 py-2.5 text-[13px] leading-snug">
+          <span className="font-semibold text-[var(--load-low)]" aria-hidden="true">
+            ✓
+          </span>
+          <span>{t}</span>
+        </li>
+      ))}
+    </ul>
+  ) : null;
   // Turno de hoy (el del ciclo o el cambiado para hoy).
   const shiftLine = o.todayShift ? (
     <p className="relative mt-1 flex items-center gap-1.5 text-[12px] text-fg-2">
@@ -177,8 +191,9 @@ async function HomeData() {
             </p>
           )}
           {mine.appNote && <p className="relative mt-2 text-[12px] text-fg-2">{mine.appNote}</p>}
-          <Link href={`/plan/sesion/${mineToday[0].id}`} className="relative mt-3 flex min-h-[44px] items-center justify-center rounded-2xl border border-line-strong text-[14px] font-semibold">
-            {mineToday.length > 1 ? "Ver o cambiar la primera" : "Ver o cambiar"}
+          {doneLines}
+          <Link href={`/plan/sesion/${pending[0].id}`} className="relative mt-3 flex min-h-[44px] items-center justify-center rounded-2xl border border-line-strong text-[14px] font-semibold">
+            {pending.length > 1 ? "Ver o cambiar la primera" : "Ver o cambiar"}
           </Link>
         </section>
       ) : (
@@ -199,6 +214,7 @@ async function HomeData() {
             </div>
           </div>
           <p className="relative mt-2 text-[14px] leading-snug text-fg-2">{o.advice.reason}</p>
+          {doneLines}
           <Link
             href={`/plan/sesion/nueva?fecha=${today}&tipo=${mineKindForToday(o.advice.kind)}&volver=inicio`}
             className="relative mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-line-strong text-[15px] font-semibold"

@@ -897,7 +897,7 @@ import { SESSION_LABEL, demandingOf, fmtDay, planWeeks, type SessionKind } from 
 import { rescheduleDay, weekStatus } from "@/lib/plan/compliance";
 import { freezeWeek, getStoredWeeks, listMine, type MineRow } from "@/lib/plan/plan-db";
 import { MINE_LABEL, mineDetail, weekOf, type MineKind } from "@/lib/plan/mine";
-import { assignRuns, doneWhen, linkMine, mineStatus, slotMatches, unplannedRuns, type MineStatus, type PlanSlot } from "@/lib/plan/linking";
+import { assignRuns, doneWhen, mineStatus, slotMatches, unplannedRuns, type MineStatus, type PlanSlot } from "@/lib/plan/linking";
 import { TYPE_META as RUN_TYPE_META, isSessionType as isRunType } from "@/lib/analysis/session-type";
 import { pace as fmtPace } from "@/lib/format";
 import { MINE_WHAT, RUN_WHAT, SUGG_WHAT, mineWarnings, type Exigente, type WarnCtx } from "@/lib/plan/warnings";
@@ -968,18 +968,49 @@ function mineExigentes(mine: readonly MineView[]): Exigente[] {
 
 /** Mis sesiones de un día (para Inicio), con su estado (misma vinculación por semana que en Plan). */
 export async function getMineOn(day: string, ctx: Ctx = makeCtx()): Promise<(MineView & { distanceM: number | null; durationS: number | null })[]> {
-  const d = dayNum(day)!;
-  const monday = mondayOfDay(d);
-  const [rows, runs] = await Promise.all([listMine(db(), ymdOf(monday - 1), ymdOf(monday + 7)), ctx.runs()]);
-  if (!rows.some((m) => m.date === day)) return [];
-  const madrid = (x: Date) => new Date(localDay(x) * 86_400_000).toISOString().slice(0, 10);
-  const lite = runs
-    .map((r) => ({ id: r.id, date: madrid(r.startAt), at: r.startAt.getTime(), type: r.type }))
-    .filter((r) => r.date >= ymdOf(monday - 2) && r.date <= day);
-  const links = linkMine(rows, lite);
-  return rows
-    .filter((m) => m.date === day)
-    .map((m) => ({ ...mineView(m), distanceM: m.distanceM, durationS: m.durationS, status: mineStatus(m, links.get(m.id), day) }));
+  // El mismo reparto por semana que en Plan (mis sesiones y la sugerencia visible de la semana).
+  const core = await planCore(day, ctx, { weeksAhead: 1 });
+  if (!core.anchor) {
+    const d = dayNum(day)!;
+    const monday = mondayOfDay(d);
+    const rows = (await listMine(db(), ymdOf(monday - 1), ymdOf(monday + 7))).map(mineView);
+    if (!rows.some((m) => m.date === day)) return [];
+    const lite = core.runs
+      .map((r) => ({ id: r.id, date: core.madrid(r.startAt), at: r.startAt.getTime(), type: r.type, distanceM: r.distanceM, durationS: r.durationS }))
+      .filter((r) => r.date >= ymdOf(monday - 2) && r.date <= day);
+    const assigned = assignRuns(rows, lite);
+    return rows.filter((m) => m.date === day).map((m) => withDone(m, assigned.get(m.id), day));
+  }
+  const mine = core.mine.filter((m) => m.date === day);
+  if (!mine.length) return [];
+  const w = core.sessions[0];
+  const { assigned } = planLinks(core, day, core.pastStart, core.hidden[w.start] ? [] : [{ week: w.start, day: w.day, session: w.session }]);
+  return mine.map((m) => withDone(m, assigned.get(m.id), day));
+}
+
+/** Mi sesión con su carrera (si la cubre una, aunque sea otro día de su semana). */
+function withDone(
+  m: MineView,
+  l: { run: { id: string; date: string; at: number; type: string | null; distanceM: number | null; durationS: number }; offset: number } | undefined,
+  day: string,
+): MineView & { distanceM: number | null; durationS: number | null } {
+  const r = l?.run;
+  return {
+    ...m,
+    status: mineStatus(m, r, day),
+    doneOffset: l ? l.offset : null,
+    doneWhen: doneWhen(l),
+    done: r
+      ? {
+          id: r.id,
+          date: r.date,
+          dayLabel: fmtDay(r.date),
+          typeLabel: r.type && isRunType(r.type) ? RUN_TYPE_META[r.type].label : "Sin tipo",
+          km: r.distanceM ? (r.distanceM / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 }) : null,
+          pace: r.distanceM && r.durationS ? fmtPace(r.durationS / (r.distanceM / 1000)) : null,
+        }
+      : null,
+  };
 }
 
 /** Ciclo de turnos: semanas desde la actual (incluida) y la anterior, para Plan. */

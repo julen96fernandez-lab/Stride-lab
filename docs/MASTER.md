@@ -584,6 +584,19 @@ como máximo una sesión. Lo que vincule a mano manda.
     «Tirada larga: ya cumplida · hecha antes (jueves 26)» y «No queda pendiente para este día», y
     en «Previstas» la marca «✓ cumplida». `doneWhen` y `runDayLabel` en `lib/plan/linking.ts`
     (con pruebas); `buildCalendar` lleva `covered` en cada sesión prevista.
+- **Paso 3 · Efecto en el plan y en «Hoy» (hecho).** Decidido: «Hoy» sabe si ya está hecha, no
+  más exigente esa semana y alternancia con lo corrido (sin aviso nuevo). Con el turno efectivo
+  de cada día, como el resto.
+  - `planWeeks` (con pruebas): si esta semana ya corrí una exigente (hasta hoy), la sesión de la
+    semana pasa a ser esa (su tipo y su día; «La exigente de esta semana ya está hecha… no toca
+    otra esta semana»), también en la semana ya guardada; no se ofrece «Reorganizar» (queda
+    cumplida). Para alternar cuenta lo corrido: si una tirada larga prevista se cubrió con series,
+    la siguiente exigente es tirada larga.
+  - «Hoy»: `getMineOn` usa el mismo reparto por semana que Plan (mis sesiones y la sugerencia
+    visible). `splitToday` (lib/plan/today.ts, con pruebas): lo de hoy que ya cubrió una carrera
+    anterior de su semana deja de ser «Hoy te toca»; sale «✓ Tu calidad de esta semana ya está
+    hecha: miércoles 25 (Series · 7,4 km)» y, si no queda nada pendiente hoy, la estimación de
+    siempre (con el turno de hoy).
 
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
@@ -1000,6 +1013,8 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Cumplimiento por semana, paso 3: no más exigente en una semana ya cumplida,
+  alternancia con lo corrido y «Hoy» que sabe si ya está hecha.
 - 2026‑11‑26 — Calendario, paso 3: cambio de turno de un día con efecto en el plan, los avisos y «Hoy».
 - 2026‑11‑26 — Cumplimiento por semana, paso 2: «Hecha antes / después» en Plan, calendario (punto
   hueco) y hoja del día («ya cumplida», sin dejarla pendiente).
