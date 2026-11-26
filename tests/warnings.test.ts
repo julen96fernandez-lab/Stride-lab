@@ -56,3 +56,23 @@ describe("avisos de mis sesiones: afinado", () => {
     expect(mineWarnings({ date: "2026-12-22", kind: "tirada_larga" }, r)).toEqual([]);
   });
 });
+
+describe("aviso de exigente repetida en la semana", () => {
+  const run = { date: "2026-11-24", kind: "quality" as const, what: "la calidad que corriste", runId: "r1" };
+  const c = (o: Partial<WarnCtx> = {}) => ctx({ anchor: null, exigentes: [run], ...o });
+  it("otra exigente en una semana con la exigente ya corrida: avisa (y se guarda igual)", () => {
+    expect(mineWarnings({ id: "m", date: "2026-11-28", kind: "tirada_larga" }, c())).toContain("Ya hiciste la exigente de esta semana (martes 24).");
+  });
+  it("no avisa si esa carrera es la que cubre la sesión", () => {
+    expect(mineWarnings({ id: "m", date: "2026-11-26", kind: "calidad" }, c({ covering: { m: "r1" } }))).not.toContain("Ya hiciste la exigente de esta semana (martes 24).");
+  });
+  it("ni para sesiones suaves, ni en otra semana, ni el mismo día de la carrera", () => {
+    expect(mineWarnings({ date: "2026-11-28", kind: "suave" }, c())).toEqual([]);
+    expect(mineWarnings({ date: "2026-12-01", kind: "calidad" }, c()).join(" ")).not.toMatch(/Ya hiciste/);
+    expect(mineWarnings({ date: "2026-11-24", kind: "calidad" }, c()).join(" ")).not.toMatch(/Ya hiciste/);
+  });
+  it("las exigentes sugeridas o mías no cuentan como «hecha»", () => {
+    const e = [{ date: "2026-11-24", kind: "quality" as const, what: "tu calidad", id: "x" }];
+    expect(mineWarnings({ date: "2026-11-28", kind: "tirada_larga" }, c({ exigentes: e })).join(" ")).not.toMatch(/Ya hiciste/);
+  });
+});

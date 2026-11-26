@@ -1057,16 +1057,17 @@ async function planCore(today: string, ctx: Ctx, o: { weeksAhead: number; from?:
 
 /** Contexto de avisos: otras exigentes (mías, sugeridas visibles desde hoy y corridas), carreras y ciclo. */
 function warnContext(core: Extract<Awaited<ReturnType<typeof planCore>>, { weeks: unknown }>, today: string): WarnCtx {
-  const { anchor, mine, sessions, hidden, history, pastStart, raceList, overrides } = core;
+  const { anchor, mine, sessions, hidden, pastStart, raceList, overrides, runs, madrid } = core;
   const exigentes: Exigente[] = [
     ...mineExigentes(mine),
     ...sessions.flatMap((w) => {
       const k = demandingOf(w.session);
       return k && !hidden[w.start] && w.day >= today ? [{ date: w.day, kind: k, what: SUGG_WHAT[k] }] : [];
     }),
-    ...history.flatMap((r) => {
+    ...runs.flatMap((r) => {
       const k = demandingOf(r.type);
-      return k && r.date >= pastStart && r.date <= today ? [{ date: r.date, kind: k, what: RUN_WHAT[k] }] : [];
+      const date = madrid(r.startAt);
+      return k && date >= pastStart && date <= today ? [{ date, kind: k, what: RUN_WHAT[k], runId: r.id }] : [];
     }),
   ];
   return { anchor, races: raceList, exigentes, overrides };
@@ -1123,6 +1124,8 @@ export async function getCalendar(today: string, from: string, to: string, ctx: 
     return l ? { date: l.run.date, offset: l.offset, matched: slotMatches(kind, l.run.type), when: doneWhen(l) } : null;
   };
   const suggestions = visible.map((g) => ({ ...g, covered: doneOf(`sug:${g.week}`, g.session) }));
+  const covering = Object.fromEntries(mine.flatMap((m) => (assigned.get(m.id) ? [[m.id, assigned.get(m.id)!.run.id]] : [])));
+  for (const m of mine) m.warnings = mineWarnings(m, { ...warnCtx, covering });
   const mineDone = mine.map((m) => ({ ...m, covered: doneOf(m.id, m.kind) }));
   return buildCalendar({ from, to, shiftOf: (m) => shiftWeek(anchor, m).kind, suggestions, mine: mineDone, runs, races: core.raceList, injuries, today, overrides: core.overrides });
 }
@@ -1213,6 +1216,9 @@ export async function getPlan(today: string, ctx: Ctx = makeCtx()) {
     m.doneOffset = l ? l.offset : null;
     m.doneWhen = doneWhen(l);
   }
+  // Con el reparto hecho, los avisos saben qué carrera cubre cada sesión mía.
+  const covering = Object.fromEntries(mine.flatMap((m) => (assigned.get(m.id) ? [[m.id, assigned.get(m.id)!.run.id]] : [])));
+  for (const m of mine) m.warnings = mineWarnings(m, { ...warnCtx, covering });
   const sugBy = new Map<string, SessionKind>();
   for (const w of sessions) if (!hidden[w.start]) sugBy.set(w.start, w.session);
   for (const w of past) if (w.sug && !w.hidden) sugBy.set(w.start, w.sug.session);

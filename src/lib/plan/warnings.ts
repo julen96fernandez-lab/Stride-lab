@@ -3,6 +3,8 @@
  * guardar igual (mis sesiones nunca se mueven). Lógica pura, con pruebas. Reglas:
  * - Turno efectivo de cada día (el del ciclo o el cambiado ese día): en un día de noche, solo
  *   suave u opcional; tras una noche (el día anterior de noche), nada exigente.
+ * - Una semana con la exigente ya corrida: «Ya hiciste la exigente de esta semana (…)» si pongo otra
+ *   (salvo que esa carrera sea justo la que cubre la sesión).
  * - Nunca dos exigentes en días consecutivos (con otra mía, la sugerida o una ya corrida).
  * - Nunca el mismo tipo exigente dos veces seguidas (con la exigente anterior, mía, sugerida o hecha).
  * - Afinado de una carrera objetivo: dos semanas antes, nada de tirada larga; la semana anterior,
@@ -18,6 +20,8 @@ export interface Exigente {
   what: string;
   /** id de mi sesión (para no compararla consigo misma) */
   id?: string;
+  /** id de la carrera, si es una exigente ya corrida */
+  runId?: string;
 }
 
 export interface WarnCtx {
@@ -27,6 +31,8 @@ export interface WarnCtx {
   races: readonly { name: string; date: string }[];
   /** otras sesiones exigentes: mías, sugeridas visibles y corridas */
   exigentes: readonly Exigente[];
+  /** carrera que cubre cada sesión mía (id de sesión → id de carrera), según el reparto por semana */
+  covering?: Readonly<Record<string, string>>;
 }
 
 const NAME: Record<Demanding, string> = { long: "tirada larga", quality: "calidad" };
@@ -45,6 +51,13 @@ export function mineWarnings(m: { id?: string; date: string; kind: string }, ctx
   }
 
   if (dem) {
+    // La exigente de esta semana ya está hecha (otra carrera que no es la que cubre esta sesión).
+    const own = m.id ? ctx.covering?.[m.id] : undefined;
+    const wk = mondayOfDay(d);
+    const done = others
+      .filter((e) => e.runId && e.runId !== own && e.date !== m.date && mondayOfDay(dayNum(e.date)!) === wk)
+      .sort((a, b) => a.date.localeCompare(b.date))[0];
+    if (done) out.push(`Ya hiciste la exigente de esta semana (${fmtDay(done.date)}).`);
     const next = others.filter((e) => Math.abs(dayNum(e.date)! - d) === 1);
     if (next.length) out.push(`Dos exigentes en días seguidos: ${next[0].what} del ${fmtDay(next[0].date)}.`);
     const before = others.filter((e) => e.date < m.date).sort((a, b) => a.date.localeCompare(b.date)).at(-1);

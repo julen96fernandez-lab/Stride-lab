@@ -597,6 +597,10 @@ como máximo una sesión. Lo que vincule a mano manda.
     anterior de su semana deja de ser «Hoy te toca»; sale «✓ Tu calidad de esta semana ya está
     hecha: miércoles 25 (Series · 7,4 km)» y, si no queda nada pendiente hoy, la estimación de
     siempre (con el turno de hoy).
+  - Aviso de exigente repetida (añadido después): si pongo otra exigente en una semana cuya
+    exigente ya corrí, «Ya hiciste la exigente de esta semana (martes 24).», y se guarda igual.
+    No avisa si esa carrera es justo la que cubre la sesión (los avisos reciben `covering` tras
+    el reparto por semana), ni el mismo día de la carrera.
 
 ### Resumen y comparación en el detalle
 Datos (producción, 256 válidas): ruta GPS 187 (las de cinta no), pulso medio 92 (las 54 del
