@@ -8,6 +8,7 @@ import { SESSION_TYPES, TYPE_META } from "@/lib/analysis/session-type";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { ChoicePanel, ChoiceProvider, ChoiceSelector } from "@/components/ui/Choice";
 import { WeeksHistory } from "@/components/analysis/WeekViews";
+import { IntensityCard } from "@/components/charts/IntensityCard";
 import { DEFAULT_HR_BAND, HR_BANDS, MIN_DISTANCE_M, type YearPace } from "@/lib/analysis/pace-at-hr";
 import { analysisScreen } from "@/lib/db/screens";
 import { AnalysisSkeleton } from "@/components/ui/Skeletons";
@@ -73,7 +74,7 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
   const sp = await searchParams;
   // Una sola carga (con caché) con todas las opciones de todos los selectores: cambiar de
   // opción no vuelve al servidor.
-  const { analysis: a, periods, fitness, insights, effRodaje, effAll, feelings, weeks } = await analysisScreen(cacheDay());
+  const { analysis: a, periods, fitness, insights, effRodaje, effAll, feelings, weeks, intensity } = await analysisScreen(cacheDay());
   const initial = choicesFromParams({ ...sp, vista: sp.vista === "ano" ? "año" : sp.vista }, CHOICES);
 
   const latest = a.vo2.at(-1) ?? null;
@@ -124,6 +125,9 @@ async function AnalysisData({ searchParams }: { searchParams: Promise<Record<str
 
       {/* Carga y forma */}
       <FitnessCard view={fitness} />
+
+      {/* Intensidad: reparto por zonas */}
+      <IntensityCard data={intensity} />
 
       {/* Sensaciones */}
       <FeelingsSection s={feelings} />

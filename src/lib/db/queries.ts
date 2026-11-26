@@ -1500,3 +1500,14 @@ export async function getWeekHistory(today: string, n = 12, ctx: Ctx = makeCtx()
       : [];
   });
 }
+
+// ─── Intensidad ──────────────────────────────────────────────────────────────
+
+import { intensity, INTENSITY_VIEWS, type IntensityResult, type IntensityView } from "@/lib/analysis/intensity";
+
+/** «Intensidad»: las tres vistas ya calculadas (el selector cambia al instante). */
+export async function getIntensity(ctx: Ctx = makeCtx()): Promise<Record<IntensityView, IntensityResult>> {
+  const runs = (await ctx.runs()).map((r) => ({ day: localDay(r.startAt), durationS: r.durationS, zoneSeconds: r.hrZoneSeconds }));
+  const today = localDay(new Date());
+  return Object.fromEntries(INTENSITY_VIEWS.map((v) => [v.key, intensity(runs, v.key, today)])) as Record<IntensityView, IntensityResult>;
+}

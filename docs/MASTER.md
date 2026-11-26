@@ -613,6 +613,20 @@ como máximo una sesión. Lo que vincule a mano manda.
     vínculo manual toma su estado de él (cumplida si es de su tipo, «otra» si no; desvinculada,
     como sin carrera), y las carreras vinculadas a mano no salen como «Sesión no prevista».
 
+### Tres mejoras (intensidad, «≈» en récords, zapatillas)
+Decisiones: «≈» cuando el mayor hueco entre muestras dentro del tramo del esfuerzo supera 60 s;
+los récords con «≈» siguen siendo récords con la marca y el detalle muestra «Mejor con muestras
+finas» si lo hay; predicciones de Plan sin cambios; zapatillas con «Contar carreras en cinta»
+(sí por defecto); asignación masiva solo a carreras sin zapatilla salvo casilla; los imports del
+zip no reciben la habitual (solo el formulario manual la preselecciona).
+- **Mejora 1 · Intensidad (hecho).** `lib/analysis/intensity.ts` (con pruebas; reglas en
+  `INTENSITY_RULES`): reparto del tiempo por zonas en suave (Z1–Z2), medio (Z3) y fuerte (Z4–Z5),
+  por tiempo; solo carreras con pulso ≥ 80 % de la duración (y cuántas quedan fuera); vistas 12
+  semanas (por semana), 12 meses y todo (por mes, desde el primer mes con pulso). En Análisis, tras
+  «Carga y forma»: barras apiladas al 100 % con la línea neutra «80 % suave» (guía habitual), %
+  del periodo y «Tu reparto: …» solo con 5 o más carreras válidas (si no, «no se sacan
+  conclusiones» y los % en gris). En producción hoy entran 25 carreras (24 de 2026).
+
 ### Resumen de la semana
 Sin especificación previa en el repositorio: diseño de esta sesión, a revisar. Sin notificaciones
 (solo se ve al abrirlo), sin causas, sin alertas de volumen (la semana se compara con la media de
@@ -1057,6 +1071,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑26 — Mejora 1: «Intensidad» en Análisis (reparto por zonas, guía neutra del 80 % suave).
 - 2026‑11‑26 — Resumen de la semana, paso 7: tarjeta «Semana pasada» en Inicio e historial de 12
   semanas en Análisis.
 - 2026‑11‑26 — Resumen de la semana, paso 6: pantalla «Resumen de la semana».

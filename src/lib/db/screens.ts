@@ -39,7 +39,7 @@ export async function analysisScreen(day: string) {
   cacheTag(DATA_TAG);
   cacheLife(DATA_LIFE);
   const ctx = q.makeCtx();
-  const [analysis, periods, fitness, insights, effRodaje, effAll, feelings, weeks] = await Promise.all([
+  const [analysis, periods, fitness, insights, effRodaje, effAll, feelings, weeks, intensity] = await Promise.all([
     q.getAnalysis(DEFAULT_HR_BAND, ctx),
     q.getPeriodsAll(ctx),
     q.getFitness(ctx),
@@ -48,8 +48,9 @@ export async function analysisScreen(day: string) {
     q.getEfficiency(null, ctx),
     q.getFeelingStats(day),
     q.getWeekHistory(day, 12, ctx),
+    q.getIntensity(ctx),
   ]);
-  return { analysis, periods, fitness, insights, effRodaje, effAll, feelings, weeks };
+  return { analysis, periods, fitness, insights, effRodaje, effAll, feelings, weeks, intensity };
 }
 
 export async function runScreen(id: string, day: string) {

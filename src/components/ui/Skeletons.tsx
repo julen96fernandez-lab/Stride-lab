@@ -85,6 +85,8 @@ export function AnalysisSkeleton() {
     <div className="flex flex-col gap-4" aria-hidden="true">
       <ChartCard chart={210} title="45%" />
       <ChartCard chart={170} title="25%" pill />
+      {/* Intensidad */}
+      <ChartCard chart={190} title="25%" pill />
       {/* Últimas 12 semanas */}
       <div className="card flex flex-col gap-3 p-5">
         <Bar w="35%" h={10} />
