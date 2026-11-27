@@ -656,6 +656,39 @@ zip no reciben la habitual (solo el formulario manual la preselecciona).
   lista ya cargada (no se repite la lista por zapatilla). La prueba de desbordes cubre Zapatillas y
   Actividad (destapó 4 px de más en las fichas de Actividad, ya corregido).
 
+### Recuperación (HRV, reposo, sueño, cadencia)
+Decisiones aprobadas:
+- **Sueño principal del día:** el bloque de sueño más largo (descontando siestas de menos de
+  90 min) que termina en las 24 h anteriores al final de ese día, sea de noche o de día. Así
+  cuenta el sueño diurno tras un turno de noche. Solo fuente Watch.
+- **Turno de noche:** si el turno efectivo de ese día o del anterior es Noche (con los cambios
+  por día), el estado muestra «Turno de noche: comparación menos fiable». No se usa la regla de
+  «menos de 5 h» para evitar calidad. Se compara con la media de los días de noche si hay al
+  menos 7; si no, con la general.
+- **Base de la comparación:** media de los 28 días anteriores, con al menos 14 días con dato; sin
+  eso, no hay estado.
+- **Estados:**
+  - **Cargado:** se cumplen al menos 2 de estas 3: HRV < 90 % de la media; reposo ≥ media + 3 ppm;
+    sueño ≤ media − 60 min.
+  - **Recuperado:** se cumplen las 3: HRV ≥ 105 % de la media; reposo ≤ media; sueño ≥
+    media − 30 min.
+  - **Normal:** el resto.
+  - **Sin noche:** «Sin datos de esta noche» (no se estima).
+- **Reimport:** con «Reprocesar» sobre el zip guardado. Las tablas nuevas tienen clave natural y
+  se insertan o actualizan (idempotente). Las carreras conservan su id.
+
+- **Paso 1a · Revisar datos de salud (hecho).** Perfil → Importar → «Revisar datos de salud»:
+  - Lee el zip guardado (sin subirlo) por tramos reanudables, como el importador
+    (`streamXmlEntry`/`locateXml`, sacados de `pipeline.ts`), y **solo cuenta**.
+  - Tabla `health_scans` (migración 0019): progreso y recuentos, ninguna lectura de salud.
+  - `lib/health/census.ts` (con pruebas) recuenta HRV (SDNN), reposo, sueño (fases del Watch) y
+    temperatura de muñeca: total por fuente (Watch, iPhone u otra), primera y última fecha (Madrid;
+    en el sueño, el día del final), días con dato del Watch y en los 28 días que acaban en el
+    export. También los días con los tres datos a la vez, y los pasos del Watch dentro de cada
+    carrera válida (cuántas carreras los traen y cada cuánto llegan).
+  - Pruebas: cuenta bien, no cambia nada más, por tramos da lo mismo que de una vez, y si hay una
+    a medias la continúa.
+
 ### Resumen de la semana
 Sin especificación previa en el repositorio: diseño de esta sesión, a revisar. Sin notificaciones
 (solo se ve al abrirlo), sin causas, sin alertas de volumen (la semana se compara con la media de
@@ -967,7 +1000,7 @@ aunque tardara más, se reanuda sola.
 ## Esquema de base de datos
 
 Ver `src/lib/db/schema.ts` (fuente de verdad) y `drizzle/*.sql`. Tablas:
-`app_settings`, `imports` (+ `lease_until`), `shoes` (+ límite, habitual, cinta), `run_shoes`, `runs` (+ `in_injury`), `run_routes`, `run_splits`
+`app_settings`, `imports` (+ `lease_until`), `shoes` (+ límite, habitual, cinta), `run_shoes`, `health_scans` (solo recuentos), `runs` (+ `in_injury`), `run_routes`, `run_splits`
 (+ `basis`), `run_series` (hr | power | speed | distance), `import_samples` (temporal
 durante la importación), `vo2max_readings`, `injuries`, `run_efforts` (mejor esfuerzo por
 carrera y distancia).
@@ -1100,6 +1133,7 @@ Al terminar la importación, la pantalla compara esa carrera con estos valores.
 
 ## Registro de cambios
 
+- 2026‑11‑27 — Recuperación, paso 1a: «Revisar datos de salud» (solo cuenta lo que trae el zip guardado).
 - 2026‑11‑26 — Mejora 3: garaje de zapatillas (km, límite y aviso, habitual, retirada, asignación masiva, filtro en Actividad).
 - 2026‑11‑26 — Mejora 2: «≈» en récords y marcas de muestras gruesas (hueco > 60 s en el tramo).
 - 2026‑11‑26 — Mejora 1: «Intensidad» en Análisis (reparto por zonas, guía neutra del 80 % suave).

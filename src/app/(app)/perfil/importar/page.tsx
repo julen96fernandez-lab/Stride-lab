@@ -4,6 +4,9 @@ import { connection } from "next/server";
 import { PageHeader } from "@/components/ui/primitives";
 import { checkRun, latestImport } from "@/lib/import/status";
 import { ImportFlow } from "./ImportFlow";
+import { HealthScanCard } from "./HealthScanCard";
+import { db } from "@/lib/db/client";
+import { latestHealthScan, toHealthScanView } from "@/lib/health/census-run";
 
 export const metadata = { title: "Importar · Stride Lab" };
 
@@ -12,6 +15,12 @@ async function Flow() {
   const last = await latestImport();
   const check = last?.status === "done" ? await checkRun() : null;
   return <ImportFlow initial={last} initialCheck={check} />;
+}
+
+async function HealthScan() {
+  await connection();
+  const row = await latestHealthScan(db());
+  return <HealthScanCard initial={row ? await toHealthScanView(db(), row) : null} />;
 }
 
 export default function ImportPage() {
@@ -35,6 +44,9 @@ export default function ImportPage() {
       </Link>
       <Suspense fallback={<div className="card h-[260px]" aria-hidden="true" />}>
         <Flow />
+      </Suspense>
+      <Suspense fallback={<div className="card h-[150px]" aria-hidden="true" />}>
+        <HealthScan />
       </Suspense>
     </div>
   );

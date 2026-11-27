@@ -134,6 +134,13 @@
       "when": 1795040000000,
       "tag": "0018_shoes",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795130000000,
+      "tag": "0019_health_scans",
+      "breakpoints": true
     }
   ]
 }

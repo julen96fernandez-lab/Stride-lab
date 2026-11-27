@@ -67,8 +67,44 @@ export const REF_START = Date.parse("2026-10-17T07:00:00Z"); // 09:00 en Madrid
 export const REF_DURATION_S = 6101; // 1:41:41
 export const REF_DISTANCE_M = 21_340;
 
-export function buildFixture(opts: { filler?: number } = {}): { zip: Buffer; xml: string } {
-  const recs: string[] = [];
+const sleepRec = (source: string, start: number, end: number, stage: string) =>
+  `<Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="${source}" sourceVersion="11.0" creationDate="${fmt(end)}" startDate="${fmt(
+    start,
+  )}" endDate="${fmt(end)}" value="HKCategoryValueSleepAnalysis${stage}"/>`;
+
+/** Datos de salud sintéticos (opción `health`): HRV, reposo, sueño y pasos en la carrera de referencia. */
+function healthRecords(): string[] {
+  const out: string[] = [];
+  const at = (iso: string) => Date.parse(iso);
+  // HRV: 3 del Watch en 2 días y 1 de otra fuente.
+  for (const t of ["2026-11-10T05:30:00Z", "2026-11-11T05:20:00Z", "2026-11-11T14:00:00Z"]) {
+    out.push(`<Record type="HKQuantityTypeIdentifierHeartRateVariabilitySDNN" sourceName="${WATCH}" sourceVersion="11.0" unit="ms" creationDate="${fmt(at(t))}" startDate="${fmt(at(t))}" endDate="${fmt(at(t) + 60_000)}" value="52.3">
+  <HeartRateVariabilityMetadataList>
+   <InstantaneousBeatsPerMinute bpm="58" time="7:30:01,12 AM"/>
+  </HeartRateVariabilityMetadataList>
+ </Record>`);
+  }
+  out.push(rec("HeartRateVariabilitySDNN", "Oura", "ms", at("2026-11-11T05:00:00Z"), at("2026-11-11T05:01:00Z"), 60));
+  // Pulso en reposo: 2 días del Watch.
+  out.push(rec("RestingHeartRate", WATCH, "count/min", at("2026-11-10T00:00:00Z"), at("2026-11-10T23:59:00Z"), 48));
+  out.push(rec("RestingHeartRate", WATCH, "count/min", at("2026-11-11T00:00:00Z"), at("2026-11-11T23:59:00Z"), 50));
+  // Sueño: noche que acaba el 11 nov (Watch, con fases) y «en cama» del iPhone.
+  const n0 = at("2026-11-10T22:30:00Z");
+  out.push(sleepRec(WATCH, n0, n0 + 3 * 3600_000, "AsleepCore"));
+  out.push(sleepRec(WATCH, n0 + 3 * 3600_000, n0 + 4 * 3600_000, "AsleepDeep"));
+  out.push(sleepRec(WATCH, n0 + 4 * 3600_000, n0 + 5 * 3600_000, "AsleepREM"));
+  out.push(sleepRec(WATCH, n0 + 5 * 3600_000, n0 + 5.2 * 3600_000, "Awake"));
+  out.push(sleepRec(WATCH, n0 + 5.2 * 3600_000, n0 + 7 * 3600_000, "AsleepCore"));
+  out.push(sleepRec(PHONE, n0 - 600_000, n0 + 7.2 * 3600_000, "InBed"));
+  // Pasos: cada 20 s dentro de la carrera de referencia (Watch); los del iPhone y los de fuera no cuentan.
+  for (let t = 0; t < REF_DURATION_S; t += 20) out.push(rec("StepCount", WATCH, "count", REF_START + t * 1000, REF_START + (t + 20) * 1000, 57));
+  out.push(rec("StepCount", PHONE, "count", REF_START + 60_000, REF_START + 120_000, 160));
+  out.push(rec("StepCount", WATCH, "count", REF_START - 3600_000, REF_START - 3500_000, 90));
+  return out;
+}
+
+export function buildFixture(opts: { filler?: number; health?: boolean } = {}): { zip: Buffer; xml: string } {
+  const recs: string[] = opts.health ? healthRecords() : [];
   // Relleno: registros que el importador debe ignorar (para pruebas con varios MB).
   for (let i = 0; i < (opts.filler ?? 0); i++) {
     const t = Date.parse("2025-01-01T00:00:00Z") + i * 60_000;

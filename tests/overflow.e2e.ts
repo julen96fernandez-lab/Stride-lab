@@ -54,6 +54,7 @@ const FORMS: { name: string; path: string; ready?: string; open?: (p: Page) => P
     },
   },
   { name: "Actividad (con el filtro de zapatilla si hay)", path: "/actividad", ready: "nav[aria-label='Filtrar por tipo']" },
+  { name: "Importar (con «Revisar datos de salud»)", path: "/perfil/importar", ready: "section[aria-label='Revisar datos de salud']" },
   {
     name: "Plan · Calendario (hoja del día, con «Mover a…» abierto si hay sesión)",
     path: "/plan?vista=calendario",

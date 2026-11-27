@@ -388,3 +388,27 @@ export const runShoes = pgTable(
   },
   (t) => [index("run_shoes_shoe_idx").on(t.shoeId)],
 );
+
+export type HealthScanStatus = "pending" | "processing" | "done" | "failed";
+
+/**
+ * «Revisar datos de salud»: recorre el zip guardado y solo cuenta. Aquí van el progreso y los
+ * recuentos (ver lib/health/census.ts); ninguna lectura de salud.
+ */
+export const healthScans = pgTable("health_scans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  importId: uuid("import_id").references(() => imports.id, { onDelete: "set null" }),
+  blobUrl: text("blob_url").notNull(),
+  blobPathname: text("blob_pathname").notNull(),
+  exportDate: timestamp("export_date", { withTimezone: true }),
+  status: text("status").$type<HealthScanStatus>().notNull().default("pending"),
+  bytesProcessed: bigint("bytes_processed", { mode: "number" }).notNull().default(0),
+  bytesTotal: bigint("bytes_total", { mode: "number" }),
+  state: jsonb("state").$type<Record<string, unknown>>().notNull().default({}),
+  census: jsonb("census").$type<Record<string, unknown>>(),
+  error: text("error"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  createdAt: createdAt(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  updatedAt: updatedAt(),
+});

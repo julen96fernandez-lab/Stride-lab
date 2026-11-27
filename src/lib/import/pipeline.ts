@@ -142,29 +142,23 @@ const HANDLERS: Record<Exclude<ImportPhase, "done">, (row: ImportRow, deps: Impo
 // ─── index ───────────────────────────────────────────────────────────────────
 
 async function phaseIndex(row: ImportRow, deps: ImportDeps): Promise<boolean> {
-  const entries = await readCentralDirectory(deps.source);
-  // El nombre del XML puede ir traducido (export.xml, exportación.xml…): el .xml más grande que no sea CDA.
-  const xml = entries
-    .filter((e) => /\.xml$/i.test(e.name) && !/cda/i.test(basename(e.name)) && !e.name.includes("__MACOSX"))
-    .sort((a, b) => b.uncompressedSize - a.uncompressedSize)[0];
-  if (!xml) throw new Error("El zip no contiene el export de Apple Health (export.xml)");
+  const { xml: ref, entries } = await locateXml(deps.source);
   const gpx: Record<string, CompactEntry> = {};
   for (const e of entries) {
     if (/\.gpx$/i.test(e.name) && !e.name.includes("__MACOSX")) {
       gpx[basename(e.name)] = [e.localHeaderOffset, e.compressedSize, e.uncompressedSize, e.method];
     }
   }
-  const dataStart = await entryDataStart(deps.source, xml);
   await saveState(
     deps.db,
     row,
     {
-      xml: { name: xml.name, entry: [xml.localHeaderOffset, xml.compressedSize, xml.uncompressedSize, xml.method], dataStart },
+      xml: ref,
       gpx,
       offset: 0,
       seq: 0,
     },
-    { phase: "workouts", bytesTotal: xml.uncompressedSize, bytesProcessed: 0 },
+    { phase: "workouts", bytesTotal: ref.entry[2], bytesProcessed: 0 },
     { gpxFiles: Object.keys(gpx).length },
   );
   return true;
@@ -181,12 +175,48 @@ async function streamXml(
   onMatch: (id: string, text: string) => void,
   checkpoint: (offset: number) => Promise<void>,
 ): Promise<boolean> {
-  const now = deps.now ?? Date.now;
   const state = row.state as State;
   if (!state.xml) throw new Error("Índice del zip ausente");
-  const entry = toEntry(state.xml.name, state.xml.entry);
-  const skip = state.offset ?? 0;
-  const stream = await openEntryStream(deps.source, entry, state.xml.dataStart);
+  return streamXmlEntry({ source: deps.source, xml: state.xml, offset: state.offset ?? 0, now: deps.now, deadline, targets, onMatch, checkpoint });
+}
+
+export interface XmlRef {
+  name: string;
+  entry: CompactEntry;
+  dataStart: number;
+}
+
+/** Localiza export.xml en el zip (el .xml más grande que no sea CDA). */
+export async function locateXml(source: RangeSource): Promise<{ xml: XmlRef; entries: ZipEntry[] }> {
+  const entries = await readCentralDirectory(source);
+  // El nombre del XML puede ir traducido (export.xml, exportación.xml…): el .xml más grande que no sea CDA.
+  const xml = entries
+    .filter((e) => /\.xml$/i.test(e.name) && !/cda/i.test(basename(e.name)) && !e.name.includes("__MACOSX"))
+    .sort((a, b) => b.uncompressedSize - a.uncompressedSize)[0];
+  if (!xml) throw new Error("El zip no contiene el export de Apple Health (export.xml)");
+  const dataStart = await entryDataStart(source, xml);
+  return { xml: { name: xml.name, entry: [xml.localHeaderOffset, xml.compressedSize, xml.uncompressedSize, xml.method], dataStart }, entries };
+}
+
+/**
+ * Recorre el XML desde `offset` hasta el final o hasta `deadline`, con puntos de control
+ * reanudables (también lo usa la revisión de datos de salud, que solo cuenta).
+ */
+export async function streamXmlEntry(o: {
+  source: RangeSource;
+  xml: XmlRef;
+  offset: number;
+  now?: () => number;
+  deadline: number;
+  targets: ScanTarget[];
+  onMatch: (id: string, text: string) => void;
+  checkpoint: (offset: number) => Promise<void>;
+}): Promise<boolean> {
+  const { deadline, targets, onMatch, checkpoint } = o;
+  const now = o.now ?? Date.now;
+  const entry = toEntry(o.xml.name, o.xml.entry);
+  const skip = o.offset;
+  const stream = await openEntryStream(o.source, entry, o.xml.dataStart);
   const scanner = new XmlScanner(targets, skip);
   const emit = (m: { id: string; text: string }) => onMatch(m.id, m.text);
   let consumed = 0;
